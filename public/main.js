@@ -1,4 +1,4 @@
-import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar } from './graph.js';
+import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar } from './graph.js';
 import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool } from './ui.js';
 import { runTracePath, closeTraceView } from './tracer.js';
@@ -14,6 +14,7 @@ window.renderGraph      = renderGraph;
 window.toggleFreeze     = toggleFreeze;
 window.toggleLayout     = toggleLayout;
 window.toggleLabels     = toggleLabels;
+window.toggleTimestamps = toggleTimestamps;
 window.zoomIn           = zoomIn;
 window.zoomOut          = zoomOut;
 window.recenterGraph    = recenterGraph;

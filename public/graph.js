@@ -12,11 +12,13 @@ let svg;
 let zoom;
 let container, g;
 let link, node, label;
+let edgeLabel;
 
 // ─── Data state ───────────────────────────────────────────────────────────────
 let currentTargetId = null;
 let fullGraphData = null;
 let labelsVisible = true;
+let timestampsVisible = true;
 let isFrozen = false;
 let currentLayout = 'force';  // 'force' | 'tree'
 let rawNodes = [];
@@ -378,6 +380,13 @@ function _renderGraphImpl(graphData, targetId) {
             .attr("dx", 12).attr("dy", ".35em")
             .attr("fill", "#1e293b").attr("font-size", "11px").attr("font-weight", "500");
 
+        // Edge labels (timestamp + amount)
+        edgeLabel = g.append("g").attr("class", "edge-labels")
+            .selectAll("text").data(links).enter().append("text")
+            .attr("class", "edge-label")
+            .attr("text-anchor", "middle")
+            .attr("fill", "#0f172a").attr("font-size", "10px").attr("font-weight", "500");
+
         zoom = d3.zoom().scaleExtent([0.1, 8])
             .on("zoom", ev => g.attr("transform", ev.transform));
         svg.call(zoom);
@@ -411,6 +420,16 @@ function ticked() {
             g.select('.dest-ring').selectAll('circle')
                 .attr('cx', fn.x || 0).attr('cy', fn.y || 0);
         }
+    }
+    // Update edge label positions and text
+    if (edgeLabel && edgeLabel.size && link) {
+        edgeLabel.attr('x', d => (d.source.x + d.target.x) / 2)
+                 .attr('y', d => (d.source.y + d.target.y) / 2 - 6)
+                 .text(d => {
+                     const amt = typeof d.amount !== 'undefined' ? (satsToBTC(d.amount) + ' BTC') : '';
+                     const ts = (timestampsVisible && d.timestamp > 0) ? new Date(d.timestamp * 1000).toISOString().split('T').join(' ').split('.')[0] : '';
+                     return (ts ? ts + ' · ' : '') + amt;
+                 });
     }
 }
 
@@ -502,6 +521,42 @@ function rebindGraphSelections() {
             exit   => exit.remove()
         );
     label = g.select(".labels").selectAll("text");
+    // Rebind edge labels so they follow rawLinks and update on expansions
+    const _edgeKey = l => {
+        const s = l.source?.id || l.source;
+        const t = l.target?.id || l.target;
+        return `${s}|${t}`;
+    };
+    g.select('.edge-labels').remove();
+    edgeLabel = g.insert('g', '.nodes').attr('class', 'edge-labels')
+        .selectAll('text').data(rawLinks, _edgeKey)
+        .join(
+            enter => enter.append('text')
+                .attr('class', 'edge-label')
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#0f172a').attr('font-size', '10px').attr('font-weight', '500')
+                .style('display', 'none'),
+            update => update,
+            exit => exit.remove()
+        );
+    // Rebind edge labels so they follow rawLinks and update on expansions
+    const edgeKey = l => {
+        const s = l.source?.id || l.source;
+        const t = l.target?.id || l.target;
+        return `${s}|${t}`;
+    };
+    // Remove any stale edge-labels group and recreate keyed join so labels align with edges
+    g.select('.edge-labels').remove();
+    edgeLabel = g.insert('g', '.nodes').attr('class', 'edge-labels')
+        .selectAll('text').data(rawLinks, edgeKey)
+        .join(
+            enter => enter.append('text')
+                .attr('class', 'edge-label')
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#0f172a').attr('font-size', '10px').attr('font-weight', '500'),
+            update => update,
+            exit => exit.remove()
+        );
 }
 
 /**
@@ -844,6 +899,8 @@ export function toggleLabels() {
     document.getElementById('labelToggleText').textContent = labelsVisible ? '[HIDE LABELS]' : '[SHOW LABELS]';
 }
 
+
+
 export function zoomIn()  { if (svg) svg.transition().duration(300).call(zoom.scaleBy, 1.5); }
 export function zoomOut() { if (svg) svg.transition().duration(300).call(zoom.scaleBy, 1 / 1.5); }
 
@@ -904,6 +961,10 @@ function highlightNeighbors(d, hovering) {
         node.style("opacity", o => connected(d, o) ? 1 : 0.12);
         applyLinkHighlight(o => o.source === d || o.target === d);
         label.style("opacity", o => connected(d, o) ? 1 : 0.08);
+        // Show edge labels only for edges connected to the hovered node
+        if (edgeLabel) {
+            edgeLabel.style('display', e => (timestampsVisible && (e.source === d || e.target === d)) ? 'block' : 'none');
+        }
     } else { unhighlightAll(); }
 }
 
@@ -918,6 +979,9 @@ function highlightNode(nodeId) {
     // track selection for the expand button
     selectedNodeId = nodeId;
     updateExpandBtn();
+    if (edgeLabel) {
+        edgeLabel.style('display', e => (timestampsVisible && (e.source.id === nodeId || e.target.id === nodeId)) ? 'block' : 'none');
+    }
 }
 
 function unhighlightAll() {
@@ -933,6 +997,17 @@ function unhighlightAll() {
             return (tn && tn.risk > 0) ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
         });
     label.style("opacity", 1);
+}
+
+// Toggle timestamps visibility for hover/select; wired to toolbar button
+export function toggleTimestamps() {
+    timestampsVisible = !timestampsVisible;
+    const txt = document.getElementById('timestampToggleText');
+    if (txt) txt.textContent = timestampsVisible ? '[HIDE TIMESTAMPS]' : '[SHOW TIMESTAMPS]';
+    if (!timestampsVisible && edgeLabel) edgeLabel.style('display', 'none');
+    if (timestampsVisible && selectedNodeId && edgeLabel) {
+        edgeLabel.style('display', e => (e.source.id === selectedNodeId || e.target.id === selectedNodeId) ? 'block' : 'none');
+    }
 }
 
 // =============================================================================

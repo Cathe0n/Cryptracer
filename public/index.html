@@ -320,6 +320,9 @@
                 <button onclick="toggleLabels()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Toggle node labels on/off">
                     <span id="labelToggleText">[HIDE LABELS]</span>
                 </button>
+                <button onclick="toggleTimestamps()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Toggle transaction timestamps on/off">
+                    <span id="timestampToggleText">[SHOW TIMESTAMPS]</span>
+                </button>
                 <button onclick="toggleLayout()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Re-run force simulation">[LAYOUT]</button>
                 <button id="expandSelectedBtn" onclick="expandSelected()" disabled class="bg-cyan-700/90 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white shadow" title="Expand selected node">[EXPAND]</button>
                 <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="px-3 py-2 rounded border text-xs font-bold text-white shadow transition" style="background:rgba(194,65,12,0.85);border-color:#c2410c" title="Trace BTC forward to its final destination address">[TRACE PATH]</button>
