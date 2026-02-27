@@ -147,6 +147,7 @@
         <div class="flex gap-3 w-1/2">
             <input id="targetId" type="text" placeholder="Trace Address or Hash..." class="flex-1 bg-black/50 border border-slate-700 rounded-md px-4 py-2 text-xs font-mono focus:border-cyan-500 outline-none text-cyan-400">
             <button onclick="runSleuth()" class="bg-cyan-600 hover:bg-cyan-500 px-8 py-2 rounded-md text-xs font-bold transition text-white uppercase tracking-widest">Investigate</button>
+            <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="bg-orange-600 hover:bg-orange-500 px-5 py-2 rounded-md text-xs font-bold transition text-white uppercase tracking-widest" title="Trace BTC forward to its final destination">🔍 Trace Path</button>
             <a href="/ui/setup.html" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-md text-xs font-bold transition text-slate-300 uppercase tracking-widest flex items-center gap-2" title="Configure database and API settings">
                 <span>⚙️</span>
                 <span class="hidden sm:inline">Setup</span>
@@ -171,6 +172,18 @@
                 </div>
             </div>
             
+            <!-- Trace Path View -->
+            <div id="traceView" class="hidden h-full flex flex-col">
+                <div class="p-4 border-b flex items-center justify-between shrink-0" style="border-color:#1e293b">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full" style="background:#f97316;box-shadow:0 0 8px #f97316"></div>
+                        <span class="text-[10px] font-bold uppercase tracking-widest" style="color:#fb923c">Forward Path Trace</span>
+                    </div>
+                    <button onclick="closeTraceView()" class="text-xl leading-none" style="color:#475569">&times;</button>
+                </div>
+                <div id="traceContent" class="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar"></div>
+            </div>
+
             <!-- Live Activity View -->
             <div id="liveView" class="p-6 space-y-8 overflow-y-auto custom-scrollbar">
                 <div id="statsBox" class="space-y-4">
@@ -206,6 +219,10 @@
                             <div class="flex items-center gap-2">
                                 <div class="w-4 h-4 rounded-full bg-[#fbbf24]"></div>
                                 <span class="text-slate-300">Target</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full" style="background:#f97316"></div>
+                                <span class="text-slate-300">Trace Final Addr</span>
                             </div>
                             <!-- Arrow legend -->
                             <div class="flex items-center gap-2 pt-1 border-t border-slate-700/50 mt-1">
@@ -271,6 +288,7 @@
                         <div>• Hover to highlight neighbors</div>
                         <div>• Use [FREEZE] to lock positions</div>
                         <div>• Use [TREE VIEW] to toggle hierarchy layout</div>
+                        <div>• <span class="text-orange-400 font-bold">Trace Path</span> follows BTC forward using change detection</div>
                         <div>• Use [HIDE LABELS] for clarity</div>
                     </div>
                 </div>
@@ -304,6 +322,7 @@
                 </button>
                 <button onclick="toggleLayout()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Re-run force simulation">[LAYOUT]</button>
                 <button id="expandSelectedBtn" onclick="expandSelected()" disabled class="bg-cyan-700/90 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white shadow" title="Expand selected node">[EXPAND]</button>
+                <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="px-3 py-2 rounded border text-xs font-bold text-white shadow transition" style="background:rgba(194,65,12,0.85);border-color:#c2410c" title="Trace BTC forward to its final destination address">[TRACE PATH]</button>
                 <button onclick="zoomOut()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom out">[-]</button>
                 <button onclick="zoomIn()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom in">[+]</button>
             </div>

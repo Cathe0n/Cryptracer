@@ -26,6 +26,11 @@ let calendarViewDate = new Date();
 let expandedNodes   = new Set(); // tracks which address nodes have been expanded
 let selectedNodeId  = null;   // currently-selected node (used by toolbar button)
 
+// ── Trace-path state (kept at module level so ticked() can use it) ──────────
+let traceFinalAddr    = null;  // final destination address of current trace
+let tracePathNodeIds  = null;  // Set<id> of nodes in active trace path
+let tracePathEdgeKeys = null;  // Set<"s|t"> of edges in active trace path
+
 // update state/text of the toolbar expand button
 function updateExpandBtn() {
     const btn = document.getElementById('expandSelectedBtn');
@@ -327,6 +332,7 @@ function _renderGraphImpl(graphData, targetId) {
         mkArrow("arrowhead-default",   "#64748b");
         mkArrow("arrowhead-highlight", "#0ea5e9");
         mkArrow("arrowhead-risk",      "#ef4444");
+        mkArrow("arrowhead-trace",     "#f97316");
 
         g = svg.append("g");
 
@@ -363,6 +369,7 @@ function _renderGraphImpl(graphData, targetId) {
             .on("mouseover", (ev, d) => highlightNeighbors(d, true))
             .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
             .call(drag());
+        state.node = node;
 
         label = g.append("g").attr("class", "labels")
             .selectAll("text").data(nodes).enter().append("text")
@@ -374,6 +381,7 @@ function _renderGraphImpl(graphData, targetId) {
         zoom = d3.zoom().scaleExtent([0.1, 8])
             .on("zoom", ev => g.attr("transform", ev.transform));
         svg.call(zoom);
+        state.svg = svg;
 
         document.getElementById('nodeCount').textContent = nodes.length.toLocaleString();
         document.getElementById('edgeCount').textContent = links.length.toLocaleString();
@@ -396,6 +404,14 @@ function ticked() {
     label.attr("x", d => d.x).attr("y", d => d.y);
     // Expand-rings share the same data objects as rawNodes, so d.x/d.y are always current
     g.select(".expand-rings").selectAll("circle").attr("cx", d => d.x).attr("cy", d => d.y);
+    // Keep the destination-ring centred on the final trace node as it moves
+    if (traceFinalAddr) {
+        const fn = rawNodes.find(n => n.id === traceFinalAddr);
+        if (fn) {
+            g.select('.dest-ring').selectAll('circle')
+                .attr('cx', fn.x || 0).attr('cy', fn.y || 0);
+        }
+    }
 }
 
 function drag() {
@@ -471,6 +487,7 @@ function rebindGraphSelections() {
             exit   => exit.remove()
         );
     node = g.select(".nodes").selectAll("circle");
+    state.node = node;
 
     // ── Labels ───────────────────────────────────────────────────────────────
     g.select(".labels").selectAll("text")
@@ -605,6 +622,11 @@ async function expandNode(nodeId) {
             : 'No new connections found';
         setBusy(true, 'RECALCULATING LAYOUT...', msg);
         setTimeout(() => { if (simulation) simulation.stop(); fitGraphToScreen(); setBusy(false); }, 2500);
+        // Refresh timeline to include any newly added timestamps from expansion
+        refreshTimelineFromRawLinks();
+
+        // Ensure timeline covers any transaction timestamps present at initial load
+        refreshTimelineFromRawLinks();
 
     } catch (err) {
         // Allow retry on network error
@@ -614,7 +636,6 @@ async function expandNode(nodeId) {
         console.error('expandNode error:', err);
     }
 }
-// Keep window reference so any inline onclick="expandNode(...)" handlers work
 window.expandNode = expandNode;
 
 // =============================================================================
@@ -655,98 +676,6 @@ export function toggleFreeze() {
 // =============================================================================
 // TREE LAYOUT — proper d3.hierarchy + d3.cluster(), NOT force simulation
 // =============================================================================
-
-/**
- * Reapply tree layout with only visible nodes (filtered by timeline).
- * Called when scrubbing through timeline while in tree mode.
- */
-function reapplyTreeLayoutWithFilter(visibleNodeIds) {
-    if (!node || !link || !label || rawNodes.length === 0) return;
-
-    // Build tree with only visible nodes
-    const visibleNodes = rawNodes.filter(n => visibleNodeIds.has(n.id));
-    if (visibleNodes.length === 0) return;
-
-    const rootId = currentTargetId || visibleNodes[0]?.id;
-    if (!rootId) return;
-
-    // Undirected adjacency from visible edges only
-    const adj = new Map(visibleNodes.map(n => [n.id, []]));
-    rawLinks.forEach(l => {
-        const sid = l.source?.id || l.source;
-        const tid = l.target?.id || l.target;
-        // Only include edges where both nodes are visible
-        if (visibleNodeIds.has(sid) && visibleNodeIds.has(tid)) {
-            if (adj.has(sid)) adj.get(sid).push(tid);
-            if (adj.has(tid)) adj.get(tid).push(sid);
-        }
-    });
-
-    // BFS: build spanning tree with only visible nodes
-    const treeNodes = new Map(visibleNodes.map(n => [n.id, { id: n.id, children: [] }]));
-    const visited   = new Set([rootId]);
-    const queue     = [rootId];
-    
-    while (queue.length) {
-        const curr = queue.shift();
-        for (const nb of (adj.get(curr) || [])) {
-            if (!visited.has(nb)) {
-                visited.add(nb);
-                treeNodes.get(curr).children.push(treeNodes.get(nb));
-                queue.push(nb);
-            }
-        }
-    }
-    
-    // Attach disconnected visible nodes to root
-    visibleNodes.forEach(n => {
-        if (!visited.has(n.id)) treeNodes.get(rootId).children.push(treeNodes.get(n.id));
-    });
-
-    // Build hierarchy and compute layout
-    const hierarchyRoot = d3.hierarchy(treeNodes.get(rootId), d => d.children);
-    d3.cluster().nodeSize([36, 200])(hierarchyRoot);
-
-    // Update positions for visible nodes only
-    const posMap = new Map();
-    hierarchyRoot.descendants().forEach(d => posMap.set(d.data.id, { x: d.y, y: d.x }));
-
-    node.data().forEach(d => {
-        const pos = posMap.get(d.id);
-        if (pos) { d.x = pos.x; d.y = pos.y; d.fx = pos.x; d.fy = pos.y; }
-    });
-
-    // Update tree links with visible links only
-    g.select(".tree-links").remove();
-    
-    const treeLinkData = hierarchyRoot.links().map(hl => {
-        const src = node.data().find(n => n.id === hl.source.data.id);
-        const tgt = node.data().find(n => n.id === hl.target.data.id);
-        const orig = rawLinks.find(rl => {
-            const s = rl.source.id || rl.source, t = rl.target.id || rl.target;
-            return (s === hl.source.data.id && t === hl.target.data.id) ||
-                   (s === hl.target.data.id && t === hl.source.data.id);
-        });
-        return { source: src, target: tgt, amount: orig?.amount || 0 };
-    }).filter(l => l.source && l.target);
-
-    g.insert("g", ".nodes")
-        .attr("class", "tree-links")
-        .selectAll("line")
-        .data(treeLinkData)
-        .enter().append("line")
-        .attr("stroke", "#64748b")
-        .attr("stroke-opacity", 0.85)
-        .attr("stroke-width", d => Math.max(1.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 6)))
-        .attr("marker-end", "url(#arrowhead-default)")
-        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-
-    // Smoothly transition visible nodes to new positions
-    const t = d3.transition().duration(400).ease(d3.easeCubicInOut);
-    node.transition(t).attr("cx", d => d.x).attr("cy", d => d.y);
-    label.transition(t).attr("x", d => d.x).attr("y", d => d.y);
-}
 
 function applyTreeLayout() {
     if (!node || !link || !label || rawNodes.length === 0) return;
@@ -1011,6 +940,13 @@ function unhighlightAll() {
 // =============================================================================
 function showEntityView(nodeId) {
     if (!fullGraphData || !fullGraphData.nodes[nodeId]) return;
+
+    // Close trace panel if open (and clear its graph highlight)
+    const tv = document.getElementById('traceView');
+    if (tv && !tv.classList.contains('hidden')) {
+        tv.classList.add('hidden');
+        if (window.clearTrace) window.clearTrace();
+    }
     const nodeData = fullGraphData.nodes[nodeId];
     const allLinks = link.data();
     const degree   = allLinks.filter(l => l.source.id === nodeId || l.target.id === nodeId).length;
@@ -1242,6 +1178,7 @@ function showEntityView(nodeId) {
     html += `</div>`;
     document.getElementById('entityContent').innerHTML = html;
     document.getElementById('liveView').classList.add('hidden');
+    document.getElementById('traceView')?.classList.add('hidden');
     document.getElementById('entityView').classList.remove('hidden');
 }
 
@@ -1442,7 +1379,10 @@ window.enrichTxFromMempool = async function(txid) {
 
 function closeEntityView() {
     document.getElementById('entityView').classList.add('hidden');
-    document.getElementById('liveView').classList.remove('hidden');
+    const tv = document.getElementById('traceView');
+    if (!tv || tv.classList.contains('hidden')) {
+        document.getElementById('liveView').classList.remove('hidden');
+    }
 }
 
 // =============================================================================
@@ -1488,21 +1428,65 @@ function initTimeline(edges) {
         if (cm && !cm.classList.contains('hidden')) renderCalendar();
         if (!link || !node) return;
 
-        link.style("display", l => (l.timestamp > 0 && l.timestamp > v) ? "none" : "block");
+        link.style("display", l => {
+            const s = l.source?.id || l.source;
+            const t = l.target?.id || l.target;
+            const key = s + '|' + t;
+            // keep trace-path edges visible regardless of timestamp
+            if (typeof tracePathEdgeKeys !== 'undefined' && tracePathEdgeKeys && tracePathEdgeKeys.has(key)) return 'block';
+            return (l.timestamp > 0 && l.timestamp > v) ? 'none' : 'block';
+        });
 
         const vis = new Set([currentTargetId]);
         link.data().forEach(l => {
             if (l.timestamp === 0 || l.timestamp <= v) { vis.add(l.source.id); vis.add(l.target.id); }
         });
+        // Ensure any nodes that are part of a traced path remain visible while scrubbing
+        if (typeof tracePathNodeIds !== 'undefined' && tracePathNodeIds && tracePathNodeIds.size) {
+            tracePathNodeIds.forEach(id => vis.add(id));
+        }
         node.style("display",  d => vis.has(d.id) ? "block" : "none");
         label.style("display", d => vis.has(d.id) && labelsVisible ? "block" : "none");
-
-        // If tree layout is active, reapply it with only visible nodes
-        if (currentLayout === 'tree') {
-            reapplyTreeLayoutWithFilter(vis);
-        }
     };
     slider.oninput();
+}
+
+/** Recompute timeline ranges from current `rawLinks` and update the UI slider.
+ * Safe to call any time the graph gains new edges (e.g. expand or trace merge).
+ */
+function refreshTimelineFromRawLinks() {
+    if (!rawLinks || rawLinks.length === 0) {
+        const ui = document.getElementById('timelineUI');
+        if (ui) ui.classList.add('hidden');
+        return;
+    }
+    const ts_edges = rawLinks.filter(e => e.timestamp > 0);
+    if (!ts_edges.length) { document.getElementById('timelineUI').classList.add('hidden'); return; }
+
+    const timestamps = ts_edges.map(e => e.timestamp).sort((a, b) => a - b);
+    const minTS = timestamps[0], maxTS = timestamps[timestamps.length - 1];
+
+    calendarTxDates = {};
+    ts_edges.forEach(e => {
+        const k = new Date(e.timestamp * 1000).toISOString().split('T')[0];
+        calendarTxDates[k] = (calendarTxDates[k] || 0) + 1;
+    });
+    calendarViewDate = new Date(maxTS * 1000);
+
+    if (!document.getElementById('calendarModal')) createCalendarUI();
+
+    const ui = document.getElementById('timelineUI');
+    const slider  = document.getElementById('timeSlider');
+    if (!ui || !slider) return;
+    ui.classList.remove('hidden');
+    slider.min = minTS; slider.max = maxTS;
+    // If current slider value is outside new range, clamp it to max (latest)
+    if (parseInt(slider.value) > maxTS || parseInt(slider.value) < minTS) slider.value = maxTS;
+    // Update calendar display and invoke the oninput handler to re-evaluate visibility
+    const display = document.getElementById('dateDisplay');
+    const v = parseInt(slider.value);
+    if (display) display.innerText = new Date(v * 1000).toISOString().split('T')[0];
+    if (typeof slider.oninput === 'function') slider.oninput();
 }
 
 // =============================================================================
@@ -1563,6 +1547,320 @@ function renderCalendar() {
         };
         grid.appendChild(cell);
     }
+}
+
+// =============================================================================
+// TRACE PATH — merge hops into live graph + apply highlight
+// =============================================================================
+
+/** Convenience: resolve default fill for any node */
+function defaultNodeFill(d) {
+    if (d.isTarget)               return '#fbbf24';
+    if (d.risk > 0)               return '#ef4444';
+    if (d.type === 'Transaction') return '#6366f1';
+    return '#0ea5e9';
+}
+
+/** Apply/refresh the orange path highlight across all current selections */
+function applyTraceHighlight() {
+    if (!node || !link || !label || !tracePathNodeIds) return;
+
+    node.attr('fill', d => {
+            if (d.id === traceFinalAddr) return '#f97316';
+            if (tracePathNodeIds.has(d.id)) return defaultNodeFill(d);
+            return defaultNodeFill(d);
+        })
+        .attr('r', d => {
+            if (d.id === traceFinalAddr) return 16;
+            return d.isTarget ? 18 : d.risk > 0 ? 12 : d.type === 'Transaction' ? 4 : 7;
+        })
+        .style('opacity', d => tracePathNodeIds.has(d.id) ? 1 : 0.15);
+
+    link.attr('stroke', d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            return tracePathEdgeKeys.has(s + '|' + t) ? '#f97316' : '#64748b';
+        })
+        .attr('stroke-width', d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            return tracePathEdgeKeys.has(s + '|' + t) ? 3 : Math.max(1, Math.sqrt((d.amount || 0) + 1));
+        })
+        .attr('marker-end', d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            return tracePathEdgeKeys.has(s + '|' + t) ? 'url(#arrowhead-trace)' : 'url(#arrowhead-default)';
+        })
+        .style('opacity', d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            return tracePathEdgeKeys.has(s + '|' + t) ? 1 : 0.08;
+        });
+
+    label.style('opacity', d => tracePathNodeIds.has(d.id) ? 1 : 0.06);
+}
+
+/** Draw (or update) the glowing destination ring around the final node */
+function drawDestRing() {
+    if (!g || !traceFinalAddr) return;
+    const fn = rawNodes.find(n => n.id === traceFinalAddr);
+    if (!fn) return;
+
+    let destGroup = g.select('.dest-ring');
+    if (destGroup.empty()) destGroup = g.insert('g', '.nodes').attr('class', 'dest-ring');
+    destGroup.selectAll('circle').remove();
+
+    // Outer glow ring
+    destGroup.append('circle')
+        .attr('cx', fn.x || 0).attr('cy', fn.y || 0)
+        .attr('r', 28)
+        .attr('fill', 'none')
+        .attr('stroke', '#f97316')
+        .attr('stroke-width', 3)
+        .attr('stroke-dasharray', '7 4')
+        .attr('opacity', 0.9);
+
+    // Inner solid ring
+    destGroup.append('circle')
+        .attr('cx', fn.x || 0).attr('cy', fn.y || 0)
+        .attr('r', 20)
+        .attr('fill', 'rgba(249,115,22,0.12)')
+        .attr('stroke', '#fb923c')
+        .attr('stroke-width', 1.5)
+        .attr('opacity', 0.7);
+}
+
+/**
+ * Merge a TracePath object into the live D3 graph one hop at a time,
+ * animating each new node/edge appearing as the simulation runs.
+ * The final destination is highlighted with an orange glow ring.
+ * Safe to call before runSleuth — bootstraps the SVG if needed.
+ */
+export async function mergePathIntoGraph(path) {
+    if (!path || !path.hops || path.hops.length === 0) return;
+
+    // Bootstrap a bare SVG if no graph has been loaded yet
+    if (!g || !svg) {
+        const containerEl = document.getElementById('graph-container');
+        containerEl.innerHTML = '';
+        const width = containerEl.clientWidth, height = containerEl.clientHeight;
+
+        svg = d3.select(containerEl).append('svg')
+            .attr('width', width).attr('height', height)
+            .style('background', '#ffffff')
+            .attr('viewBox', [-width / 2, -height / 2, width, height])
+            .on('click', ev => {
+                if (ev.target.tagName === 'svg') {
+                    closeEntityView(); unhighlightAll();
+                    selectedNodeId = null; updateExpandBtn();
+                }
+            });
+
+        const defs = svg.append('defs');
+        const mkArrow = (id, color) => defs.append('marker').attr('id', id)
+            .attr('viewBox', '0 -5 10 10').attr('refX', 20).attr('refY', 0)
+            .attr('markerWidth', 7).attr('markerHeight', 7).attr('orient', 'auto')
+            .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', color);
+        mkArrow('arrowhead-default',   '#64748b');
+        mkArrow('arrowhead-highlight', '#0ea5e9');
+        mkArrow('arrowhead-risk',      '#ef4444');
+        mkArrow('arrowhead-trace',     '#f97316');
+
+        g = svg.append('g');
+        g.append('g').attr('class', 'links');
+        g.append('g').attr('class', 'nodes');
+        g.append('g').attr('class', 'labels');
+
+        zoom = d3.zoom().scaleExtent([0.1, 8]).on('zoom', ev => g.attr('transform', ev.transform));
+        svg.call(zoom);
+        state.svg = svg;
+
+        rawNodes = [];
+        rawLinks = [];
+        link  = g.select('.links').selectAll('line');
+        node  = g.select('.nodes').selectAll('circle');
+        label = g.select('.labels').selectAll('text');
+        state.link = link;
+        state.node = node;
+        fullGraphData = { nodes: {}, edges: [] };
+        state.fullGraphData = fullGraphData;
+    }
+
+    // Initialise module-level trace state
+    traceFinalAddr    = path.final_addr;
+    tracePathNodeIds  = new Set([path.start]);
+    tracePathEdgeKeys = new Set();
+
+    // Build lookup sets from what's already in the graph
+    const existingNodeIds  = new Set(rawNodes.map(n => n.id));
+    const existingEdgeKeys = new Set(rawLinks.map(l => {
+        const s = l.source?.id || l.source;
+        const t = l.target?.id || l.target;
+        return s + '|' + t;
+    }));
+
+    // Anchor position: start from the origin node if it exists, else centre
+    const startNode = rawNodes.find(n => n.id === path.start);
+    let prevX = startNode?.x ?? 0;
+    let prevY = startNode?.y ?? 0;
+
+    // Add the origin node if missing
+    if (!existingNodeIds.has(path.start)) {
+        rawNodes.push({
+            id: path.start, label: path.start, type: 'Address',
+            sources: ['Trace'], risk: 0, isTarget: !rawNodes.length,
+            x: prevX, y: prevY
+        });
+        fullGraphData.nodes[path.start] = { label: path.start, type: 'Address', sources: ['Trace'], risk: 0 };
+        existingNodeIds.add(path.start);
+    }
+
+    // Kick off a gentle simulation over everything already in the graph
+    if (simulation) simulation.stop();
+    simulation = d3.forceSimulation(rawNodes)
+        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(60))
+        .force('charge', d3.forceManyBody().strength(-120))
+        .force('center', d3.forceCenter(0, 0))
+        .alphaDecay(0.03)
+        .on('tick', ticked);
+
+    rebindGraphSelections();
+    applyTraceHighlight();
+
+    // ── Add hops one at a time ────────────────────────────────────────────────
+    const STEP_X = 180;
+    const total  = path.hops.length;
+
+    for (let idx = 0; idx < total; idx++) {
+        const hop = path.hops[idx];
+
+        setBusy(true,
+            'TRACING PATH… HOP ' + (idx + 1) + ' / ' + total,
+            '\u2192 ' + (hop.to_addr.length > 28 ? hop.to_addr.substring(0, 14) + '\u2026' + hop.to_addr.slice(-10) : hop.to_addr)
+        );
+
+        // Spread hops in a slight arc to avoid overlap
+        const angle  = (idx - (total - 1) / 2) * 0.3; // radians
+        const txX    = prevX + STEP_X * Math.cos(angle);
+        const txY    = prevY + STEP_X * Math.sin(angle) * 0.5;
+        const toX    = prevX + STEP_X * 1.9 * Math.cos(angle);
+        const toY    = prevY + STEP_X * 1.9 * Math.sin(angle) * 0.5;
+
+        // Add TX node
+        if (!existingNodeIds.has(hop.tx_hash)) {
+            rawNodes.push({
+                id: hop.tx_hash, label: hop.tx_hash, type: 'Transaction',
+                sources: ['Trace'], risk: 0, isTarget: false, x: txX, y: txY
+            });
+            fullGraphData.nodes[hop.tx_hash] = { label: hop.tx_hash, type: 'Transaction', sources: ['Trace'], risk: 0 };
+            existingNodeIds.add(hop.tx_hash);
+        }
+        tracePathNodeIds.add(hop.tx_hash);
+
+        // Add destination address node
+        if (!existingNodeIds.has(hop.to_addr)) {
+            rawNodes.push({
+                id: hop.to_addr, label: hop.label || hop.to_addr, type: 'Address',
+                sources: ['Trace'], risk: hop.risk || 0, isTarget: false, x: toX, y: toY
+            });
+            fullGraphData.nodes[hop.to_addr] = {
+                label: hop.label || hop.to_addr, type: 'Address',
+                sources: ['Trace'], risk: hop.risk || 0
+            };
+            existingNodeIds.add(hop.to_addr);
+        }
+        tracePathNodeIds.add(hop.from_addr);
+        tracePathNodeIds.add(hop.to_addr);
+
+        // from_addr → tx_hash
+        const k1 = hop.from_addr + '|' + hop.tx_hash;
+        if (!existingEdgeKeys.has(k1)) {
+            rawLinks.push({ source: hop.from_addr, target: hop.tx_hash, amount: hop.amount, timestamp: hop.timestamp });
+            fullGraphData.edges.push({ source: hop.from_addr, target: hop.tx_hash, amount: hop.amount });
+            existingEdgeKeys.add(k1);
+        }
+        tracePathEdgeKeys.add(k1);
+
+        // tx_hash → to_addr
+        const k2 = hop.tx_hash + '|' + hop.to_addr;
+        if (!existingEdgeKeys.has(k2)) {
+            rawLinks.push({ source: hop.tx_hash, target: hop.to_addr, amount: hop.amount, timestamp: hop.timestamp });
+            fullGraphData.edges.push({ source: hop.tx_hash, target: hop.to_addr, amount: hop.amount });
+            existingEdgeKeys.add(k2);
+        }
+        tracePathEdgeKeys.add(k2);
+
+        prevX = toX;
+        prevY = toY;
+
+        // Rebind selections so new nodes/edges enter the DOM
+        rebindGraphSelections();
+
+        // Restart simulation with a small kick so new nodes animate in
+        if (simulation) {
+            simulation.nodes(rawNodes);
+            simulation.force('link').links(rawLinks);
+            simulation.alpha(0.4).restart();
+        }
+
+        // Apply highlight to path so far
+        applyTraceHighlight();
+
+        document.getElementById('nodeCount').textContent = rawNodes.length.toLocaleString();
+        document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
+
+        // Pause between hops so the user sees each one appear
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // ── All hops added — finalise ─────────────────────────────────────────────
+    setBusy(true, 'FINALISING TRACE…', 'Settling layout');
+
+    if (simulation) simulation.alpha(0.6).restart();
+
+    // Let the simulation settle then do the final highlight + ring
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    if (simulation) simulation.stop();
+
+    updateExpandRings();
+    applyTraceHighlight();
+    drawDestRing();
+    fitGraphToScreen();
+    // Ensure timeline covers trace hops' timestamps
+    refreshTimelineFromRawLinks();
+    setBusy(false);
+}
+
+/**
+ * Reset all node/edge colours and opacities back to defaults,
+ * remove the destination ring, and clear module-level trace state.
+ * Called when the trace panel is closed.
+ */
+export function clearPathHighlight() {
+    traceFinalAddr    = null;
+    tracePathNodeIds  = null;
+    tracePathEdgeKeys = null;
+
+    if (!node || !link || !label) return;
+
+    node.attr('fill', d => defaultNodeFill(d))
+        .attr('r',    d => d.isTarget ? 18 : d.risk > 0 ? 12 : d.type === 'Transaction' ? 4 : 7)
+        .style('opacity', 1);
+
+    link.attr('stroke', d => {
+            const tn = fullGraphData?.nodes[d.target?.id];
+            return (tn && tn.risk > 0) ? '#ef4444' : '#64748b';
+        })
+        .attr('stroke-width', d => Math.max(2.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 8)))
+        .attr('marker-end', d => {
+            const tn = fullGraphData?.nodes[d.target?.id];
+            return (tn && tn.risk > 0) ? 'url(#arrowhead-risk)' : 'url(#arrowhead-default)';
+        })
+        .style('opacity', 0.85);
+
+    label.style('opacity', 1);
+    g?.select('.dest-ring')?.selectAll('circle')?.remove();
 }
 
 // Graph module: exports D3 rendering and interaction functions

@@ -7,6 +7,7 @@ import (
 	"money-tracer/internal/aggregator"
 	"money-tracer/internal/bitquery"
 	"money-tracer/internal/blockstream"
+	"money-tracer/internal/tracer"
 	"money-tracer/parser"
 	"os"
 	"strings"
@@ -259,6 +260,34 @@ func main() {
 		logAPI("GET", "/api/history/"+address, 200, duration, fmt.Sprintf("%d transactions", len(txs)))
 
 		c.JSON(200, txs)
+	})
+
+	// ── Forward Path Tracer ───────────────────────────────────────────────────
+	r.GET("/api/trace-path/:address", func(c *gin.Context) {
+		start := time.Now()
+		address := c.Param("address")
+
+		hops := 10
+		if h := c.Query("hops"); h != "" {
+			if n, err := fmt.Sscanf(h, "%d", &hops); n != 1 || err != nil || hops < 1 || hops > 20 {
+				hops = 10
+			}
+		}
+
+		configMutex.RLock()
+		caKey := currentConfig.ChainAbuseKey
+		configMutex.RUnlock()
+
+		log.Printf("🔍 [TRACE-PATH] Forward tracing from: %s (max %d hops)", address, hops)
+
+		path := tracer.TraceForward(c.Request.Context(), address, caKey, hops)
+
+		duration := time.Since(start)
+		log.Printf("✅ [TRACE-PATH] %d hops traced in %v — stopped: %s", path.TotalHops, duration, path.StopReason)
+		logAPI("GET", "/api/trace-path/"+address, 200, duration,
+			fmt.Sprintf("%d hops, final=%s, reason=%s", path.TotalHops, path.FinalAddr, path.StopReason))
+
+		c.JSON(200, gin.H{"path": path})
 	})
 
 	// ── Debug: Raw Bitquery output ────────────────────────────────────────────

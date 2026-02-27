@@ -1,6 +1,7 @@
 import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar } from './graph.js';
 import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool } from './ui.js';
+import { runTracePath, closeTraceView } from './tracer.js';
 
 console.log('Cryptracker: D3 Renderer Loaded (Modular)');
 // Backend uses Blockstream API, Frontend uses Mempool.space for live enrichment.
@@ -20,8 +21,10 @@ window.fitGraphToScreen = fitGraphToScreen;
 window.toggleCalendar   = toggleCalendar;
 window.closeEntityView  = closeEntityView;
 window.initNetworkStats = initNetworkStats;
-window.enrichFromMempool = enrichFromMempool;
-window.enrichTxFromMempool = enrichTxFromMempool;
+window.enrichFromMempool    = enrichFromMempool;
+window.enrichTxFromMempool  = enrichTxFromMempool;
+window.runTracePath     = runTracePath;
+window.closeTraceView   = closeTraceView;
 
 // Boot network stats ticker
 window.addEventListener('DOMContentLoaded', () => initNetworkStats());
