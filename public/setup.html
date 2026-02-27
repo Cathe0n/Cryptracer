@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <title>Cryptracker | Setup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        body { font-family: 'JetBrains Mono', monospace; background: #ffffff; color: #1e293b; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 bg-white">
+    <div class="w-full max-w-2xl">
+        <div class="bg-white border border-slate-200 rounded-xl p-8 shadow-lg">
+            <!-- Header -->
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-3 h-3 bg-cyan-500 rounded-full shadow-[0_0_12px_#06b6d4]"></div>
+                <h1 class="font-bold text-slate-900 text-xl tracking-[0.3em] uppercase">Cryptracker</h1>
+            </div>
+            
+            <h2 class="text-lg font-bold text-slate-700 mb-2">Configuration Setup</h2>
+            <p class="text-sm text-slate-400 mb-6">Configure your database and API credentials to start investigating.</p>
+            
+            <form id="configForm" class="space-y-6">
+                <!-- Neo4j Configuration -->
+                <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                    <h3 class="text-sm font-bold text-cyan-600 mb-4 uppercase tracking-wider">Neo4j Database</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">URI</label>
+                            <input type="text" id="neo4j_uri" name="neo4j_uri" 
+                                   placeholder="neo4j://localhost:7687"
+                                   class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400"
+                                   required>
+                            <p class="text-xs text-slate-400 mt-1">Example: neo4j://127.0.0.1:7687 or bolt://localhost:7687</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">Username</label>
+                            <input type="text" id="neo4j_user" name="neo4j_user" 
+                                   placeholder="neo4j"
+                                   class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400"
+                                   required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">Password</label>
+                            <input type="password" id="neo4j_pass" name="neo4j_pass" 
+                                   placeholder="••••••••"
+                                   class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900"
+                                   required>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ChainAbuse API -->
+                <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                    <h3 class="text-sm font-bold text-cyan-600 mb-4 uppercase tracking-wider">ChainAbuse API (Optional)</h3>
+                    
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">API Key</label>
+                        <input type="text" id="chainabuse_key" name="chainabuse_key" 
+                               placeholder="ca_..."
+                               class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400">
+                        <p class="text-xs text-slate-400 mt-1">Leave blank to skip risk scoring. Get your key at <a href="https://www.chainabuse.com/api" target="_blank" class="text-cyan-500 hover:underline">chainabuse.com/api</a></p>
+                    </div>
+                </div>
+
+                <!-- Bitquery API -->
+                <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                    <h3 class="text-sm font-bold text-cyan-600 mb-4 uppercase tracking-wider">Bitquery API (Optional)</h3>
+                    
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">API Key</label>
+                        <input type="text" id="bitquery_key" name="bitquery_key" 
+                               placeholder="BQY..."
+                               class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400">
+                        <p class="text-xs text-slate-400 mt-1">
+                            Enables inflow/outflow graph enrichment. Get your key at 
+                            <a href="https://graphql.bitquery.io" target="_blank" class="text-cyan-500 hover:underline">graphql.bitquery.io</a>
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Status Messages -->
+                <div id="statusMessage" class="hidden rounded-lg p-4 text-sm"></div>
+                
+                <!-- Action Buttons -->
+                <div class="flex gap-3 pt-4">
+                    <button type="submit" 
+                            class="flex-1 bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-md text-sm font-bold transition text-white uppercase tracking-widest">
+                        Save &amp; Test Connection
+                    </button>
+                    <button type="button" onclick="loadSaved()" 
+                            class="px-6 py-3 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md text-sm font-bold text-slate-600 uppercase">
+                        Load Saved
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Instructions -->
+            <div class="mt-8 p-4 rounded-lg border border-slate-200 bg-slate-50">
+                <h4 class="text-xs font-bold text-slate-500 uppercase mb-3">📋 Instructions</h4>
+                <ul class="space-y-2 text-xs text-slate-400">
+                    <li>• Make sure Neo4j is running on your machine</li>
+                    <li>• Default Neo4j credentials are usually <code class="text-cyan-600">neo4j</code> / <code class="text-cyan-600">neo4j</code> (change on first login)</li>
+                    <li>• ChainAbuse API is optional — enables risk scoring on wallet addresses</li>
+                    <li>• Bitquery API is optional — enables deeper inflow/outflow graph data</li>
+                    <li>• Credentials are stored in your browser's local storage (secure)</li>
+                    <li>• Click "Load Saved" to restore previous configuration</li>
+                </ul>
+            </div>
+            
+            <!-- Link to Main App -->
+            <div class="mt-6 text-center">
+                <a href="/ui/index.html" id="mainAppLink" class="text-sm text-slate-400 hover:text-cyan-500 transition">
+                    Already configured? Go to main app →
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Form submission
+        document.getElementById('configForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const config = {
+                neo4j_uri:      document.getElementById('neo4j_uri').value.trim(),
+                neo4j_user:     document.getElementById('neo4j_user').value.trim(),
+                neo4j_pass:     document.getElementById('neo4j_pass').value,
+                chainabuse_key: document.getElementById('chainabuse_key').value.trim(),
+                bitquery_key:   document.getElementById('bitquery_key').value.trim()
+            };
+            
+            showStatus('Testing connection...', 'loading');
+            
+            try {
+                const response = await fetch('/api/config/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    localStorage.setItem('forensic_config', JSON.stringify(config));
+                    showStatus('✅ Configuration saved successfully! Redirecting...', 'success');
+                    setTimeout(() => { window.location.href = '/ui/index.html'; }, 1500);
+                } else {
+                    showStatus('❌ Connection failed: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (err) {
+                showStatus('❌ Error: ' + err.message, 'error');
+            }
+        });
+        
+        // Load saved configuration
+        function loadSaved() {
+            const saved = localStorage.getItem('forensic_config');
+            if (saved) {
+                try {
+                    const config = JSON.parse(saved);
+                    document.getElementById('neo4j_uri').value      = config.neo4j_uri      || '';
+                    document.getElementById('neo4j_user').value     = config.neo4j_user     || '';
+                    document.getElementById('neo4j_pass').value     = config.neo4j_pass     || '';
+                    document.getElementById('chainabuse_key').value = config.chainabuse_key || '';
+                    document.getElementById('bitquery_key').value   = config.bitquery_key   || '';
+                    showStatus('✅ Loaded saved configuration', 'success');
+                } catch (e) {
+                    showStatus('⚠️ Could not load saved configuration', 'error');
+                }
+            } else {
+                showStatus('⚠️ No saved configuration found', 'error');
+            }
+        }
+        
+        // Show status message
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.classList.remove('hidden',
+                'bg-blue-50', 'border-blue-400', 'text-blue-700',
+                'bg-green-50', 'border-green-400', 'text-green-700',
+                'bg-red-50', 'border-red-400', 'text-red-700');
+            
+            if (type === 'loading') {
+                statusDiv.classList.add('bg-blue-50', 'border', 'border-blue-400', 'text-blue-700');
+            } else if (type === 'success') {
+                statusDiv.classList.add('bg-green-50', 'border', 'border-green-400', 'text-green-700');
+            } else if (type === 'error') {
+                statusDiv.classList.add('bg-red-50', 'border', 'border-red-400', 'text-red-700');
+            }
+            
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('hidden');
+        }
+        
+        // Auto-load on page load
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('forensic_config');
+            if (saved) loadSaved();
+        });
+    </script>
+</body>
+</html>

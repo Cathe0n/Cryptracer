@@ -2,20 +2,121 @@
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <title>CryptTracker | Sigma Edition</title>
-    <script src="https://cdn.jsdelivr.net/npm/graphology@0.25.1/dist/graphology.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sigma@2.4.0/build/sigma.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/graphology-layout-forceatlas2@0.10.1/browser/index.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Cryptracker | D3 Edition</title>
+    <!-- Using D3.js modules instead of the old Sigma.js renderer -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Tailwind CSS v2 pre-built — no build step, no console warning -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
         body { font-family: 'JetBrains Mono', monospace; background: #020617; color: #cbd5e1; }
-        #sigma-container { width: 100%; height: 100%; position: absolute; }
+        #graph-container { width: 100%; height: 100%; position: absolute; }
         #loader { display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.9); z-index: 100; backdrop-filter: blur(8px); align-items: center; justify-content: center; flex-direction: column; }
         .spinner { width: 40px; height: 40px; border: 3px solid #1e293b; border-top: 3px solid #06b6d4; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Range Slider Styling */
+        /* D3 specific styles — tuned for white canvas */
+        .node { cursor: pointer; }
+        .link {
+            stroke: #64748b;       /* Solid slate, clearly visible on white */
+            stroke-opacity: 0.85;
+            stroke-width: 2.5px;   /* Minimum visible thickness */
+        }
+        .node-label {
+            fill: #1e293b;         /* Dark text on white background */
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            pointer-events: none;
+            /* Subtle light halo so labels stay legible near dark nodes */
+            paint-order: stroke;
+            stroke: rgba(255,255,255,0.85);
+            stroke-width: 3px;
+            stroke-linejoin: round;
+        }
+        
+        /* ── Tailwind v3 classes not in v2 pre-built — defined manually ── */
+
+        /* Arbitrary font sizes */
+        .text-\[8px\]  { font-size: 8px; }
+        .text-\[9px\]  { font-size: 9px; }
+        .text-\[10px\] { font-size: 10px; }
+        .text-\[11px\] { font-size: 11px; }
+
+        /* Cyan 950 (v3 extended palette) */
+        .bg-cyan-950    { background-color: #083344; }
+        .border-cyan-950{ border-color: #083344; }
+
+        /* Emerald (missing from some v2 builds) */
+        .bg-emerald-50  { background-color: #ecfdf5; }
+        .border-emerald-300 { border-color: #6ee7b7; }
+        .text-emerald-700   { color: #047857; }
+        .bg-emerald-500 { background-color: #10b981; }
+
+        /* Cyan 400/600 text used in enrichment panel */
+        .text-cyan-400  { color: #22d3ee; }
+        .text-cyan-600  { color: #0891b2; }
+        .bg-cyan-50     { background-color: #ecfeff; }
+        .border-cyan-200{ border-color: #a5f3fc; }
+        .hover\:bg-cyan-100:hover { background-color: #cffafe; }
+
+        /* Opacity utilities used in sidebar */
+        .bg-cyan-500\/5  { background-color: rgba(6,182,212,0.05); }
+        .bg-cyan-500\/20 { background-color: rgba(6,182,212,0.2); }
+        .border-cyan-500\/20 { border-color: rgba(6,182,212,0.2); }
+        .bg-red-500\/5   { background-color: rgba(239,68,68,0.05); }
+        .bg-red-500\/20  { background-color: rgba(239,68,68,0.2); }
+        .border-red-500\/20  { border-color: rgba(239,68,68,0.2); }
+        .bg-slate-700\/50    { background-color: rgba(51,65,85,0.5); }
+        .border-slate-700\/50{ border-color: rgba(51,65,85,0.5); }
+        .bg-slate-800\/20    { background-color: rgba(30,41,59,0.2); }
+        .bg-slate-800\/80    { background-color: rgba(30,41,59,0.8); }
+        .bg-slate-900\/80    { background-color: rgba(15,23,42,0.8); }
+        .bg-slate-900\/90    { background-color: rgba(15,23,42,0.9); }
+        .bg-slate-900\/95    { background-color: rgba(15,23,42,0.95); }
+        .bg-black\/50        { background-color: rgba(0,0,0,0.5); }
+        .bg-cyan-700\/80     { background-color: rgba(14,116,144,0.8); }
+        .bg-cyan-700\/90     { background-color: rgba(14,116,144,0.9); }
+        .bg-blue-700\/90     { background-color: rgba(29,78,216,0.9); }
+        .border-blue-500     { border-color: #3b82f6; }
+        .bg-slate-800\/90    { background-color: rgba(30,41,59,0.9); }
+        .border-slate-600    { border-color: #475569; }
+
+        /* Backdrop blur */
+        .backdrop-blur-xl { backdrop-filter: blur(24px); }
+        .backdrop-filter  { backdrop-filter: var(--tw-backdrop-filter, none); }
+
+        /* Tracking */
+        .tracking-\[0\.2em\] { letter-spacing: 0.2em; }
+        .tracking-\[0\.3em\] { letter-spacing: 0.3em; }
+
+        /* min-w-0 clamp for flex children */
+        .min-w-0 { min-width: 0; }
+
+        /* shrink-0 */
+        .shrink-0 { flex-shrink: 0; }
+
+        /* Gap utilities that may be missing */
+        .gap-1 { gap: 0.25rem; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-3 { gap: 0.75rem; }
+        .gap-4 { gap: 1rem; }
+
+        /* Paint-order (SVG label halos — non-Tailwind, stays in custom CSS) */
+        .node-label {
+            paint-order: stroke;
+            stroke: rgba(255,255,255,0.85);
+            stroke-width: 3px;
+            stroke-linejoin: round;
+        }
+
+        /* Shadow glow utilities used in risk banners */
+        .shadow-\[0_0_20px_rgba\(34\,197\,94\,0\.2\)\]  { box-shadow: 0 0 20px rgba(34,197,94,0.2); }
+        .shadow-\[0_0_20px_rgba\(234\,179\,8\,0\.2\)\]   { box-shadow: 0 0 20px rgba(234,179,8,0.2); }
+        .shadow-\[0_0_25px_rgba\(249\,115\,22\,0\.3\)\]  { box-shadow: 0 0 25px rgba(249,115,22,0.3); }
+        .shadow-\[0_0_30px_rgba\(239\,68\,68\,0\.4\)\]   { box-shadow: 0 0 30px rgba(239,68,68,0.4); }
+        .shadow-\[0_0_12px_\#06b6d4\]  { box-shadow: 0 0 12px #06b6d4; }
+        .shadow-\[0_0_8px_\#06b6d4\]   { box-shadow: 0 0 8px #06b6d4; }
         input[type=range] { width: 100%; cursor: pointer; accent-color: #06b6d4; }
         
         /* Scrollbar Styling */
@@ -36,12 +137,20 @@
     <header class="h-16 border-b border-slate-800 bg-slate-900/95 flex items-center px-8 justify-between shrink-0 z-50">
         <div class="flex items-center gap-3">
             <div class="w-2.5 h-2.5 bg-cyan-500 rounded-full shadow-[0_0_12px_#06b6d4]"></div>
-            <span class="font-bold text-white text-sm tracking-[0.3em] uppercase">CryptTracker</span>
-            <span class="text-[9px] text-cyan-400 bg-cyan-950 px-2 py-1 rounded">SIGMA EDITION</span>
+            <span class="font-bold text-white text-sm tracking-[0.3em] uppercase">Cryptracker</span>
+            <span class="text-[9px] text-cyan-400 bg-cyan-950 px-2 py-1 rounded">D3 EDITION</span>
+        </div>
+        <!-- Live network stats ticker -->
+        <div id="networkStats" class="flex items-center px-4 max-w-lg overflow-hidden">
+            <span class="text-[10px] text-slate-600 italic">Loading network stats…</span>
         </div>
         <div class="flex gap-3 w-1/2">
             <input id="targetId" type="text" placeholder="Trace Address or Hash..." class="flex-1 bg-black/50 border border-slate-700 rounded-md px-4 py-2 text-xs font-mono focus:border-cyan-500 outline-none text-cyan-400">
             <button onclick="runSleuth()" class="bg-cyan-600 hover:bg-cyan-500 px-8 py-2 rounded-md text-xs font-bold transition text-white uppercase tracking-widest">Investigate</button>
+            <a href="/ui/setup.html" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-md text-xs font-bold transition text-slate-300 uppercase tracking-widest flex items-center gap-2" title="Configure database and API settings">
+                <span>⚙️</span>
+                <span class="hidden sm:inline">Setup</span>
+            </a>
         </div>
     </header>
 
@@ -98,6 +207,29 @@
                                 <div class="w-4 h-4 rounded-full bg-[#fbbf24]"></div>
                                 <span class="text-slate-300">Target</span>
                             </div>
+                            <!-- Arrow legend -->
+                            <div class="flex items-center gap-2 pt-1 border-t border-slate-700/50 mt-1">
+                                <svg width="28" height="10" viewBox="0 0 28 10">
+                                    <defs>
+                                        <marker id="leg-arrow" viewBox="0 -4 8 8" refX="7" refY="0" markerWidth="5" markerHeight="5" orient="auto">
+                                            <path d="M0,-4L8,0L0,4" fill="#64748b"/>
+                                        </marker>
+                                    </defs>
+                                    <line x1="2" y1="5" x2="20" y2="5" stroke="#64748b" stroke-width="1.5" marker-end="url(#leg-arrow)"/>
+                                </svg>
+                                <span class="text-slate-400">Fund flow direction</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <svg width="28" height="10" viewBox="0 0 28 10">
+                                    <defs>
+                                        <marker id="leg-arrow-r" viewBox="0 -4 8 8" refX="7" refY="0" markerWidth="5" markerHeight="5" orient="auto">
+                                            <path d="M0,-4L8,0L0,4" fill="#ef4444"/>
+                                        </marker>
+                                    </defs>
+                                    <line x1="2" y1="5" x2="20" y2="5" stroke="#ef4444" stroke-width="1.5" marker-end="url(#leg-arrow-r)"/>
+                                </svg>
+                                <span class="text-slate-400">To high-risk node</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -117,23 +249,37 @@
                     <h3 class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-4">Live Activity</h3>
                     <div id="historyList" class="space-y-3 text-[10px] text-slate-600 italic">No search results.</div>
                 </div>
+
+                <!-- ── Search history ── -->
+                <div id="searchHistorySection">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Investigation History</h3>
+                        <button onclick="document.getElementById('searchHistoryList').innerHTML='';searchHistory=[];"
+                            class="text-[8px] text-slate-600 hover:text-slate-400 uppercase tracking-wider transition">
+                            Clear
+                        </button>
+                    </div>
+                    <div id="searchHistoryList" class="space-y-2 text-[9px] text-slate-600 italic">No searches yet.</div>
+                </div>
                 
                 <div class="p-4 rounded-lg border border-slate-700/50 bg-slate-800/20">
                     <div class="text-[9px] text-slate-400 uppercase font-bold mb-3">💡 Tips</div>
                     <div class="space-y-2 text-[9px] text-slate-500">
-                        <div>• Scroll to zoom in/out</div>
-                        <div>• Drag to pan around</div>
-                        <div>• Click node for details</div>
+                        <div>• <span class="text-cyan-400 font-bold">Dashed ring</span> = expandable address</div>
+                        <div>• Click node → <span class="text-cyan-400 font-bold">Expand Search</span> to merge its network</div>
+                        <div>• Scroll to zoom · Drag to pan</div>
                         <div>• Hover to highlight neighbors</div>
-                        <div>• Use [LAYOUT] if messy</div>
+                        <div>• Use [FREEZE] to lock positions</div>
+                        <div>• Use [TREE VIEW] to toggle hierarchy layout</div>
                         <div>• Use [HIDE LABELS] for clarity</div>
                     </div>
                 </div>
             </div>
         </aside>
 
-        <div class="flex-grow relative overflow-hidden bg-[#020617]">
-            <div id="sigma-container"></div>
+        <!-- Graph canvas — white background -->
+        <div class="flex-grow relative overflow-hidden bg-white">
+            <div id="graph-container"></div>
             
             <!-- Timeline Floating UI -->
             <div id="timelineUI" class="absolute bottom-10 left-10 right-10 bg-slate-900/90 border border-slate-800 p-6 rounded-xl backdrop-blur-xl z-50 hidden shadow-2xl">
@@ -148,18 +294,23 @@
             </div>
 
             <div class="absolute top-6 right-6 flex gap-2 z-40">
-                <button onclick="fitGraphToScreen()" class="bg-slate-800/80 hover:bg-slate-700 px-3 py-2 rounded border border-slate-700 text-xs font-bold text-slate-300" title="Fit all nodes to screen">[FIT ALL]</button>
-                <button onclick="recenterGraph()" class="bg-cyan-700/80 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white" title="Focus on target node">[FIND TARGET]</button>
-                <button onclick="toggleLabels()" class="bg-slate-800/80 hover:bg-slate-700 px-3 py-2 rounded border border-slate-700 text-xs font-bold text-slate-300" title="Toggle node labels on/off">
+                <button onclick="fitGraphToScreen()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Fit all nodes to screen">[FIT ALL]</button>
+                <button onclick="recenterGraph()" class="bg-cyan-700/90 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white shadow" title="Focus on target node">[FIND TARGET]</button>
+                <button onclick="toggleFreeze()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Freeze/unfreeze node positions">
+                    <span id="freezeText">[FREEZE]</span>
+                </button>
+                <button onclick="toggleLabels()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Toggle node labels on/off">
                     <span id="labelToggleText">[HIDE LABELS]</span>
                 </button>
-                <button onclick="toggleLayout()" class="bg-slate-800/80 hover:bg-slate-700 px-3 py-2 rounded border border-slate-700 text-xs font-bold text-slate-300" title="Reorganize graph layout">[LAYOUT]</button>
-                <button onclick="zoomOut()" class="bg-slate-800/80 hover:bg-slate-700 px-2 py-2 rounded border border-slate-700 text-xs font-bold text-slate-300" title="Zoom out">[-]</button>
-                <button onclick="zoomIn()" class="bg-slate-800/80 hover:bg-slate-700 px-2 py-2 rounded border border-slate-700 text-xs font-bold text-slate-300" title="Zoom in">[+]</button>
+                <button onclick="toggleLayout()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Re-run force simulation">[LAYOUT]</button>
+                <button id="expandSelectedBtn" onclick="expandSelected()" disabled class="bg-cyan-700/90 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white shadow" title="Expand selected node">[EXPAND]</button>
+                <button onclick="zoomOut()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom out">[-]</button>
+                <button onclick="zoomIn()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom in">[+]</button>
             </div>
         </div>
     </main>
 
-    <script src="sigma-script.js"></script>
+    <!-- Application entry point; module imports load graph, UI, and utilities -->
+    <script type="module" src="main.js"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
@@ -9,13 +10,23 @@ import (
 
 var driver neo4j.DriverWithContext
 
-func Init(uri, user, pass string) {
+func Init(uri, user, pass string) error {
 	var err error
 	driver, err = neo4j.NewDriverWithContext(uri, neo4j.BasicAuth(user, pass, ""))
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to create Neo4j driver: %w", err)
 	}
+
+	// Test the connection
+	ctx := context.Background()
+	err = driver.VerifyConnectivity(ctx)
+	if err != nil {
+		driver.Close(ctx)
+		return fmt.Errorf("failed to connect to Neo4j: %w", err)
+	}
+
 	log.Println("✅ Neo4j Connected")
+	return nil
 }
 
 func Close() { _ = driver.Close(context.Background()) }
