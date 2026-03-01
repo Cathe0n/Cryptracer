@@ -79,7 +79,7 @@ func loadEnv() {
 	}
 }
 
-func updateConfig(config Config) error {
+func updateConfig(config Config) (string, error) {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 
@@ -99,8 +99,9 @@ func updateConfig(config Config) error {
 
 	err := db.Init(currentConfig.Neo4jURI, currentConfig.Neo4jUser, currentConfig.Neo4jPass)
 	if err != nil {
-		log.Printf("❌ Database connection failed: %v", err)
-		return err
+		dbInitialized = false
+		log.Printf("⚠️  Database connection failed: %v", err)
+		return "Neo4j not connected; local DB features will be disabled.", nil
 	}
 
 	dbInitialized = true
@@ -118,7 +119,7 @@ func updateConfig(config Config) error {
 		log.Println("⚠️  Bitquery API key not set - Bitquery enrichment disabled")
 	}
 
-	return nil
+	return "Configuration saved and connected.", nil
 }
 
 func getConfig() Config {
@@ -145,7 +146,7 @@ func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "--import" {
 		if !dbInitialized {
-			log.Fatal("❌ Database not configured. Set environment variables or configure via web UI first.")
+			log.Println("⚠️  Database not configured. Import will run but DB writes will be skipped.")
 		}
 		fmt.Println("\n[SYSTEM] 🚀 Starting High-Speed Data Import...")
 		parser.ImportData("./data/Blockchair_bitcoin_inputs_20260130.tsv", true)
@@ -179,18 +180,17 @@ func main() {
 		}
 
 		log.Printf("🔧 [CONFIG] Testing connection to %s with user %s", config.Neo4jURI, config.Neo4jUser)
-
-		err := updateConfig(config)
+		msg, err := updateConfig(config)
 		if err != nil {
 			logAPI("POST", "/api/config/test", 500, time.Since(start), "Connection failed")
 			c.JSON(200, gin.H{"success": false, "error": err.Error()})
 			return
 		}
 
-		logAPI("POST", "/api/config/test", 200, time.Since(start), "Connection successful")
+		logAPI("POST", "/api/config/test", 200, time.Since(start), "Connection processed")
 		c.JSON(200, gin.H{
 			"success": true,
-			"message": "Configuration saved and connection successful",
+			"message": msg,
 		})
 	})
 
@@ -203,15 +203,10 @@ func main() {
 	r.GET("/api/trace/:id", func(c *gin.Context) {
 		start := time.Now()
 
-		if !dbInitialized {
-			logAPI("GET", "/api/trace", 503, time.Since(start), "Database not configured")
-			c.JSON(503, gin.H{
-				"error": "Database not configured. Please configure at /ui/setup.html",
-			})
-			return
-		}
-
 		id := c.Param("id")
+		if !dbInitialized {
+			log.Printf("⚠️  Database not configured - local DB queries will be skipped for %s", id)
+		}
 
 		log.Printf("\n🔎 [INVESTIGATION] Target: %s", id)
 		log.Printf("📊 [INVESTIGATION] Querying Neo4j database...")

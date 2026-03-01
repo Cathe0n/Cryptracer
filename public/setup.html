@@ -147,8 +147,13 @@
                 
                 if (result.success) {
                     localStorage.setItem('forensic_config', JSON.stringify(config));
-                    showStatus('✅ Configuration saved successfully! Redirecting...', 'success');
-                    setTimeout(() => { window.location.href = '/ui/index.html'; }, 1500);
+                    if (result.message && result.message.toLowerCase().includes('neo4j not connected')) {
+                        showStatus('⚠️ ' + result.message + ' You can still use online APIs.', 'error');
+                        setTimeout(() => { window.location.href = '/ui/index.html'; }, 1800);
+                    } else {
+                        showStatus('✅ Configuration saved successfully! Redirecting...', 'success');
+                        setTimeout(() => { window.location.href = '/ui/index.html'; }, 1500);
+                    }
                 } else {
                     showStatus('❌ Connection failed: ' + (result.error || 'Unknown error'), 'error');
                 }
