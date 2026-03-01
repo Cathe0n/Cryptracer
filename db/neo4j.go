@@ -9,6 +9,7 @@ import (
 )
 
 var driver neo4j.DriverWithContext
+var enabled bool
 
 func Init(uri, user, pass string) error {
 	var err error
@@ -25,13 +26,20 @@ func Init(uri, user, pass string) error {
 		return fmt.Errorf("failed to connect to Neo4j: %w", err)
 	}
 
+	enabled = true
 	log.Println("✅ Neo4j Connected")
 	return nil
 }
 
-func Close() { _ = driver.Close(context.Background()) }
+func Close() {
+	_ = driver.Close(context.Background())
+	enabled = false
+}
 
 func SaveOutput(data []map[string]interface{}) {
+	if !enabled {
+		return
+	}
 	ctx := context.Background()
 	session := driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close(ctx)
@@ -40,6 +48,9 @@ func SaveOutput(data []map[string]interface{}) {
 }
 
 func SaveInput(data []map[string]interface{}) {
+	if !enabled {
+		return
+	}
 	ctx := context.Background()
 	session := driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close(ctx)
@@ -48,6 +59,9 @@ func SaveInput(data []map[string]interface{}) {
 }
 
 func GetMoneyFlow(ctx context.Context, id string) (map[string]interface{}, error) {
+	if !enabled {
+		return nil, nil
+	}
 	session := driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer session.Close(ctx)
 

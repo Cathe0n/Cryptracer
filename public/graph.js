@@ -425,11 +425,10 @@ function ticked() {
     if (edgeLabel && edgeLabel.size && link) {
         edgeLabel.attr('x', d => (d.source.x + d.target.x) / 2)
                  .attr('y', d => (d.source.y + d.target.y) / 2 - 6)
-                 .text(d => {
-                     const amt = typeof d.amount !== 'undefined' ? (satsToBTC(d.amount) + ' BTC') : '';
-                     const ts = (timestampsVisible && d.timestamp > 0) ? new Date(d.timestamp * 1000).toISOString().split('T').join(' ').split('.')[0] : '';
-                     return (ts ? ts + ' · ' : '') + amt;
-                 });
+                .text(d => {
+                    const amt = typeof d.amount !== 'undefined' ? (satsToBTC(d.amount) + ' BTC') : '';
+                    return amt; // remove timestamps from edge labels/tooltips
+                });
     }
 }
 
