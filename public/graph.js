@@ -118,6 +118,12 @@ function satsToBTC(sats) {
     return (sats / 1e8).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') || '0';
 }
 
+// Format BTC value that's already in BTC (not satoshis)
+function formatBTC(btc) {
+    if (typeof btc !== 'number') return '0';
+    return btc.toFixed(8).replace(/0+$/, '').replace(/\.$/, '') || '0';
+}
+
 // =============================================================================
 // NETWORK STATS TICKER (shown in header)
 // =============================================================================
@@ -462,7 +468,7 @@ function ticked() {
         edgeLabel.attr('x', d => (d.source.x + d.target.x) / 2)
                  .attr('y', d => (d.source.y + d.target.y) / 2 - 6)
                 .text(d => {
-                    const amt = typeof d.amount !== 'undefined' ? (satsToBTC(d.amount) + ' BTC') : '';
+                    const amt = typeof d.amount !== 'undefined' ? (formatBTC(d.amount) + ' BTC') : '';
                     const ts = d.timestamp || d.ts || 0;
                     let tsText = '';
                     if (ts && Number(ts) > 0) {
@@ -664,8 +670,25 @@ function rebindGraphSelections() {
             enter => enter.append('text')
                 .attr('class', 'edge-label')
                 .attr('text-anchor', 'middle')
-                .attr('fill', '#0f172a').attr('font-size', '10px').attr('font-weight', '500'),
-            update => update,
+                .attr('fill', '#0f172a').attr('font-size', '10px').attr('font-weight', '500')
+                .text(d => {
+                    const amt = typeof d.amount !== 'undefined' ? (formatBTC(d.amount) + ' BTC') : '';
+                    const ts = d.timestamp || d.ts || 0;
+                    let tsText = '';
+                    if (ts && Number(ts) > 0) {
+                        try { tsText = new Date(Number(ts) * 1000).toISOString().replace('T', ' ').split('.')[0] + ' UTC'; } catch (e) { tsText = ''; }
+                    }
+                    return (amt && tsText && timestampsVisible && (selectedNodeId && true)) ? `${amt} • ${tsText}` : amt;
+                }),
+            update => update.text(d => {
+                const amt = typeof d.amount !== 'undefined' ? (formatBTC(d.amount) + ' BTC') : '';
+                const ts = d.timestamp || d.ts || 0;
+                let tsText = '';
+                if (ts && Number(ts) > 0) {
+                    try { tsText = new Date(Number(ts) * 1000).toISOString().replace('T', ' ').split('.')[0] + ' UTC'; } catch (e) { tsText = ''; }
+                }
+                return (amt && tsText && timestampsVisible && (selectedNodeId && true)) ? `${amt} • ${tsText}` : amt;
+            }),
             exit => exit.remove()
         );
 
@@ -679,7 +702,7 @@ function rebindGraphSelections() {
             const midx = (d.source.x + d.target.x) / 2;
             const midy = (d.source.y + d.target.y) / 2;
             const pos = screenPosFromGraph(midx, midy);
-            const amt = typeof d.amount !== 'undefined' ? (satsToBTC(d.amount) + ' • ') : '';
+            const amt = typeof d.amount !== 'undefined' ? (formatBTC(d.amount) + ' • ') : '';
             const ts = d.timestamp || d.ts || 0;
             let tsText = '';
             if (ts && Number(ts) > 0) {
