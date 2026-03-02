@@ -3,6 +3,7 @@ package tracer
 import (
 	"context"
 	"math"
+	"money-tracer/internal/aggregator"
 	"money-tracer/internal/blockstream"
 	"money-tracer/internal/intel"
 	"sort"
@@ -13,16 +14,20 @@ const DefaultMaxHops = 10
 // Hop represents one step in a forward trace chain.
 // Each hop is: currentAddress → sendingTx → nextAddress
 type Hop struct {
-	HopIndex  int     `json:"hop_index"`
-	FromAddr  string  `json:"from_addr"`
-	TxHash    string  `json:"tx_hash"`
-	ToAddr    string  `json:"to_addr"`
-	Amount    float64 `json:"amount"`
-	Timestamp int64   `json:"timestamp"`
-	Label     string  `json:"label,omitempty"`
-	Risk      int     `json:"risk"`
-	// Confidence that the ToAddr is the "real" destination (vs. change)
-	DestConfidence string `json:"dest_confidence"` // "high" | "medium" | "low"
+	HopIndex       int     `json:"hop_index"`
+	FromAddr       string  `json:"from_addr"`
+	TxHash         string  `json:"tx_hash"`
+	ToAddr         string  `json:"to_addr"`
+	Amount         float64 `json:"amount"`
+	Timestamp      int64   `json:"timestamp"`
+	Label          string  `json:"label,omitempty"`
+	Risk           int     `json:"risk"`
+	DestConfidence string  `json:"dest_confidence"` // "high" | "medium" | "low"
+
+	// MixerScore is set when a CoinJoin/mixer transaction is detected on this hop.
+	// A non-zero value means the trace was halted because funds entered a mixer.
+	MixerScore float64              `json:"mixer_score,omitempty"`
+	MixerType  aggregator.MixerType `json:"mixer_type,omitempty"`
 }
 
 type TracePath struct {
@@ -33,7 +38,7 @@ type TracePath struct {
 	StopReason string `json:"stop_reason"`
 }
 
-// stopReasonLabel returns a human-readable explanation for why tracing stopped.
+// StopReasonLabel returns a human-readable explanation for why tracing stopped.
 func StopReasonLabel(r string) string {
 	switch r {
 	case "utxo":
@@ -42,6 +47,8 @@ func StopReasonLabel(r string) string {
 		return "Stopped at high-risk / flagged address"
 	case "known_service":
 		return "Reached known exchange or service"
+	case "mixer_detected":
+		return "Funds entered a coin mixer — trail obfuscated"
 	case "cycle":
 		return "Cycle detected — address reused in chain"
 	case "max_hops":
@@ -58,8 +65,7 @@ func StopReasonLabel(r string) string {
 }
 
 // isRoundBTC returns true if a BTC value is "round" — a signal that it's
-// an intentional payment rather than change.  We check common round increments
-// down to 0.0001 BTC (10,000 sats).
+// an intentional payment rather than change.
 func isRoundBTC(btc float64) bool {
 	for _, step := range []float64{1, 0.5, 0.25, 0.1, 0.05, 0.01, 0.005, 0.001, 0.0001} {
 		remainder := math.Mod(btc, step)
@@ -70,18 +76,30 @@ func isRoundBTC(btc float64) bool {
 	return false
 }
 
+// scriptTypePriority ranks script types by how "modern" they are.
+// Outputs with newer, more common script types are preferred as real payments
+// versus change outputs which sometimes use older types.
+var scriptTypePriority = map[string]int{
+	"p2tr":   5, // Taproot — modern, unambiguously intentional
+	"p2wpkh": 4, // Native SegWit — most common modern payment type
+	"p2wsh":  3, // SegWit script hash — multi-sig / contract
+	"p2sh":   2, // Legacy SegWit wrapped
+	"p2pkh":  1, // Legacy — oldest, often change
+}
+
 type scoredOutput struct {
 	vout  blockstream.Vout
 	score int
 	conf  string
 }
 
-// pickDestination applies three heuristics to choose the most likely "real"
+// pickDestination applies heuristics to choose the most likely "real"
 // destination output from a transaction:
 //
-//  1. Fresh address — output address not seen in any input (strong signal, +4)
-//  2. Round amount  — BTC value is a round number (+2)
-//  3. Larger value  — among ties, prefer the bigger output (+1)
+//  1. Fresh address (+4) — output address not seen in any input
+//  2. Round amount (+2)  — BTC value is a round number
+//  3. Larger value (+1)  — prefer bigger output on ties
+//  4. Modern script (+1) — Taproot/SegWit outputs preferred over P2PKH
 //
 // Returns nil if no spendable outputs exist.
 func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutput {
@@ -89,20 +107,24 @@ func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutpu
 
 	for _, vout := range tx.Vout {
 		addr := vout.ScriptPubKeyAddress
-		if addr == "" {
-			continue // OP_RETURN, P2PK without decoded address, etc.
+		// Skip OP_RETURN and undecodable outputs
+		if addr == "" || vout.ScriptPubKeyType == "op_return" {
+			continue
 		}
 
 		score := 0
 		if !inputAddrs[addr] {
-			score += 4 // fresh address
+			score += 4 // fresh address — strongest signal
 		}
 		btc := float64(vout.Value) / 1e8
 		if isRoundBTC(btc) {
 			score += 2
 		}
 		if btc >= 0.001 {
-			score += 1
+			score += 1 // non-dust
+		}
+		if p, ok := scriptTypePriority[vout.ScriptPubKeyType]; ok {
+			score += p // favour modern script types
 		}
 
 		candidates = append(candidates, scoredOutput{vout, score, ""})
@@ -122,11 +144,11 @@ func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutpu
 
 	best := &candidates[0]
 
-	// Assign confidence label based on score
+	// Assign confidence label
 	switch {
-	case best.score >= 6:
+	case best.score >= 7:
 		best.conf = "high"
-	case best.score >= 3:
+	case best.score >= 4:
 		best.conf = "medium"
 	default:
 		best.conf = "low"
@@ -135,12 +157,42 @@ func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutpu
 	return best
 }
 
+// buildTransactionIO converts a blockstream.Tx into the aggregator.TransactionIO
+// format so we can run mixer-detection heuristics inline during tracing.
+func buildTransactionIO(tx blockstream.Tx) aggregator.TransactionIO {
+	tio := aggregator.TransactionIO{
+		Txid:      tx.Txid,
+		Timestamp: tx.Status.BlockTime,
+	}
+	for _, vin := range tx.Vin {
+		if vin.Prevout == nil {
+			continue
+		}
+		tio.Inputs = append(tio.Inputs, aggregator.TxInput{
+			Address:  vin.Prevout.ScriptPubKeyAddress,
+			Value:    float64(vin.Prevout.Value) / 1e8,
+			Sequence: vin.Sequence,
+		})
+	}
+	for _, vout := range tx.Vout {
+		tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
+			Address:    vout.ScriptPubKeyAddress,
+			Value:      float64(vout.Value) / 1e8,
+			ScriptType: vout.ScriptPubKeyType,
+		})
+	}
+	return tio
+}
+
 // TraceForward follows BTC from startAddr forward hop-by-hop, applying
 // change-detection heuristics at each transaction to find the most likely
 // final destination address.
 //
-//   - maxHops: maximum number of address→tx→address hops to follow (default 10)
+//   - maxHops: maximum number of address→tx→address hops (default 10)
 //   - caKey:   ChainAbuse API key (empty = skip risk scoring)
+//
+// Tracing stops early when funds enter a mixer, reach a known service,
+// hit a high-risk address, or encounter a cycle.
 func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops int) TracePath {
 	if maxHops <= 0 {
 		maxHops = DefaultMaxHops
@@ -173,8 +225,7 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 		}
 
 		// ── 2. Find the most recent TX where this address is a SENDER ───────
-		//
-		// Blockstream returns txs newest-first.  We scan for the first TX
+		// Blockstream returns txs newest-first. We scan for the first TX
 		// that has an input whose prevout address matches currentAddr.
 		var sendingTx *blockstream.Tx
 		for idx := range txs {
@@ -195,7 +246,31 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			break
 		}
 
-		// ── 3. Collect all input addresses for change detection ──────────────
+		// ── 3. Run mixer detection on this transaction ───────────────────────
+		// If the sending transaction looks like a CoinJoin, flag the hop and stop.
+		// Continuing past a mixer is meaningless — we can't follow the funds.
+		tio := buildTransactionIO(*sendingTx)
+		mixerResult := aggregator.IsCoinMixer(tio, 0.70)
+		if mixerResult.Flagged {
+			// Record the mixer hop with zero destination (funds are obfuscated)
+			hop := Hop{
+				HopIndex:       i + 1,
+				FromAddr:       currentAddr,
+				TxHash:         sendingTx.Txid,
+				ToAddr:         "", // can't determine — mixed
+				MixerScore:     mixerResult.Score,
+				MixerType:      mixerResult.MixerType,
+				DestConfidence: "low",
+			}
+			if sendingTx.Status.Confirmed {
+				hop.Timestamp = sendingTx.Status.BlockTime
+			}
+			path.Hops = append(path.Hops, hop)
+			path.StopReason = "mixer_detected"
+			break
+		}
+
+		// ── 4. Collect all input addresses for change detection ──────────────
 		inputAddrs := map[string]bool{}
 		for _, vin := range sendingTx.Vin {
 			if vin.Prevout != nil && vin.Prevout.ScriptPubKeyAddress != "" {
@@ -203,7 +278,7 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			}
 		}
 
-		// ── 4. Pick most likely destination output ───────────────────────────
+		// ── 5. Pick most likely destination output ───────────────────────────
 		dest := pickDestination(*sendingTx, inputAddrs)
 		if dest == nil {
 			path.StopReason = "no_destination"
@@ -218,7 +293,7 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			ts = sendingTx.Status.BlockTime
 		}
 
-		// ── 5. Enrich with label and optional risk scoring ───────────────────
+		// ── 6. Enrich with label and optional risk scoring ───────────────────
 		label := intel.GetLabel(nextAddr)
 		var risk int
 		if caKey != "" {
@@ -239,7 +314,7 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 		}
 		path.Hops = append(path.Hops, hop)
 
-		// ── 6. Stop conditions ───────────────────────────────────────────────
+		// ── 7. Stop conditions ───────────────────────────────────────────────
 		if risk >= 50 {
 			path.StopReason = "high_risk"
 			currentAddr = nextAddr

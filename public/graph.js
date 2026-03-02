@@ -3,8 +3,8 @@ import { state } from './state.js';
 // Mempool.space API integrated for live on-chain enrichment
 console.log('Cryptracker: D3 Renderer Loaded');
 
+import { MEMPOOL_API } from './state.js';
 // ─── Constants ────────────────────────────────────────────────────────────────
-const MEMPOOL_API = 'https://mempool.space/api';
 
 // ─── D3 / simulation state ───────────────────────────────────────────────────
 let simulation;
@@ -13,12 +13,15 @@ let zoom;
 let container, g;
 let link, node, label;
 let edgeLabel;
+let edgeTooltipDiv;
+let currentEdgeHover = null;
 
 // ─── Data state ───────────────────────────────────────────────────────────────
 let currentTargetId = null;
 let fullGraphData = null;
 let labelsVisible = true;
 let timestampsVisible = true;
+let edgeTooltipsVisible = false; // show amount+timestamp tooltips on hover when true
 let isFrozen = false;
 let currentLayout = 'force';  // 'force' | 'tree'
 let rawNodes = [];
@@ -40,22 +43,30 @@ function updateExpandBtn() {
     // determine if the currently selected node is eligible for expansion
     if (!selectedNodeId) {
         btn.disabled = true;
-        btn.textContent = '[EXPAND]';
+        btn.textContent = 'Expand node';
+        btn.title = 'Select an address node to expand its neighbors';
+        btn.classList.remove('text-xs');
+        btn.classList.add('px-3', 'py-1', 'text-sm');
         return;
     }
     const n = fullGraphData?.nodes[selectedNodeId];
     const isAddress = n && n.type === 'Address';
     if (!isAddress) {
         btn.disabled = true;
-        btn.textContent = '[EXPAND]';
+        btn.textContent = 'Expand (addresses only)';
+        btn.title = 'Only address nodes can be expanded';
+        btn.classList.remove('text-sm');
+        btn.classList.add('px-3', 'py-1');
         return;
     }
     if (expandedNodes.has(selectedNodeId)) {
         btn.disabled = true;
-        btn.textContent = '[EXPANDED]';
+        btn.textContent = 'Expanded';
+        btn.title = 'Node already expanded';
     } else {
         btn.disabled = false;
-        btn.textContent = '[EXPAND]';
+        btn.textContent = 'Expand neighbors';
+        btn.title = 'Load and show connected addresses (neighbors)';
     }
 }
 
@@ -345,12 +356,14 @@ function _renderGraphImpl(graphData, targetId) {
             .on("tick", ticked);
 
         const edgeColor = d => {
-            const tn = graphData.nodes[d.target] || graphData.nodes[d.target?.id];
-            return (tn && tn.risk > 0) ? "#ef4444" : "#64748b";
+              const tn = fullGraphData?.nodes[d.target?.id];
+              const r = tn && tn.risk ? tn.risk : 0;
+              return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
         };
         const edgeArrow = d => {
-            const tn = graphData.nodes[d.target] || graphData.nodes[d.target?.id];
-            return (tn && tn.risk > 0) ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
+              const tn = fullGraphData?.nodes[d.target?.id];
+              const r = tn && tn.risk ? tn.risk : 0;
+              return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
         };
 
         link = g.append("g").attr("class", "links")
@@ -362,11 +375,19 @@ function _renderGraphImpl(graphData, targetId) {
             .attr("marker-end", edgeArrow);
         state.link = link;
 
+        const riskColor = r => {
+            if (!r) return null;
+            if (r >= 70) return '#ef4444'; // high risk: red
+            if (r >= 40) return '#f97316'; // med-high: orange
+            if (r >= 10) return '#f59e0b'; // low-med: amber
+            return '#06b6d4'; // minimal: teal
+        };
+
         node = g.append("g").attr("class", "nodes")
             .selectAll("circle").data(nodes).enter().append("circle")
             .attr("class", "node")
-            .attr("r", d => d.isTarget ? 18 : d.risk > 0 ? 12 : d.type === 'Transaction' ? 4 : 7)
-            .attr("fill", d => d.isTarget ? '#fbbf24' : d.risk > 0 ? '#ef4444' : d.type === 'Transaction' ? '#6366f1' : '#0ea5e9')
+            .attr("r", d => d.isTarget ? 18 : (d.type === 'Transaction' ? 4 : (d.risk ? 12 : 7)))
+            .attr("fill", d => d.isTarget ? '#fbbf24' : (d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9')))
             .on("click", (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
             .on("mouseover", (ev, d) => highlightNeighbors(d, true))
             .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
@@ -388,7 +409,22 @@ function _renderGraphImpl(graphData, targetId) {
             .attr("fill", "#0f172a").attr("font-size", "10px").attr("font-weight", "500");
 
         zoom = d3.zoom().scaleExtent([0.1, 8])
-            .on("zoom", ev => g.attr("transform", ev.transform));
+            .on("zoom", ev => {
+                g.attr("transform", ev.transform);
+                // Keep expand rings visually in sync when user zooms/pans
+                updateExpandRings();
+                // If an edge tooltip is visible, reposition it to follow the edge
+                if (currentEdgeHover && edgeTooltipDiv) {
+                    try {
+                        const d = currentEdgeHover;
+                        const midx = (d.source.x + d.target.x) / 2;
+                        const midy = (d.source.y + d.target.y) / 2;
+                        const pos = screenPosFromGraph(midx, midy);
+                        edgeTooltipDiv.style.left = (pos.left + 8) + 'px';
+                        edgeTooltipDiv.style.top  = (pos.top - 18) + 'px';
+                    } catch (e) { /* ignore transient state during layout */ }
+                }
+            });
         svg.call(zoom);
         state.svg = svg;
 
@@ -427,14 +463,75 @@ function ticked() {
                  .attr('y', d => (d.source.y + d.target.y) / 2 - 6)
                 .text(d => {
                     const amt = typeof d.amount !== 'undefined' ? (satsToBTC(d.amount) + ' BTC') : '';
-                    return amt; // remove timestamps from edge labels/tooltips
+                    const ts = d.timestamp || d.ts || 0;
+                    let tsText = '';
+                    if (ts && Number(ts) > 0) {
+                        try {
+                            const dt = new Date(Number(ts) * 1000);
+                            tsText = dt.toISOString().replace('T', ' ').split('.')[0] + ' UTC';
+                        } catch (e) { tsText = ''; }
+                    }
+                    // Only include timestamp in the label text; visibility is still
+                    // controlled by hover/selection/toggle so we don't clutter view.
+                    if (edgeTooltipsVisible) {
+                        // When tooltips are enabled we still hide labels by default
+                        // and show them on hover/selection; text contains amt+ts if available.
+                        return tsText ? `${amt} • ${tsText}` : amt;
+                    }
+                    return (amt && tsText && timestampsVisible && (selectedNodeId && (d.source.id === selectedNodeId || d.target.id === selectedNodeId)))
+                        ? `${amt} • ${tsText}`
+                        : amt;
                 });
+    }
+    // If an edge tooltip is visible while the simulation/tick runs, keep it positioned
+    if (currentEdgeHover && edgeTooltipDiv && edgeTooltipDiv.style.display === 'block') {
+        try {
+            const d = currentEdgeHover;
+            const midx = (d.source.x + d.target.x) / 2;
+            const midy = (d.source.y + d.target.y) / 2;
+            const pos = screenPosFromGraph(midx, midy);
+            edgeTooltipDiv.style.left = (pos.left + 8) + 'px';
+            edgeTooltipDiv.style.top  = (pos.top - 18) + 'px';
+        } catch (e) { /* ignore transient state */ }
+    }
+}
+
+// Convert graph-space coordinates (x,y) to screen coordinates for tooltip placement
+function screenPosFromGraph(x, y) {
+    if (!svg) return { left: 0, top: 0 };
+    const rect = svg.node().getBoundingClientRect();
+    const t = d3.zoomTransform(svg.node());
+    // SVG viewBox centers at (0,0) so map graph x/y using zoom transform
+    const cx = rect.left + rect.width / 2 + (x * t.k + t.x);
+    const cy = rect.top  + rect.height / 2 + (y * t.k + t.y);
+    return { left: cx, top: cy };
+}
+
+function createEdgeTooltip() {
+    const containerEl = document.getElementById('graph-container');
+    if (!containerEl) return;
+    edgeTooltipDiv = document.getElementById('edge-tooltip');
+    if (!edgeTooltipDiv) {
+        edgeTooltipDiv = document.createElement('div');
+        edgeTooltipDiv.id = 'edge-tooltip';
+        edgeTooltipDiv.style.position = 'absolute';
+        edgeTooltipDiv.style.pointerEvents = 'none';
+        edgeTooltipDiv.style.padding = '6px 8px';
+        edgeTooltipDiv.style.background = 'rgba(15,23,42,0.95)';
+        edgeTooltipDiv.style.color = '#e6eef6';
+        edgeTooltipDiv.style.fontFamily = 'JetBrains Mono, monospace';
+        edgeTooltipDiv.style.fontSize = '12px';
+        edgeTooltipDiv.style.borderRadius = '6px';
+        edgeTooltipDiv.style.zIndex = 9999;
+        edgeTooltipDiv.style.display = 'none';
+        containerEl.appendChild(edgeTooltipDiv);
     }
 }
 
 function drag() {
     return d3.drag()
         .on("start", (ev, d) => {
+            if (edgeTooltipDiv) edgeTooltipDiv.style.display = 'none';
             if (!isFrozen && !ev.active && simulation) simulation.alphaTarget(0.3).restart();
             d.fx = d.x; d.fy = d.y;
         })
@@ -444,7 +541,14 @@ function drag() {
         })
         .on("end", (ev, d) => {
             if (!isFrozen && !ev.active && simulation) simulation.alphaTarget(0);
-            if (!isFrozen) { d.fx = null; d.fy = null; }
+            // Persist the node position so the user's layout is preserved during this session
+            d.fx = d.x; d.fy = d.y;
+            try {
+                if (fullGraphData && fullGraphData.nodes && fullGraphData.nodes[d.id]) {
+                    fullGraphData.nodes[d.id].x = d.x;
+                    fullGraphData.nodes[d.id].y = d.y;
+                }
+            } catch (e) { /* ignore */ }
         });
 }
 
@@ -461,12 +565,14 @@ function rebindGraphSelections() {
     const edgeColor = d => {
         const tid = d.target?.id || d.target;
         const tn  = fullGraphData?.nodes[tid];
-        return (tn && tn.risk > 0) ? "#ef4444" : "#64748b";
+        const r = tn && tn.risk ? tn.risk : 0;
+        return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
     };
     const edgeArrow = d => {
         const tid = d.target?.id || d.target;
         const tn  = fullGraphData?.nodes[tid];
-        return (tn && tn.risk > 0) ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
+        const r = tn && tn.risk ? tn.risk : 0;
+        return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
     };
 
     // ── Links ────────────────────────────────────────────────────────────────
@@ -490,13 +596,19 @@ function rebindGraphSelections() {
     state.link = link;
 
     // ── Nodes ────────────────────────────────────────────────────────────────
+    const riskColor = r => {
+        if (r >= 70) return '#ef4444'; // high risk: red
+        if (r >= 40) return '#f97316'; // med-high: orange
+        if (r >= 10) return '#f59e0b'; // low-med: amber
+        return '#06b6d4'; // minimal: teal
+    };
     g.select(".nodes").selectAll("circle")
         .data(rawNodes, d => d.id)
         .join(
             enter => enter.append("circle")
                 .attr("class", "node")
-                .attr("r",    d => d.isTarget ? 18 : d.risk > 0 ? 12 : d.type === 'Transaction' ? 4 : 7)
-                .attr("fill", d => d.isTarget ? '#fbbf24' : d.risk > 0 ? '#ef4444' : d.type === 'Transaction' ? '#6366f1' : '#0ea5e9')
+                .attr("r",    d => d.isTarget ? 18 : (d.type === 'Transaction' ? 4 : (d.risk ? 12 : 7)))
+                .attr("fill", d => d.isTarget ? '#fbbf24' : (d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9')))
                 .on("click",     (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
                 .on("mouseover", (ev, d) => highlightNeighbors(d, true))
                 .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
@@ -556,6 +668,39 @@ function rebindGraphSelections() {
             update => update,
             exit => exit.remove()
         );
+
+    // Add hover listeners on links to show per-edge tooltip when enabled
+    g.select('.links').selectAll('line')
+        .on('mouseover', function(ev, d) {
+            if (!edgeTooltipsVisible) return;
+            if (!edgeTooltipDiv) createEdgeTooltip();
+            currentEdgeHover = d;
+            // position tooltip at the midpoint of the edge using current zoom transform
+            const midx = (d.source.x + d.target.x) / 2;
+            const midy = (d.source.y + d.target.y) / 2;
+            const pos = screenPosFromGraph(midx, midy);
+            const amt = typeof d.amount !== 'undefined' ? (satsToBTC(d.amount) + ' • ') : '';
+            const ts = d.timestamp || d.ts || 0;
+            let tsText = '';
+            if (ts && Number(ts) > 0) {
+                try { tsText = new Date(Number(ts) * 1000).toISOString().replace('T', ' ').split('.')[0] + ' UTC'; } catch (e) { tsText = ''; }
+            }
+            edgeTooltipDiv.textContent = (amt + (tsText || '')).trim();
+            edgeTooltipDiv.style.left = (pos.left + 8) + 'px';
+            edgeTooltipDiv.style.top  = (pos.top - 18) + 'px';
+            edgeTooltipDiv.style.display = 'block';
+        })
+        .on('mouseout', function() {
+            currentEdgeHover = null;
+            if (edgeTooltipDiv) edgeTooltipDiv.style.display = 'none';
+        })
+        .on('mouseout', function(ev, d) {
+            if (!edgeTooltipsVisible || !edgeTooltipDiv) return;
+            edgeTooltipDiv.style.display = 'none';
+        });
+
+    // Hide tooltip when user starts dragging nodes
+    g.select('.nodes').selectAll('circle').on('mousedown.tooltip-hide', () => { if (edgeTooltipDiv) edgeTooltipDiv.style.display = 'none'; });
 }
 
 /**
@@ -945,12 +1090,14 @@ function applyLinkHighlight(activePred) {
         .attr("stroke", o => {
             if (activePred(o)) return "#0ea5e9";
             const tn = fullGraphData?.nodes[o.target?.id];
-            return (tn && tn.risk > 0) ? "#ef4444" : "#64748b";
+            const r = tn && tn.risk ? tn.risk : 0;
+            return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
         })
         .attr("marker-end", o => {
             if (activePred(o)) return "url(#arrowhead-highlight)";
             const tn = fullGraphData?.nodes[o.target?.id];
-            return (tn && tn.risk > 0) ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
+            const r = tn && tn.risk ? tn.risk : 0;
+            return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
         });
 }
 
@@ -989,11 +1136,13 @@ function unhighlightAll() {
     link.style("opacity", 0.85)
         .attr("stroke", d => {
             const tn = fullGraphData?.nodes[d.target?.id];
-            return (tn && tn.risk > 0) ? "#ef4444" : "#64748b";
+            const r = tn && tn.risk ? tn.risk : 0;
+            return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
         })
         .attr("marker-end", d => {
             const tn = fullGraphData?.nodes[d.target?.id];
-            return (tn && tn.risk > 0) ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
+            const r = tn && tn.risk ? tn.risk : 0;
+            return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
         });
     label.style("opacity", 1);
 }
@@ -1002,11 +1151,20 @@ function unhighlightAll() {
 export function toggleTimestamps() {
     timestampsVisible = !timestampsVisible;
     const txt = document.getElementById('timestampToggleText');
-    if (txt) txt.textContent = timestampsVisible ? '[HIDE TIMESTAMPS]' : '[SHOW TIMESTAMPS]';
+    if (txt) txt.textContent = timestampsVisible ? '[HIDE INFO]' : '[INFO]';
     if (!timestampsVisible && edgeLabel) edgeLabel.style('display', 'none');
     if (timestampsVisible && selectedNodeId && edgeLabel) {
         edgeLabel.style('display', e => (e.source.id === selectedNodeId || e.target.id === selectedNodeId) ? 'block' : 'none');
     }
+}
+
+// Toggle per-edge tooltips (amount + timestamp) on hover
+export function toggleEdgeTooltips() {
+    edgeTooltipsVisible = !edgeTooltipsVisible;
+    const btn = document.getElementById('toggleEdgeTipBtn');
+    if (btn) btn.textContent = edgeTooltipsVisible ? '[TOOLTIPS ON]' : '[TOOLTIPS]';
+    // Hide any visible labels when turning off
+    if (!edgeTooltipsVisible && edgeLabel) edgeLabel.style('display', 'none');
 }
 
 // =============================================================================
@@ -1050,24 +1208,46 @@ function showEntityView(nodeId) {
     const isAddress = nodeData.type === 'Address';
 
     // ── Risk banner ──────────────────────────────────────────────────────────
-    const risk = nodeData.risk || 0;
-    const rd   = nodeData.risk_data;
+    const risk       = nodeData.risk || 0;
+    const rd         = nodeData.risk_data;
     const hasReports = rd && rd.report_count > 0;
     const hasError   = rd && rd.error;
 
+    // hasTaintOnly = risk is inherited from graph proximity (taint propagation),
+    // NOT from direct ChainAbuse reports for this address/tx.
+    // We must never show "NO RISK REPORTS ✅" when risk > 0 — that is contradictory.
+    const hasTaintOnly = !hasReports && !hasError && risk > 0;
+
     let rc, rl, rbg, rbrd, rglow, ri;
     if (hasError) {
-        rc='orange'; rl='API LIMIT REACHED'; rbg='bg-orange-50'; rbrd='border-orange-300'; rglow=''; ri='⏳';
-    } else if (!hasReports) {
-        rc='emerald'; rl='NO RISK REPORTS'; rbg='bg-emerald-50'; rbrd='border-emerald-300'; rglow=''; ri='✅';
+        rc='orange'; rl='API LIMIT REACHED';
+        rbg='bg-orange-50'; rbrd='border-orange-300'; rglow=''; ri='⏳';
+    } else if (hasTaintOnly) {
+        if (risk >= 70) {
+            rc='orange'; rl='HIGH TAINT RISK';
+            rbg='bg-amber-50'; rbrd='border-amber-300'; rglow='shadow-[0_0_20px_rgba(245,158,11,0.2)]'; ri='⚠️';
+        } else if (risk >= 40) {
+            rc='yellow'; rl='ELEVATED TAINT RISK';
+            rbg='bg-yellow-50'; rbrd='border-yellow-300'; rglow=''; ri='⚠️';
+        } else {
+            rc='slate'; rl='LOW TAINT RISK';
+            rbg='bg-slate-50'; rbrd='border-slate-300'; rglow=''; ri='🔗';
+        }
+    } else if (!hasReports && risk === 0) {
+        rc='emerald'; rl='NO RISK REPORTS';
+        rbg='bg-emerald-50'; rbrd='border-emerald-300'; rglow=''; ri='✅';
     } else if (risk >= 70) {
-        rc='red'; rl='CRITICAL RISK'; rbg='bg-red-100'; rbrd='border-red-300'; rglow='shadow-[0_0_30px_rgba(239,68,68,0.4)]'; ri='🚨';
+        rc='red'; rl='CRITICAL RISK';
+        rbg='bg-red-100'; rbrd='border-red-300'; rglow='shadow-[0_0_30px_rgba(239,68,68,0.4)]'; ri='🚨';
     } else if (risk >= 40) {
-        rc='orange'; rl='HIGH RISK'; rbg='bg-orange-100'; rbrd='border-orange-300'; rglow='shadow-[0_0_25px_rgba(249,115,22,0.3)]'; ri='⚠️';
+        rc='orange'; rl='HIGH RISK';
+        rbg='bg-orange-100'; rbrd='border-orange-300'; rglow='shadow-[0_0_25px_rgba(249,115,22,0.3)]'; ri='⚠️';
     } else if (risk >= 20) {
-        rc='yellow'; rl='MEDIUM RISK'; rbg='bg-yellow-100'; rbrd='border-yellow-300'; rglow='shadow-[0_0_20px_rgba(234,179,8,0.2)]'; ri='⚠️';
+        rc='yellow'; rl='MEDIUM RISK';
+        rbg='bg-yellow-100'; rbrd='border-yellow-300'; rglow='shadow-[0_0_20px_rgba(234,179,8,0.2)]'; ri='⚠️';
     } else {
-        rc='green'; rl='LOW RISK'; rbg='bg-green-100'; rbrd='border-green-300'; rglow=''; ri='✅';
+        rc='green'; rl='LOW RISK';
+        rbg='bg-green-100'; rbrd='border-green-300'; rglow=''; ri='✅';
     }
 
     let html = `<div class="space-y-4">`;
@@ -1081,7 +1261,7 @@ function showEntityView(nodeId) {
         </div>
         <div class="bg-white/60 rounded-full h-2 mb-3">
             <div class="bg-${rc}-500 h-2 rounded-full transition-all duration-500"
-                 style="width: ${hasReports ? Math.max(risk, 4) : 100}%"></div>
+                 style="width: ${(hasReports || hasTaintOnly) ? Math.max(risk, 4) : 100}%"></div>
         </div>`;
 
     if (hasError) {
@@ -1095,7 +1275,17 @@ function showEntityView(nodeId) {
             <div><div class="text-slate-500 uppercase">Lost</div><div class="font-bold text-slate-800">${rd.total_amount.toFixed(2)} BTC</div></div>
         </div>`;
     } else {
-        html += `<div class="text-[9px] text-emerald-700">No abuse reports found for this address.</div>`;
+        if (hasTaintOnly) {
+            html += `
+            <div class="text-[9px] text-amber-800 font-bold mb-1">No direct abuse reports for this address.</div>
+            <div class="text-[9px] text-amber-700 leading-relaxed">
+                Risk score of <strong>${risk}</strong> is inherited from graph proximity —
+                this entity is within a few hops of a flagged address. It does not indicate
+                confirmed involvement.
+            </div>`;
+        } else {
+            html += `<div class="text-[9px] text-emerald-700">No abuse reports found. Address appears clean.</div>`;
+        }
     }
     html += `</div>`;
 
@@ -1137,7 +1327,10 @@ function showEntityView(nodeId) {
     <div class="space-y-3">
         <div class="flex items-center gap-2 flex-wrap">
             <span class="px-2 py-1 rounded text-[9px] font-bold ${isAddress ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-purple-100 text-purple-600 border border-purple-200'}">${nodeData.type}</span>
-            ${nodeData.risk > 0 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-600 border border-red-200">HIGH RISK</span>' : ''}
+            ${hasReports && risk >= 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-600 border border-red-200">🚨 CRITICAL RISK</span>' : ''}
+            ${hasReports && risk >= 40 && risk < 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-orange-100 text-orange-600 border border-orange-200">⚠️ HIGH RISK</span>' : ''}
+            ${nodeData.mixer_info && nodeData.mixer_info.flagged ? ('<span class="px-2 py-1 rounded text-[9px] font-bold bg-indigo-100 text-indigo-600 border border-indigo-200" title="Mixer heuristic score: '+(nodeData.mixer_info.score||0).toFixed(2)+'">🌀 MIXER '+(nodeData.mixer_info.mixer_type || '')+'</span>') : ''}
+            ${hasTaintOnly && risk >= 40 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-300" title="Risk inherited from nearby flagged nodes — no direct reports">🔗 TAINT ' + risk + '</span>' : ''}
             <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}"
                target="_blank" rel="noopener"
                class="px-2 py-1 rounded text-[9px] font-bold bg-cyan-50 text-cyan-600 border border-cyan-200 hover:bg-cyan-100 transition">
@@ -1919,17 +2112,19 @@ export function clearPathHighlight() {
     if (!node || !link || !label) return;
 
     node.attr('fill', d => defaultNodeFill(d))
-        .attr('r',    d => d.isTarget ? 18 : d.risk > 0 ? 12 : d.type === 'Transaction' ? 4 : 7)
+        .attr('r',    d => d.isTarget ? 18 : (d.type === 'Transaction' ? 4 : (d.risk ? 12 : 7)))
         .style('opacity', 1);
 
     link.attr('stroke', d => {
             const tn = fullGraphData?.nodes[d.target?.id];
-            return (tn && tn.risk > 0) ? '#ef4444' : '#64748b';
+            const r = tn && tn.risk ? tn.risk : 0;
+            return r >= 70 ? '#ef4444' : r >= 40 ? '#f97316' : r >= 10 ? '#f59e0b' : '#64748b';
         })
         .attr('stroke-width', d => Math.max(2.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 8)))
         .attr('marker-end', d => {
             const tn = fullGraphData?.nodes[d.target?.id];
-            return (tn && tn.risk > 0) ? 'url(#arrowhead-risk)' : 'url(#arrowhead-default)';
+            const r = tn && tn.risk ? tn.risk : 0;
+            return r >= 70 ? 'url(#arrowhead-risk)' : 'url(#arrowhead-default)';
         })
         .style('opacity', 0.85);
 
@@ -1939,4 +2134,4 @@ export function clearPathHighlight() {
 
 // Graph module: exports D3 rendering and interaction functions
 // runSleuth is defined in main.js as the primary orchestrator
-export { expandNode, updateExpandRings, expandSelected, updateExpandBtn };
+export { expandNode, updateExpandRings, updateExpandBtn };

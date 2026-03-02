@@ -10,6 +10,7 @@ import (
 	"money-tracer/internal/tracer"
 	"money-tracer/parser"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +19,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Runtime configuration
+// ─── Runtime config ───────────────────────────────────────────────────────────
+
 var (
 	configMutex   sync.RWMutex
 	currentConfig struct {
@@ -32,14 +34,15 @@ var (
 )
 
 type Config struct {
-	Neo4jURI      string `json:"neo4j_uri" binding:"required"`
+	Neo4jURI      string `json:"neo4j_uri"  binding:"required"`
 	Neo4jUser     string `json:"neo4j_user" binding:"required"`
 	Neo4jPass     string `json:"neo4j_pass"`
 	ChainAbuseKey string `json:"chainabuse_key"`
 	BitqueryKey   string `json:"bitquery_key"`
 }
 
-// API Logging helper
+// ─── Logging ──────────────────────────────────────────────────────────────────
+
 func logAPI(method, endpoint string, status int, duration time.Duration, details string) {
 	emoji := "✅"
 	if status >= 400 {
@@ -50,10 +53,11 @@ func logAPI(method, endpoint string, status int, duration time.Duration, details
 	log.Printf("%s [API] %s %s - %d (%v) | %s", emoji, method, endpoint, status, duration, details)
 }
 
+// ─── Config management ────────────────────────────────────────────────────────
+
 func loadEnv() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("⚠️  Warning: .env file not found, will use runtime configuration")
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️  No .env file found — using runtime configuration")
 	}
 
 	configMutex.Lock()
@@ -66,16 +70,15 @@ func loadEnv() {
 	currentConfig.BitqueryKey = os.Getenv("BITQUERY_KEY")
 
 	if currentConfig.Neo4jURI != "" && currentConfig.Neo4jUser != "" {
-		log.Println("✅ Found credentials in environment, initializing database...")
-		err := db.Init(currentConfig.Neo4jURI, currentConfig.Neo4jUser, currentConfig.Neo4jPass)
-		if err != nil {
-			log.Printf("❌ Failed to initialize database: %v", err)
+		log.Println("✅ Found credentials in environment, initialising database...")
+		if err := db.Init(currentConfig.Neo4jURI, currentConfig.Neo4jUser, currentConfig.Neo4jPass); err != nil {
+			log.Printf("❌ Database init failed: %v", err)
 		} else {
 			dbInitialized = true
-			log.Println("✅ Database connected successfully")
+			log.Println("✅ Database connected")
 		}
 	} else {
-		log.Println("⚠️  No credentials in environment. Configure via web UI at http://localhost:8080/ui/setup.html")
+		log.Println("⚠️  No DB credentials in environment — configure via http://localhost:8080/ui/setup.html")
 	}
 }
 
@@ -95,10 +98,9 @@ func updateConfig(config Config) (string, error) {
 	currentConfig.ChainAbuseKey = config.ChainAbuseKey
 	currentConfig.BitqueryKey = config.BitqueryKey
 
-	log.Printf("🔄 Attempting to connect to Neo4j at %s...", config.Neo4jURI)
+	log.Printf("🔄 Connecting to Neo4j at %s...", config.Neo4jURI)
 
-	err := db.Init(currentConfig.Neo4jURI, currentConfig.Neo4jUser, currentConfig.Neo4jPass)
-	if err != nil {
+	if err := db.Init(config.Neo4jURI, config.Neo4jUser, config.Neo4jPass); err != nil {
 		dbInitialized = false
 		log.Printf("⚠️  Database connection failed: %v", err)
 		return "Neo4j not connected; local DB features will be disabled.", nil
@@ -107,16 +109,15 @@ func updateConfig(config Config) (string, error) {
 	dbInitialized = true
 	log.Println("✅ Database configuration updated and connected")
 
-	if currentConfig.ChainAbuseKey != "" {
+	if config.ChainAbuseKey != "" {
 		log.Println("✅ ChainAbuse API key configured")
 	} else {
-		log.Println("⚠️  ChainAbuse API key not set - risk scoring disabled")
+		log.Println("⚠️  ChainAbuse API key not set — risk scoring disabled")
 	}
-
-	if currentConfig.BitqueryKey != "" {
+	if config.BitqueryKey != "" {
 		log.Println("✅ Bitquery API key configured")
 	} else {
-		log.Println("⚠️  Bitquery API key not set - Bitquery enrichment disabled")
+		log.Println("⚠️  Bitquery API key not set — Bitquery enrichment disabled")
 	}
 
 	return "Configuration saved and connected.", nil
@@ -125,28 +126,29 @@ func updateConfig(config Config) (string, error) {
 func getConfig() Config {
 	configMutex.RLock()
 	defer configMutex.RUnlock()
-
 	return Config{
 		Neo4jURI:      currentConfig.Neo4jURI,
 		Neo4jUser:     currentConfig.Neo4jUser,
-		Neo4jPass:     "",
+		Neo4jPass:     "", // never send the password back to the client
 		ChainAbuseKey: currentConfig.ChainAbuseKey,
 		BitqueryKey:   currentConfig.BitqueryKey,
 	}
 }
 
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
 func main() {
 	loadEnv()
-
 	defer func() {
 		if dbInitialized {
 			db.Close()
 		}
 	}()
 
+	// CLI import mode
 	if len(os.Args) > 1 && os.Args[1] == "--import" {
 		if !dbInitialized {
-			log.Println("⚠️  Database not configured. Import will run but DB writes will be skipped.")
+			log.Println("⚠️  Database not configured — DB writes will be skipped.")
 		}
 		fmt.Println("\n[SYSTEM] 🚀 Starting High-Speed Data Import...")
 		parser.ImportData("./data/Blockchair_bitcoin_inputs_20260130.tsv", true)
@@ -156,116 +158,87 @@ func main() {
 
 	r := gin.Default()
 
-	// Logging middleware
+	// ── Logging middleware ────────────────────────────────────────────────────
 	r.Use(func(c *gin.Context) {
 		start := time.Now()
-		path := c.Request.URL.Path
 		c.Next()
-		duration := time.Since(start)
-		status := c.Writer.Status()
-		logAPI(c.Request.Method, path, status, duration, c.ClientIP())
+		logAPI(c.Request.Method, c.Request.URL.Path, c.Writer.Status(), time.Since(start), c.ClientIP())
 	})
 
 	r.Static("/ui", "./public")
 
 	// ── Config endpoints ──────────────────────────────────────────────────────
-	r.POST("/api/config/test", func(c *gin.Context) {
-		start := time.Now()
-		var config Config
 
+	r.POST("/api/config/test", func(c *gin.Context) {
+		var config Config
 		if err := c.ShouldBindJSON(&config); err != nil {
-			logAPI("POST", "/api/config/test", 400, time.Since(start), "Invalid JSON")
 			c.JSON(400, gin.H{"success": false, "error": "Invalid configuration format"})
 			return
 		}
-
-		log.Printf("🔧 [CONFIG] Testing connection to %s with user %s", config.Neo4jURI, config.Neo4jUser)
+		log.Printf("🔧 [CONFIG] Testing connection to %s (user: %s)", config.Neo4jURI, config.Neo4jUser)
 		msg, err := updateConfig(config)
 		if err != nil {
-			logAPI("POST", "/api/config/test", 500, time.Since(start), "Connection failed")
 			c.JSON(200, gin.H{"success": false, "error": err.Error()})
 			return
 		}
-
-		logAPI("POST", "/api/config/test", 200, time.Since(start), "Connection processed")
-		c.JSON(200, gin.H{
-			"success": true,
-			"message": msg,
-		})
+		c.JSON(200, gin.H{"success": true, "message": msg})
 	})
 
 	r.GET("/api/config", func(c *gin.Context) {
-		config := getConfig()
-		c.JSON(200, gin.H{"config": config, "initialized": dbInitialized})
+		c.JSON(200, gin.H{"config": getConfig(), "initialized": dbInitialized})
 	})
 
-	// ── Main Forensic API ─────────────────────────────────────────────────────
+	// ── Main forensic graph API ───────────────────────────────────────────────
+
 	r.GET("/api/trace/:id", func(c *gin.Context) {
 		start := time.Now()
-
 		id := c.Param("id")
+
 		if !dbInitialized {
-			log.Printf("⚠️  Database not configured - local DB queries will be skipped for %s", id)
+			log.Printf("⚠️  Database not configured — local DB queries will be skipped for %s", id)
 		}
 
 		log.Printf("\n🔎 [INVESTIGATION] Target: %s", id)
-		log.Printf("📊 [INVESTIGATION] Querying Neo4j database...")
 
 		configMutex.RLock()
 		caKey := currentConfig.ChainAbuseKey
 		bqKey := currentConfig.BitqueryKey
 		configMutex.RUnlock()
 
-		if caKey != "" {
-			log.Printf("🛡️  [INVESTIGATION] ChainAbuse risk scoring enabled")
-		}
-		if bqKey != "" {
-			log.Printf("📡 [INVESTIGATION] Bitquery enrichment enabled")
-		}
-
 		graph := aggregator.BuildVerifiedFTM(c.Request.Context(), id, caKey, bqKey)
 
-		nodeCount := len(graph.Nodes)
-		edgeCount := len(graph.Edges)
-		duration := time.Since(start)
-
-		log.Printf("✅ [INVESTIGATION] Complete: %d nodes, %d edges in %v", nodeCount, edgeCount, duration)
-		logAPI("GET", "/api/trace/"+id, 200, duration, fmt.Sprintf("%d nodes, %d edges", nodeCount, edgeCount))
+		log.Printf("✅ [INVESTIGATION] Complete: %d nodes, %d edges in %v",
+			len(graph.Nodes), len(graph.Edges), time.Since(start))
 
 		c.JSON(200, gin.H{"graph": graph})
 	})
 
-	// ── Live History API ──────────────────────────────────────────────────────
-	r.GET("/api/history/:address", func(c *gin.Context) {
-		start := time.Now()
-		address := c.Param("address")
+	// ── Live history ──────────────────────────────────────────────────────────
 
+	r.GET("/api/history/:address", func(c *gin.Context) {
+		address := c.Param("address")
 		log.Printf("📡 [HISTORY] Fetching live data for: %s", address)
 
 		txs, err := blockstream.GetAddressTxs(address)
 		if err != nil || txs == nil {
-			logAPI("GET", "/api/history/"+address, 404, time.Since(start), "No data found")
 			log.Printf("⚠️  [HISTORY] No data found for %s", address)
 			c.JSON(200, []blockstream.Tx{})
 			return
 		}
-
-		duration := time.Since(start)
-		log.Printf("✅ [HISTORY] Retrieved %d transactions in %v", len(txs), duration)
-		logAPI("GET", "/api/history/"+address, 200, duration, fmt.Sprintf("%d transactions", len(txs)))
-
+		log.Printf("✅ [HISTORY] Retrieved %d transactions for %s", len(txs), address)
 		c.JSON(200, txs)
 	})
 
-	// ── Forward Path Tracer ───────────────────────────────────────────────────
+	// ── Forward path tracer ───────────────────────────────────────────────────
+
 	r.GET("/api/trace-path/:address", func(c *gin.Context) {
 		start := time.Now()
 		address := c.Param("address")
 
 		hops := 10
 		if h := c.Query("hops"); h != "" {
-			if n, err := fmt.Sscanf(h, "%d", &hops); n != 1 || err != nil || hops < 1 || hops > 20 {
-				hops = 10
+			if n, err := strconv.Atoi(h); err == nil && n >= 1 && n <= 20 {
+				hops = n
 			}
 		}
 
@@ -277,15 +250,128 @@ func main() {
 
 		path := tracer.TraceForward(c.Request.Context(), address, caKey, hops)
 
-		duration := time.Since(start)
-		log.Printf("✅ [TRACE-PATH] %d hops traced in %v — stopped: %s", path.TotalHops, duration, path.StopReason)
-		logAPI("GET", "/api/trace-path/"+address, 200, duration,
-			fmt.Sprintf("%d hops, final=%s, reason=%s", path.TotalHops, path.FinalAddr, path.StopReason))
-
+		log.Printf("✅ [TRACE-PATH] %d hops in %v — stopped: %s", path.TotalHops, time.Since(start), path.StopReason)
 		c.JSON(200, gin.H{"path": path})
 	})
 
-	// ── Debug: Raw Bitquery output ────────────────────────────────────────────
+	// ── Mixer detection endpoint ──────────────────────────────────────────────
+	// POST /api/mixer-check/:txid
+	// Fetches a live transaction from Blockstream and runs all mixer-detection
+	// heuristics against it.  Returns the full MixerResult with breakdown scores.
+	//
+	// Query params:
+	//   threshold  float64  detection threshold 0–1 (default 0.70)
+	r.GET("/api/mixer-check/:txid", func(c *gin.Context) {
+		start := time.Now()
+		txid := c.Param("txid")
+
+		threshold := 0.70
+		if t := c.Query("threshold"); t != "" {
+			if v, err := strconv.ParseFloat(t, 64); err == nil && v > 0 && v <= 1 {
+				threshold = v
+			}
+		}
+
+		log.Printf("🔀 [MIXER-CHECK] Analysing tx: %s (threshold=%.2f)", txid, threshold)
+
+		tx, err := blockstream.GetTx(txid)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transaction: %v", err)})
+			return
+		}
+		if tx == nil {
+			c.JSON(404, gin.H{"error": "Transaction not found"})
+			return
+		}
+
+		// Build aggregator.TransactionIO from the live blockstream data
+		tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
+		for _, vin := range tx.Vin {
+			if vin.Prevout == nil {
+				continue
+			}
+			tio.Inputs = append(tio.Inputs, aggregator.TxInput{
+				Address:  vin.Prevout.ScriptPubKeyAddress,
+				Value:    float64(vin.Prevout.Value) / 1e8,
+				Sequence: vin.Sequence,
+			})
+		}
+		for _, vout := range tx.Vout {
+			tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
+				Address:    vout.ScriptPubKeyAddress,
+				Value:      float64(vout.Value) / 1e8,
+				ScriptType: vout.ScriptPubKeyType,
+			})
+		}
+
+		result := aggregator.IsCoinMixer(tio, threshold)
+
+		log.Printf("✅ [MIXER-CHECK] %s — score=%.2f flagged=%v type=%s (%v)",
+			txid, result.Score, result.Flagged, result.MixerType, time.Since(start))
+
+		c.JSON(200, gin.H{
+			"txid":      txid,
+			"inputs":    len(tio.Inputs),
+			"outputs":   len(tio.Outputs),
+			"threshold": threshold,
+			"result":    result,
+		})
+	})
+
+	// ── Exchange detection endpoint ───────────────────────────────────────────
+	// GET /api/exchange-check/:address
+	// Fetches recent transactions for an address and runs exchange-detection
+	// heuristics across all of them.
+	r.GET("/api/exchange-check/:address", func(c *gin.Context) {
+		start := time.Now()
+		address := c.Param("address")
+
+		log.Printf("🏦 [EXCHANGE-CHECK] Analysing address: %s", address)
+
+		txs, err := blockstream.GetAddressTxs(address)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
+			return
+		}
+
+		// Convert to aggregator.TransactionIO slice
+		tios := make([]aggregator.TransactionIO, 0, len(txs))
+		for _, tx := range txs {
+			tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
+			for _, vin := range tx.Vin {
+				if vin.Prevout == nil {
+					continue
+				}
+				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
+					Address:  vin.Prevout.ScriptPubKeyAddress,
+					Value:    float64(vin.Prevout.Value) / 1e8,
+					Sequence: vin.Sequence,
+				})
+			}
+			for _, vout := range tx.Vout {
+				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
+					Address:    vout.ScriptPubKeyAddress,
+					Value:      float64(vout.Value) / 1e8,
+					ScriptType: vout.ScriptPubKeyType,
+				})
+			}
+			tios = append(tios, tio)
+		}
+
+		result := aggregator.IsExchangeAddress(tios, 0.60)
+
+		log.Printf("✅ [EXCHANGE-CHECK] %s — score=%.2f flagged=%v (%v)",
+			address, result.Score, result.Flagged, time.Since(start))
+
+		c.JSON(200, gin.H{
+			"address":  address,
+			"tx_count": len(tios),
+			"result":   result,
+		})
+	})
+
+	// ── Debug: raw Bitquery output ────────────────────────────────────────────
+
 	r.GET("/api/debug/bitquery/:address", func(c *gin.Context) {
 		address := c.Param("address")
 
@@ -297,45 +383,43 @@ func main() {
 			c.JSON(400, gin.H{"error": "Bitquery key not configured — add BITQUERY_KEY to .env"})
 			return
 		}
-
 		flows, err := bitquery.GetWalletFlows(address, bqKey)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-
-		c.JSON(200, gin.H{
-			"address": address,
-			"count":   len(flows),
-			"flows":   flows,
-		})
+		c.JSON(200, gin.H{"address": address, "count": len(flows), "flows": flows})
 	})
 
+	// ─── Boot banner ──────────────────────────────────────────────────────────
 	fmt.Println("\n" + strings.Repeat("=", 60))
 	fmt.Println("🔓 Cryptracker is READY")
 	fmt.Println(strings.Repeat("=", 60))
 
 	if dbInitialized {
-		fmt.Println("✅ Database:    Connected")
-		fmt.Println("🌐 Main App:    http://localhost:8080/ui/index.html")
-		if currentConfig.ChainAbuseKey != "" {
-			fmt.Println("🛡️  ChainAbuse:  Enabled")
-		} else {
-			fmt.Println("⚠️  ChainAbuse:  Disabled (no API key)")
-		}
-		if currentConfig.BitqueryKey != "" {
-			fmt.Println("📡 Bitquery:    Enabled")
-		} else {
-			fmt.Println("⚠️  Bitquery:    Disabled (no API key)")
-		}
+		fmt.Println("✅ Database:        Connected")
+		fmt.Println("🌐 Main App:        http://localhost:8080/ui/index.html")
 	} else {
-		fmt.Println("⚠️  Database:    Not Configured")
-		fmt.Println("🔧 Setup:       http://localhost:8080/ui/setup.html")
+		fmt.Println("⚠️  Database:        Not Configured")
+		fmt.Println("🔧 Setup:           http://localhost:8080/ui/setup.html")
 	}
 
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("\n📊 API calls will be logged below:")
+	if currentConfig.ChainAbuseKey != "" {
+		fmt.Println("🛡️  ChainAbuse:      Enabled")
+	} else {
+		fmt.Println("⚠️  ChainAbuse:      Disabled (no API key)")
+	}
+	if currentConfig.BitqueryKey != "" {
+		fmt.Println("📡 Bitquery:        Enabled")
+	} else {
+		fmt.Println("⚠️  Bitquery:        Disabled (no API key)")
+	}
+
 	fmt.Println(strings.Repeat("-", 60))
+	fmt.Println("📡 New endpoints:")
+	fmt.Println("   GET /api/mixer-check/:txid     — standalone mixer analysis")
+	fmt.Println("   GET /api/exchange-check/:address — exchange behaviour analysis")
+	fmt.Println(strings.Repeat("=", 60) + "\n")
 
 	r.Run(":8080")
 }

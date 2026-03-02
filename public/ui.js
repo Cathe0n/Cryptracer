@@ -3,7 +3,6 @@ import { satsToBTC } from './utils.js';
 import { mempoolGetAddress, mempoolGetUTXOs, mempoolGetTxs, mempoolGetTx, mempoolGetTxProjection } from './api.js';
 
 // stub helpers in case graph.js isn't loaded first
-window.expandSelected = window.expandSelected || function() { /* fallback no-op */ };
 window.updateExpandBtn = window.updateExpandBtn || function() { /* fallback no-op */ };
 
 export function showEntityView(nodeId) {
@@ -52,29 +51,60 @@ export function showEntityView(nodeId) {
     const isAddress = nodeData.type === 'Address';
 
     // ── Risk banner ──────────────────────────────────────────────────────────
-    const risk = nodeData.risk || 0;
-    const rd   = nodeData.risk_data;
+    const risk       = nodeData.risk || 0;
+    const rd         = nodeData.risk_data;
     const hasReports = rd && rd.report_count > 0;
     const hasError   = rd && rd.error;
 
+    // "Direct risk" = risk score derived from actual ChainAbuse reports.
+    // "Taint risk"  = risk score propagated from nearby high-risk nodes; no
+    //                 reports exist for this specific address.
+    // We distinguish them so we never show "NO RISK REPORTS ✅" alongside a
+    // non-zero risk score — that combination is actively misleading.
+    const hasTaintOnly = !hasReports && !hasError && risk > 0;
+
     let rc, rl, rbg, rbrd, rglow, ri;
     if (hasError) {
-        rc='orange'; rl='API LIMIT REACHED'; rbg='bg-orange-50'; rbrd='border-orange-300'; rglow=''; ri='⏳';
-    } else if (!hasReports) {
-        rc='emerald'; rl='NO RISK REPORTS'; rbg='bg-emerald-50'; rbrd='border-emerald-300'; rglow=''; ri='✅';
+        rc='orange'; rl='API LIMIT REACHED';
+        rbg='bg-orange-50'; rbrd='border-orange-300'; rglow=''; ri='⏳';
+    } else if (hasTaintOnly) {
+        // Risk is graph-proximity taint, NOT direct reports — use a neutral amber tone
+        if (risk >= 70) {
+            rc='orange'; rl='HIGH TAINT RISK';
+            rbg='bg-amber-50'; rbrd='border-amber-300'; rglow='shadow-[0_0_20px_rgba(245,158,11,0.2)]'; ri='⚠️';
+        } else if (risk >= 40) {
+            rc='yellow'; rl='ELEVATED TAINT RISK';
+            rbg='bg-yellow-50'; rbrd='border-yellow-300'; rglow=''; ri='⚠️';
+        } else {
+            rc='slate'; rl='LOW TAINT RISK';
+            rbg='bg-slate-50'; rbrd='border-slate-300'; rglow=''; ri='🔗';
+        }
+    } else if (!hasReports && risk === 0) {
+        rc='emerald'; rl='NO RISK REPORTS';
+        rbg='bg-emerald-50'; rbrd='border-emerald-300'; rglow=''; ri='✅';
     } else if (risk >= 70) {
-        rc='red'; rl='CRITICAL RISK'; rbg='bg-red-100'; rbrd='border-red-300'; rglow='shadow-[0_0_30px_rgba(239,68,68,0.4)]'; ri='🚨';
+        rc='red'; rl='CRITICAL RISK';
+        rbg='bg-red-100'; rbrd='border-red-300'; rglow='shadow-[0_0_30px_rgba(239,68,68,0.4)]'; ri='🚨';
     } else if (risk >= 40) {
-        rc='orange'; rl='HIGH RISK'; rbg='bg-orange-100'; rbrd='border-orange-300'; rglow='shadow-[0_0_25px_rgba(249,115,22,0.3)]'; ri='⚠️';
+        rc='orange'; rl='HIGH RISK';
+        rbg='bg-orange-100'; rbrd='border-orange-300'; rglow='shadow-[0_0_25px_rgba(249,115,22,0.3)]'; ri='⚠️';
     } else if (risk >= 20) {
-        rc='yellow'; rl='MEDIUM RISK'; rbg='bg-yellow-100'; rbrd='border-yellow-300'; rglow='shadow-[0_0_20px_rgba(234,179,8,0.2)]'; ri='⚠️';
+        rc='yellow'; rl='MEDIUM RISK';
+        rbg='bg-yellow-100'; rbrd='border-yellow-300'; rglow='shadow-[0_0_20px_rgba(234,179,8,0.2)]'; ri='⚠️';
     } else {
-        rc='green'; rl='LOW RISK'; rbg='bg-green-100'; rbrd='border-green-300'; rglow=''; ri='✅';
+        rc='green'; rl='LOW RISK';
+        rbg='bg-green-100'; rbrd='border-green-300'; rglow=''; ri='✅';
     }
 
     let html = `<div class="space-y-4">`;
 
     // Risk block
+    // Progress bar width:
+    //   - Direct reports: fill proportionally to risk score (min 4% for visibility)
+    //   - Taint only:     fill proportionally to taint score
+    //   - Clean (score=0): fill 100% in green to signal "all clear"
+    const barWidth = (hasReports || hasTaintOnly) ? Math.max(risk, 4) : 100;
+
     html += `
     <div class="${rbg} ${rbrd} ${rglow} border rounded-lg p-4">
         <div class="flex items-center justify-between mb-2">
@@ -83,12 +113,21 @@ export function showEntityView(nodeId) {
         </div>
         <div class="bg-white/60 rounded-full h-2 mb-3">
             <div class="bg-${rc}-500 h-2 rounded-full transition-all duration-500"
-                 style="width: ${hasReports ? Math.max(risk, 4) : 100}%"></div>
+                 style="width: ${barWidth}%"></div>
         </div>`;
 
     if (hasError) {
         html += `<div class="text-[9px] text-orange-800 font-bold">${rd.error}</div>
                  <div class="text-[9px] text-orange-700 mt-1">Risk data temporarily unavailable.</div>`;
+    } else if (hasTaintOnly) {
+        // Explain taint clearly — do NOT claim the address is clean
+        html += `
+        <div class="text-[9px] text-amber-800 font-bold mb-1">No direct abuse reports for this address.</div>
+        <div class="text-[9px] text-amber-700 leading-relaxed">
+            Risk score of <strong>${risk}</strong> is inherited from graph proximity —
+            this address is within a few hops of a flagged entity. It does not indicate
+            confirmed involvement.
+        </div>`;
     } else if (hasReports) {
         html += `<div class="grid grid-cols-2 gap-2 text-[9px]">
             <div><div class="text-slate-500 uppercase">Reports</div><div class="font-bold text-slate-800">${rd.report_count}</div></div>
@@ -97,7 +136,7 @@ export function showEntityView(nodeId) {
             <div><div class="text-slate-500 uppercase">Lost</div><div class="font-bold text-slate-800">${rd.total_amount.toFixed(2)} BTC</div></div>
         </div>`;
     } else {
-        html += `<div class="text-[9px] text-emerald-700">No abuse reports found for this address.</div>`;
+        html += `<div class="text-[9px] text-emerald-700">No abuse reports found. Address appears clean.</div>`;
     }
     html += `</div>`;
 
@@ -139,7 +178,10 @@ export function showEntityView(nodeId) {
     <div class="space-y-3">
         <div class="flex items-center gap-2 flex-wrap">
             <span class="px-2 py-1 rounded text-[9px] font-bold ${isAddress ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-purple-100 text-purple-600 border border-purple-200'}">${nodeData.type}</span>
-            ${nodeData.risk > 0 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-600 border border-red-200">HIGH RISK</span>' : ''}
+            ${hasReports && risk >= 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-600 border border-red-200">🚨 CRITICAL RISK</span>' : ''}
+            ${hasReports && risk >= 40 && risk < 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-orange-100 text-orange-600 border border-orange-200">⚠️ HIGH RISK</span>' : ''}
+            ${nodeData.mixer_info && nodeData.mixer_info.is_mixer ? ('<span class="px-2 py-1 rounded text-[9px] font-bold bg-indigo-100 text-indigo-600 border border-indigo-200" title="Mixer detection — confidence: '+(nodeData.mixer_info.confidence||0)+'%">🌀 MIXER (Conf: '+(nodeData.mixer_info.confidence||0)+'%)</span>') : ''}
+            ${hasTaintOnly && risk >= 40 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-300" title="Score inherited from proximity to flagged nodes — no direct reports">🔗 TAINT ' + risk + '</span>' : ''}
             <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}"
                target="_blank" rel="noopener"
                class="px-2 py-1 rounded text-[9px] font-bold bg-cyan-50 text-cyan-600 border border-cyan-200 hover:bg-cyan-100 transition">
@@ -179,6 +221,22 @@ export function showEntityView(nodeId) {
             <div class="text-lg font-bold ${balance >= 0 ? 'text-cyan-600' : 'text-slate-500'}">${balance.toFixed(4)} BTC</div>
         </div>
     </div>`;
+
+    // Mixer detection explanation (if available)
+    if (nodeData.mixer_info) {
+        const conf = nodeData.mixer_info.confidence || 0;
+        const expl = nodeData.mixer_info.explanation && nodeData.mixer_info.explanation.length > 0
+            ? nodeData.mixer_info.explanation
+            : (nodeData.mixer_info.raw && nodeData.mixer_info.raw.notes ? nodeData.mixer_info.raw.notes.join('; ') : 'No explanation available');
+        html += `
+        <div class="mt-4 p-3 rounded border border-indigo-200 bg-indigo-50">
+            <div class="flex items-center justify-between">
+                <div class="text-[10px] font-bold text-indigo-700">🌀 Mixer detection</div>
+                <div class="text-[10px] text-slate-500">Confidence: <span class="font-bold text-indigo-700">${conf}%</span></div>
+            </div>
+            <div class="text-[9px] text-slate-600 mt-2">${expl}</div>
+        </div>`;
+    }
 
     // Tx history
     html += `<div class="border-t border-slate-200 pt-4">

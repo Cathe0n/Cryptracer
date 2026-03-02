@@ -221,6 +221,10 @@
                                 <span class="text-slate-300">Target</span>
                             </div>
                             <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full bg-indigo-100 border border-indigo-200"></div>
+                                <span class="text-slate-300">Mixer (heuristic)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
                                 <div class="w-4 h-4 rounded-full" style="background:#f97316"></div>
                                 <span class="text-slate-300">Trace Final Addr</span>
                             </div>
@@ -321,11 +325,9 @@
                     <span id="labelToggleText">[HIDE LABELS]</span>
                 </button>
                 <button onclick="toggleTimestamps()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Toggle transaction timestamps on/off">
-                    <span id="timestampToggleText">[SHOW TIMESTAMPS]</span>
+                    <span id="timestampToggleText">[INFO]</span>
                 </button>
-                <button onclick="toggleLayout()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Re-run force simulation">[LAYOUT]</button>
-                <button id="expandSelectedBtn" onclick="expandSelected()" disabled class="bg-cyan-700/90 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white shadow" title="Expand selected node">[EXPAND]</button>
-                <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="px-3 py-2 rounded border text-xs font-bold text-white shadow transition" style="background:rgba(194,65,12,0.85);border-color:#c2410c" title="Trace BTC forward to its final destination address">[TRACE PATH]</button>
+                <button onclick="toggleLayout()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Re-run force simulation">[LAYOUT]</button>                <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="px-3 py-2 rounded border text-xs font-bold text-white shadow transition" style="background:rgba(194,65,12,0.85);border-color:#c2410c" title="Trace BTC forward to its final destination address">[TRACE PATH]</button>
                 <button onclick="zoomOut()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom out">[-]</button>
                 <button onclick="zoomIn()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom in">[+]</button>
             </div>
