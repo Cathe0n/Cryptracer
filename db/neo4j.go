@@ -18,7 +18,6 @@ func Init(uri, user, pass string) error {
 		return fmt.Errorf("failed to create Neo4j driver: %w", err)
 	}
 
-	// Test the connection
 	ctx := context.Background()
 	err = driver.VerifyConnectivity(ctx)
 	if err != nil {
@@ -56,6 +55,69 @@ func SaveInput(data []map[string]interface{}) {
 	defer session.Close(ctx)
 	query := `UNWIND $rows AS row MERGE (a:Address {id: row.address}) MERGE (t:Transaction {hash: row.tx_hash}) MERGE (a)-[r:SENT_TO]->(t) SET r.amount = row.amount`
 	_, _ = session.Run(ctx, query, map[string]interface{}{"rows": data})
+}
+
+// SaveCluster persists co-spend cluster relationships to Neo4j.
+// Each row maps an address to a cluster_id via a BELONGS_TO relationship
+// to a Wallet node:  (Address)-[:BELONGS_TO]->(Wallet)
+//
+// This is idempotent — MERGE ensures re-running won't create duplicates.
+func SaveCluster(data []map[string]interface{}) {
+	if !enabled {
+		return
+	}
+	ctx := context.Background()
+	session := driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer session.Close(ctx)
+
+	query := `
+	UNWIND $rows AS row
+	MERGE (a:Address {id: row.address})
+	MERGE (w:Wallet  {id: row.cluster_id})
+	MERGE (a)-[:BELONGS_TO]->(w)
+	SET   w.cluster_id = row.cluster_id`
+
+	if _, err := session.Run(ctx, query, map[string]interface{}{"rows": data}); err != nil {
+		log.Printf("⚠️  [CLUSTER] SaveCluster failed: %v", err)
+	}
+}
+
+// GetClusterForAddress returns the cluster_id and all member addresses for
+// the wallet cluster that contains `address`. Returns nil if the address
+// is not in any cluster (singleton) or if the DB is not enabled.
+func GetClusterForAddress(ctx context.Context, address string) (map[string]interface{}, error) {
+	if !enabled {
+		return nil, nil
+	}
+	session := driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
+	defer session.Close(ctx)
+
+	// Find the Wallet node for this address and all its member addresses
+	query := `
+	MATCH (a:Address {id: $address})-[:BELONGS_TO]->(w:Wallet)
+	MATCH (member:Address)-[:BELONGS_TO]->(w)
+	RETURN w.id AS cluster_id, collect(member.id) AS members`
+
+	res, err := session.Run(ctx, query, map[string]interface{}{"address": address})
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Next(ctx) {
+		rec := res.Record()
+		clusterID, _ := rec.Get("cluster_id")
+		members, _ := rec.Get("members")
+		return map[string]interface{}{
+			"cluster_id": clusterID,
+			"members":    members,
+		}, nil
+	}
+
+	// Address is a singleton — not in any cluster
+	return map[string]interface{}{
+		"cluster_id": address,
+		"members":    []string{address},
+	}, nil
 }
 
 func GetMoneyFlow(ctx context.Context, id string) (map[string]interface{}, error) {

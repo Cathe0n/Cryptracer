@@ -27,9 +27,22 @@ type ProvenanceNode struct {
 	Risk       int                       `json:"risk"`
 	RiskData   *intel.ChainAbuseRiskData `json:"risk_data,omitempty"`
 	EntityType EntityType                `json:"entity_type"`
-	MixerInfo  *DetectionResult         `json:"mixer_info,omitempty"`
+	MixerInfo  *DetectionResult          `json:"mixer_info,omitempty"`
 	ExchInfo   *ExchangeResult           `json:"exchange_info,omitempty"`
 	HopDepth   int                       `json:"hop_depth"`
+
+	// ── Clustering (co-spend heuristic) ──────────────────────
+	// ClusterID is a stable identifier for the wallet cluster this address
+	// belongs to. Addresses sharing a ClusterID are co-controlled.
+	// Empty for singleton addresses and for Transaction nodes.
+	ClusterID string `json:"cluster_id,omitempty"`
+	// ClusterSize is the number of on-chain addresses in this cluster.
+	// 1 = singleton (no co-spend evidence). >1 = shared wallet.
+	ClusterSize int `json:"cluster_size,omitempty"`
+
+	// ── Extended entity intelligence ──────────────────────────
+	GamblingInfo *GamblingResult `json:"gambling_info,omitempty"`
+	MiningInfo   *MiningResult   `json:"mining_info,omitempty"`
 }
 
 type ProvenanceEdge struct {
@@ -55,6 +68,9 @@ type GraphSummary struct {
 	ExchangeCount int `json:"exchange_count"`
 	HighRiskCount int `json:"high_risk_count"`
 	TaintedCount  int `json:"tainted_count"`
+	ClusterCount  int `json:"cluster_count"` // multi-address wallet clusters
+	GamblingCount int `json:"gambling_count"`
+	MiningCount   int `json:"mining_count"`
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -78,7 +94,6 @@ const (
 // MIXER DETECTION
 // ─────────────────────────────────────────────────────────────
 
-// MixerType identifies specific mixing services/protocols.
 type MixerType string
 
 const (
@@ -100,6 +115,9 @@ type TransactionIO struct {
 	Timestamp int64
 	Version   int
 	LockTime  uint32
+	// HasCoinbase is true if any input is a coinbase (no prevout).
+	// Required for mining pool detection.
+	HasCoinbase bool
 }
 
 type TxInput struct {
@@ -124,20 +142,17 @@ type MixerResult struct {
 }
 
 // DetectionResult is a small wrapper that exposes mixer detection
-// with a human-friendly confidence score and explanation. This
-// helps avoid simply presenting a binary "mixer" label to users
-// without context.
+// with a human-friendly confidence score and explanation.
 type DetectionResult struct {
-	IsMixer     bool   `json:"is_mixer"`
-	Confidence  int    `json:"confidence"` // 0-100
-	Explanation string `json:"explanation"`
+	IsMixer     bool        `json:"is_mixer"`
+	Confidence  int         `json:"confidence"` // 0-100
+	Explanation string      `json:"explanation"`
 	Raw         MixerResult `json:"raw,omitempty"`
 }
 
 const defaultMixerThreshold = 0.70
 
 // IsCoinMixer performs multi-rule heuristic analysis to detect mixing transactions.
-// Returns score in [0,1], flagged status, and a full MixerResult.
 func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	if threshold <= 0 {
 		threshold = defaultMixerThreshold
@@ -156,7 +171,6 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		return result
 	}
 
-	// ── collect non-dust output values ──────────────────────────
 	const dustThreshold = 0.00001 // 1000 sat
 	cleanOutputs := make([]float64, 0, len(outputs))
 	for _, o := range outputs {
@@ -169,13 +183,11 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		return result
 	}
 
-	// ── round to 4 dp for BTC ──────────────────────────────────
 	rounded := make([]float64, len(cleanOutputs))
 	for i, a := range cleanOutputs {
 		rounded[i] = math.Round(a*10000) / 10000.0
 	}
 
-	// most common output value
 	counts := make(map[float64]int)
 	for _, r := range rounded {
 		counts[r]++
@@ -189,7 +201,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// ── RULE 1: Equal Output Amounts  (0.45) ─────────────────
+	// RULE 1: Equal Output Amounts (0.45)
 	equalRatio := float64(maxCount) / float64(len(rounded))
 	if equalRatio > 0.5 {
 		result.Breakdown["equal_outputs"] = 0.45 * equalRatio
@@ -197,18 +209,17 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 			"%.1f%% of outputs share value %.8f BTC", equalRatio*100, mostCommon))
 	}
 
-	// ── RULE 2: Participant Scale  (0.20) ──────────────────────
+	// RULE 2: Participant Scale (0.20)
 	inputCount := len(inputs)
 	outputCount := len(outputs)
 	if inputCount >= 5 && outputCount >= 5 {
-		// use divisor 50 so smaller JoinMarket rounds still score well
 		ps := math.Min(float64(inputCount+outputCount)/50.0, 1.0)
 		result.Breakdown["participant_count"] = 0.20 * ps
 		result.Notes = append(result.Notes, fmt.Sprintf(
 			"%d inputs / %d outputs", inputCount, outputCount))
 	}
 
-	// ── RULE 3: Input/Output Count Symmetry  (0.15) ───────────
+	// RULE 3: Input/Output Count Symmetry (0.15)
 	if inputCount > 0 && outputCount > 0 {
 		sym := math.Min(float64(inputCount), float64(outputCount)) /
 			math.Max(float64(inputCount), float64(outputCount))
@@ -217,7 +228,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// ── RULE 4: Known Denomination  (0.10) ────────────────────
+	// RULE 4: Known Denomination (0.10)
 	type denomInfo struct{ name string }
 	knownDenoms := map[float64]denomInfo{
 		0.1:    {"Wasabi standard"},
@@ -231,7 +242,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		result.Notes = append(result.Notes, "Known denomination: "+di.name)
 	}
 
-	// ── RULE 5: No / Minimal Change  (0.10) ───────────────────
+	// RULE 5: No / Minimal Change (0.10)
 	oddCount := 0
 	for _, a := range rounded {
 		if a != mostCommon {
@@ -247,8 +258,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		result.Breakdown["no_change"] = 0.05
 	}
 
-	// ── RULE 6: Uniform Script Types  (0.08) ──────────────────
-	// Mixers enforce homogeneous script types to prevent fingerprinting
+	// RULE 6: Uniform Script Types (0.08)
 	scriptCounts := make(map[string]int)
 	for _, o := range outputs {
 		if o.ScriptType != "" && o.ScriptType != "op_return" {
@@ -262,8 +272,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// ── RULE 7: Address Reuse Absence  (0.06) ─────────────────
-	// CoinJoin outputs almost never reuse addresses
+	// RULE 7: Address Reuse Absence (0.06)
 	inputAddrs := make(map[string]struct{})
 	for _, inp := range inputs {
 		if inp.Address != "" {
@@ -280,8 +289,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		result.Breakdown["no_addr_reuse"] = 0.06
 	}
 
-	// ── RULE 8: Distinct Input Amounts  (0.06) ────────────────
-	// Each participant brings a different input amount
+	// RULE 8: Distinct Input Amounts (0.06)
 	if inputCount >= 5 {
 		uniqueInputVals := make(map[float64]struct{})
 		for _, inp := range inputs {
@@ -293,8 +301,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// ── RULE 9: RBF Disabled on all inputs  (0.05) ────────────
-	// Wasabi sets nSequence = 0xFFFFFFFE (RBF opt-in disabled)
+	// RULE 9: RBF Disabled on all inputs (0.05)
 	rbfDisabled := 0
 	for _, inp := range inputs {
 		if inp.Sequence == 0xFFFFFFFE || inp.Sequence == 0xFFFFFFFF {
@@ -307,14 +314,12 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// ── RULE 10: Output Value Entropy  (bonus 0.05) ───────────
-	// Many distinct equal outputs → high Shannon entropy
+	// RULE 10: Output Value Entropy (bonus 0.05)
 	entropy := shannonEntropy(rounded)
 	if entropy > 3.0 && equalRatio > 0.6 {
 		result.Breakdown["high_entropy"] = 0.05
 	}
 
-	// ── Aggregate score ────────────────────────────────────────
 	var total float64
 	for _, v := range result.Breakdown {
 		total += v
@@ -322,46 +327,32 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	result.Score = math.Min(total, 1.0)
 	result.Flagged = result.Score >= threshold
 
-	// ── Classify mixer type ────────────────────────────────────
 	result.MixerType = classifyMixer(tx, mostCommon, inputCount, result.Breakdown)
-
 	return result
 }
 
-// classifyMixer uses denomination + structural signals to guess the specific protocol.
 func classifyMixer(tx TransactionIO, denom float64, inputCount int, breakdown map[string]float64) MixerType {
 	_, hasDenom := breakdown["known_denom"]
 
-	// Whirlpool: fixed pool sizes 0.001 / 0.01 / 0.05 / 0.5, always 5 inputs + 5 outputs
 	whirlpoolDenoms := map[float64]bool{0.001: true, 0.01: true, 0.05: true, 0.5: true}
 	if whirlpoolDenoms[denom] && inputCount == 5 && len(tx.Outputs) == 5 {
 		return MixerWhirlpool
 	}
-
-	// Wasabi: denom 0.1 BTC, large rounds, native segwit outputs
 	if hasDenom && denom == 0.1 && inputCount >= 50 {
 		return MixerWasabi
 	}
-
-	// JoinMarket: smaller rounds, varied denoms
 	if hasDenom && inputCount >= 3 && inputCount < 50 {
 		return MixerJoinMarket
 	}
-
-	// Centralized: denom 1.0 BTC exactly, fewer participants
 	if denom == 1.0 && inputCount < 10 {
 		return MixerCentralized
 	}
-
-	// Generic CoinJoin fallback
 	if breakdown["equal_outputs"] > 0 && breakdown["participant_count"] > 0 {
 		return MixerCoinjoin
 	}
-
 	return MixerUnknown
 }
 
-// shannonEntropy computes the Shannon entropy of a value distribution.
 func shannonEntropy(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
@@ -383,7 +374,6 @@ func shannonEntropy(values []float64) float64 {
 // EXCHANGE DETECTION
 // ─────────────────────────────────────────────────────────────
 
-// ExchangeResult holds exchange detection heuristic output.
 type ExchangeResult struct {
 	Score     float64            `json:"score"`
 	Flagged   bool               `json:"flagged"`
@@ -394,7 +384,6 @@ type ExchangeResult struct {
 const defaultExchangeThreshold = 0.60
 
 // IsExchangeAddress applies heuristics to detect exchange/custodial hot-wallet behaviour.
-// It analyses a slice of transactions associated with a single address.
 func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 	if threshold <= 0 {
 		threshold = defaultExchangeThreshold
@@ -409,8 +398,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 		return result
 	}
 
-	// ── RULE 1: UTXO Consolidation Sweeps  (0.30) ─────────────
-	// Exchanges regularly sweep many small deposits → one large output
+	// RULE 1: UTXO Consolidation Sweeps (0.30)
 	sweepCount := 0
 	for _, tx := range txs {
 		if len(tx.Inputs) >= 10 && len(tx.Outputs) <= 3 {
@@ -424,8 +412,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 			"%d/%d transactions look like UTXO sweeps", sweepCount, len(txs)))
 	}
 
-	// ── RULE 2: High Transaction Frequency  (0.20) ────────────
-	// Exchanges handle many txs per day
+	// RULE 2: High Transaction Frequency (0.20)
 	if len(txs) > 1 {
 		timestamps := make([]int64, 0, len(txs))
 		for _, tx := range txs {
@@ -446,8 +433,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 		}
 	}
 
-	// ── RULE 3: Fan-Out Pattern  (0.20) ───────────────────────
-	// Exchanges send to many distinct addresses (withdrawals)
+	// RULE 3: Fan-Out Pattern (0.20)
 	fanOutCount := 0
 	allOutputAddrs := make(map[string]struct{})
 	for _, tx := range txs {
@@ -465,8 +451,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 			"%d/%d transactions are fan-outs", fanOutCount, len(txs)))
 	}
 
-	// ── RULE 4: Mixed Script Types  (0.15) ────────────────────
-	// Exchanges receive from all wallet types (P2PKH, P2WPKH, P2TR …)
+	// RULE 4: Mixed Script Types (0.15)
 	scriptTypes := make(map[string]int)
 	for _, tx := range txs {
 		for _, o := range tx.Outputs {
@@ -481,14 +466,13 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 			"%d distinct output script types", len(scriptTypes)))
 	}
 
-	// ── RULE 5: Round-Number Withdrawals  (0.15) ──────────────
-	// Exchanges often process user withdrawals in round BTC amounts
+	// RULE 5: Round-Number Withdrawals (0.15)
 	roundCount := 0
 	totalOuts := 0
 	for _, tx := range txs {
 		for _, o := range tx.Outputs {
 			totalOuts++
-			scaled := o.Value * 100 // check for multiples of 0.01 BTC
+			scaled := o.Value * 100
 			if math.Abs(math.Round(scaled)-scaled) < 0.001 {
 				roundCount++
 			}
@@ -517,7 +501,6 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 // PEELING CHAIN DETECTION
 // ─────────────────────────────────────────────────────────────
 
-// PeelingChainResult describes a detected peel-chain pattern.
 type PeelingChainResult struct {
 	IsPeeling  bool    `json:"is_peeling"`
 	Confidence float64 `json:"confidence"`
@@ -527,7 +510,6 @@ type PeelingChainResult struct {
 
 // DetectPeelingChain looks for a sequence of transactions where one output
 // is markedly smaller than the input (the "peel") and one output is change.
-// This pattern is used by both mixers and trackers to obfuscate fund flow.
 func DetectPeelingChain(txs []TransactionIO) PeelingChainResult {
 	result := PeelingChainResult{}
 	if len(txs) < 3 {
@@ -542,7 +524,6 @@ func DetectPeelingChain(txs []TransactionIO) PeelingChainResult {
 		out0 := tx.Outputs[0].Value
 		out1 := tx.Outputs[1].Value
 		ratio := math.Min(out0, out1) / math.Max(out0, out1)
-		// If one output is significantly smaller (peel) and one is change
 		if ratio < 0.3 {
 			peelCount++
 		}
@@ -564,20 +545,16 @@ func DetectPeelingChain(txs []TransactionIO) PeelingChainResult {
 // TAINT PROPAGATION
 // ─────────────────────────────────────────────────────────────
 
-// PropagateTaint walks the graph from any high-risk node and applies a
-// decaying taint score to downstream nodes. Taint halves every hop.
 func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 	if decayPerHop <= 0 || decayPerHop >= 1 {
 		decayPerHop = 0.5
 	}
 
-	// Build adjacency: node → []outgoing edges
 	adj := make(map[string][]ProvenanceEdge)
 	for _, e := range graph.Edges {
 		adj[e.Source] = append(adj[e.Source], e)
 	}
 
-	// Seed: every node with risk > 70 starts with taint = 1.0
 	taint := make(map[string]float64)
 	for id, n := range graph.Nodes {
 		if n.Risk >= 70 {
@@ -585,7 +562,6 @@ func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 		}
 	}
 
-	// BFS propagation
 	queue := make([]string, 0)
 	for id := range taint {
 		queue = append(queue, id)
@@ -606,7 +582,6 @@ func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 		}
 	}
 
-	// Write taint back to edges and nodes
 	for i := range graph.Edges {
 		e := &graph.Edges[i]
 		srcTaint := taint[e.Source]
@@ -629,7 +604,6 @@ func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 // LABEL NORMALISATION
 // ─────────────────────────────────────────────────────────────
 
-// knownLabels maps substrings (lowercase) to EntityType.
 var knownLabels = []struct {
 	needle string
 	entity EntityType
@@ -653,16 +627,19 @@ var knownLabels = []struct {
 	{"gambling", EntityGambling},
 	{"stake.com", EntityGambling},
 	{"1xbet", EntityGambling},
+	{"bitsler", EntityGambling},
+	{"primedice", EntityGambling},
 	{"mining", EntityMining},
 	{"f2pool", EntityMining},
 	{"antpool", EntityMining},
 	{"slushpool", EntityMining},
+	{"viabtc", EntityMining},
+	{"luxor", EntityMining},
 	{"uniswap", EntityDefi},
 	{"aave", EntityDefi},
 	{"compound", EntityDefi},
 }
 
-// ResolveEntityType infers EntityType from a label string.
 func ResolveEntityType(label string) EntityType {
 	lower := strings.ToLower(label)
 	for _, entry := range knownLabels {
@@ -777,7 +754,12 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 
 		for _, vin := range tx.Vin {
-			if vin.Prevout != nil && vin.Prevout.ScriptPubKeyAddress != "" {
+			// Detect coinbase inputs (no prevout)
+			if vin.Prevout == nil {
+				tio.HasCoinbase = true
+				continue
+			}
+			if vin.Prevout.ScriptPubKeyAddress != "" {
 				addr := vin.Prevout.ScriptPubKeyAddress
 				val := float64(vin.Prevout.Value) / 1e8
 				addNode(addr, addr, "Address", "Esplora API", 0)
@@ -785,7 +767,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				tio.Inputs = append(tio.Inputs, TxInput{
 					Address:  addr,
 					Value:    val,
-					Sequence: 0,
+					Sequence: vin.Sequence,
 				})
 			}
 		}
@@ -798,20 +780,19 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				tio.Outputs = append(tio.Outputs, TxOutput{
 					Address:    addr,
 					Value:      val,
-					ScriptType: "",
+					ScriptType: vout.ScriptPubKeyType,
 				})
 			}
 		}
 		txIOs = append(txIOs, tio)
 
-		// ── per-transaction mixer detection ─────────────────────
+		// Per-transaction mixer detection
 		mr := IsCoinMixer(tio, defaultMixerThreshold)
 		det := DetectionResult{
 			IsMixer:    mr.Flagged,
 			Confidence: int(math.Round(mr.Score * 100)),
 			Raw:        mr,
 		}
-		// Build a concise explanation from available notes.
 		if len(mr.Notes) > 0 {
 			det.Explanation = strings.Join(mr.Notes, "; ")
 		} else if mr.Score > 0 {
@@ -822,23 +803,19 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 
 		if mr.Flagged {
 			if n, ok := graph.Nodes[tx.Txid]; ok {
-				// Do not mark the transaction node itself as an "EntityMixer";
-				// instead attach mixer detection info with confidence and
-				// explanation so the UI can present context to users. Only
-				// promote risk level (numeric) but avoid changing entity type
-				// which can be misleading.
 				n.MixerInfo = &det
 				risk := det.Confidence
 				if risk > n.Risk {
 					n.Risk = risk
 				}
 				graph.Nodes[tx.Txid] = n
-				log.Printf("🔀 [MIXER] %s — score=%.2f type=%s conf=%d", tx.Txid, mr.Score, mr.MixerType, det.Confidence)
+				log.Printf("🔀 [MIXER] %s — score=%.2f type=%s conf=%d",
+					tx.Txid, mr.Score, mr.MixerType, det.Confidence)
 			}
 		}
 	}
 
-	// ── exchange detection across all txs for this address ──────
+	// ── Exchange detection ─────────────────────────────────────
 	er := IsExchangeAddress(txIOs, defaultExchangeThreshold)
 	if er.Flagged {
 		if n, ok := graph.Nodes[id]; ok {
@@ -849,7 +826,29 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 	}
 
-	// ── peeling chain detection ──────────────────────────────────
+	// ── Gambling detection ────────────────────────────────────
+	gr := IsGamblingAddress(txIOs, defaultGamblingThreshold)
+	if gr.Flagged {
+		if n, ok := graph.Nodes[id]; ok {
+			n.EntityType = EntityGambling
+			n.GamblingInfo = &gr
+			log.Printf("🎰 [GAMBLING] %s — score=%.2f", id, gr.Score)
+			graph.Nodes[id] = n
+		}
+	}
+
+	// ── Mining pool detection ─────────────────────────────────
+	mr := IsMiningPoolAddress(txIOs, defaultMiningThreshold)
+	if mr.Flagged {
+		if n, ok := graph.Nodes[id]; ok {
+			n.EntityType = EntityMining
+			n.MiningInfo = &mr
+			log.Printf("⛏️  [MINING] %s — score=%.2f", id, mr.Score)
+			graph.Nodes[id] = n
+		}
+	}
+
+	// ── Peeling chain detection ───────────────────────────────
 	pc := DetectPeelingChain(txIOs)
 	if pc.IsPeeling {
 		if n, ok := graph.Nodes[id]; ok {
@@ -857,6 +856,38 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 			graph.Nodes[id] = n
 		}
 		log.Printf("🔗 [PEEL CHAIN] %s — confidence=%.2f len=%d", id, pc.Confidence, pc.ChainLen)
+	}
+
+	// ── Co-spend clustering ───────────────────────────────────
+	// Build clusters from all transactions seen so far and annotate
+	// every address node with its ClusterID and ClusterSize.
+	clusters := BuildClusters(txIOs)
+	for addr, cid := range clusters.AddrToCluster {
+		members := clusters.Clusters[cid]
+		if n, ok := graph.Nodes[addr]; ok && n.Type == "Address" {
+			n.ClusterID = cid
+			n.ClusterSize = len(members)
+			graph.Nodes[addr] = n
+		}
+	}
+
+	// Persist multi-address clusters to Neo4j
+	if len(clusters.Clusters) > 0 {
+		clusterData := make([]map[string]interface{}, 0)
+		for cid, members := range clusters.Clusters {
+			if len(members) > 1 {
+				for _, addr := range members {
+					clusterData = append(clusterData, map[string]interface{}{
+						"cluster_id": cid,
+						"address":    addr,
+					})
+				}
+			}
+		}
+		if len(clusterData) > 0 {
+			db.SaveCluster(clusterData)
+			log.Printf("🔗 [CLUSTER] %d multi-address wallet clusters for %s", len(clusters.Clusters), id)
+		}
 	}
 
 	// 4. Bitquery inflows + outflows
@@ -912,7 +943,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 	}
 
-	// 6. Taint propagation across the full graph
+	// 6. Taint propagation
 	PropagateTaint(&graph, 0.5)
 
 	// 7. Build summary
@@ -927,6 +958,7 @@ func buildSummary(g UnifiedGraph) GraphSummary {
 		TotalNodes: len(g.Nodes),
 		TotalEdges: len(g.Edges),
 	}
+	clustersSeen := make(map[string]bool)
 	for _, n := range g.Nodes {
 		if n.Risk > s.MaxRisk {
 			s.MaxRisk = n.Risk
@@ -940,14 +972,23 @@ func buildSummary(g UnifiedGraph) GraphSummary {
 		if n.EntityType == EntityExchange {
 			s.ExchangeCount++
 		}
+		if n.EntityType == EntityGambling {
+			s.GamblingCount++
+		}
+		if n.EntityType == EntityMining {
+			s.MiningCount++
+		}
 		if n.Risk > 0 && n.Risk < 70 {
-			s.TaintedCount++ // derived taint, not direct report
+			s.TaintedCount++
+		}
+		if n.ClusterID != "" && n.ClusterSize > 1 && !clustersSeen[n.ClusterID] {
+			clustersSeen[n.ClusterID] = true
+			s.ClusterCount++
 		}
 	}
 	return s
 }
 
-// max is a helper since Go < 1.21 has no builtin max for int.
 func max(a, b int) int {
 	if a > b {
 		return a

@@ -372,6 +372,159 @@ func main() {
 
 	// ── Debug: raw Bitquery output ────────────────────────────────────────────
 
+	// ── Cluster (co-spend) endpoint ───────────────────────────────────────────
+	// GET /api/cluster/:address
+	// Returns the wallet cluster that contains `address` — i.e. all Bitcoin
+	// addresses that have been proven (via co-spend) to be controlled by the
+	// same entity as the given address.
+	//
+	// Response: { address, cluster_id, member_count, members: []string }
+	r.GET("/api/cluster/:address", func(c *gin.Context) {
+		start := time.Now()
+		address := c.Param("address")
+
+		log.Printf("🔗 [CLUSTER] Looking up cluster for: %s", address)
+
+		cluster, err := db.GetClusterForAddress(c.Request.Context(), address)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("Cluster lookup failed: %v", err)})
+			return
+		}
+		if cluster == nil {
+			c.JSON(200, gin.H{
+				"address":      address,
+				"cluster_id":   address,
+				"member_count": 1,
+				"members":      []string{address},
+				"note":         "Database not configured — cluster data unavailable",
+			})
+			return
+		}
+
+		members, _ := cluster["members"].([]interface{})
+		memberStrs := make([]string, 0, len(members))
+		for _, m := range members {
+			if s, ok := m.(string); ok {
+				memberStrs = append(memberStrs, s)
+			}
+		}
+		if len(memberStrs) == 0 {
+			memberStrs = []string{address}
+		}
+
+		log.Printf("✅ [CLUSTER] %s → cluster %s (%d members) in %v",
+			address, cluster["cluster_id"], len(memberStrs), time.Since(start))
+
+		c.JSON(200, gin.H{
+			"address":      address,
+			"cluster_id":   cluster["cluster_id"],
+			"member_count": len(memberStrs),
+			"members":      memberStrs,
+		})
+	})
+
+	// ── Gambling detection endpoint ───────────────────────────────────────────
+	// GET /api/gambling-check/:address
+	r.GET("/api/gambling-check/:address", func(c *gin.Context) {
+		start := time.Now()
+		address := c.Param("address")
+
+		log.Printf("🎰 [GAMBLING-CHECK] Analysing address: %s", address)
+
+		txs, err := blockstream.GetAddressTxs(address)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
+			return
+		}
+
+		tios := make([]aggregator.TransactionIO, 0, len(txs))
+		for _, tx := range txs {
+			tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
+			for _, vin := range tx.Vin {
+				if vin.Prevout == nil {
+					tio.HasCoinbase = true
+					continue
+				}
+				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
+					Address:  vin.Prevout.ScriptPubKeyAddress,
+					Value:    float64(vin.Prevout.Value) / 1e8,
+					Sequence: vin.Sequence,
+				})
+			}
+			for _, vout := range tx.Vout {
+				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
+					Address:    vout.ScriptPubKeyAddress,
+					Value:      float64(vout.Value) / 1e8,
+					ScriptType: vout.ScriptPubKeyType,
+				})
+			}
+			tios = append(tios, tio)
+		}
+
+		result := aggregator.IsGamblingAddress(tios, 0.55)
+
+		log.Printf("✅ [GAMBLING-CHECK] %s — score=%.2f flagged=%v (%v)",
+			address, result.Score, result.Flagged, time.Since(start))
+
+		c.JSON(200, gin.H{
+			"address":  address,
+			"tx_count": len(tios),
+			"result":   result,
+		})
+	})
+
+	// ── Mining pool detection endpoint ────────────────────────────────────────
+	// GET /api/mining-check/:address
+	r.GET("/api/mining-check/:address", func(c *gin.Context) {
+		start := time.Now()
+		address := c.Param("address")
+
+		log.Printf("⛏️  [MINING-CHECK] Analysing address: %s", address)
+
+		txs, err := blockstream.GetAddressTxs(address)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
+			return
+		}
+
+		tios := make([]aggregator.TransactionIO, 0, len(txs))
+		for _, tx := range txs {
+			tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
+			for _, vin := range tx.Vin {
+				if vin.Prevout == nil {
+					tio.HasCoinbase = true
+					continue
+				}
+				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
+					Address:  vin.Prevout.ScriptPubKeyAddress,
+					Value:    float64(vin.Prevout.Value) / 1e8,
+					Sequence: vin.Sequence,
+				})
+			}
+			for _, vout := range tx.Vout {
+				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
+					Address:    vout.ScriptPubKeyAddress,
+					Value:      float64(vout.Value) / 1e8,
+					ScriptType: vout.ScriptPubKeyType,
+				})
+			}
+			tios = append(tios, tio)
+		}
+
+		result := aggregator.IsMiningPoolAddress(tios, 0.55)
+
+		log.Printf("✅ [MINING-CHECK] %s — score=%.2f flagged=%v (%v)",
+			address, result.Score, result.Flagged, time.Since(start))
+
+		c.JSON(200, gin.H{
+			"address":  address,
+			"tx_count": len(tios),
+			"result":   result,
+		})
+	})
+
+	// ── Debug: raw Bitquery output ────────────────────────────────────────────
+
 	r.GET("/api/debug/bitquery/:address", func(c *gin.Context) {
 		address := c.Param("address")
 
@@ -416,9 +569,12 @@ func main() {
 	}
 
 	fmt.Println(strings.Repeat("-", 60))
-	fmt.Println("📡 New endpoints:")
-	fmt.Println("   GET /api/mixer-check/:txid     — standalone mixer analysis")
-	fmt.Println("   GET /api/exchange-check/:address — exchange behaviour analysis")
+	fmt.Println("📡 Endpoints:")
+	fmt.Println("   GET /api/mixer-check/:txid         — mixer analysis")
+	fmt.Println("   GET /api/exchange-check/:address  — exchange analysis")
+	fmt.Println("   GET /api/gambling-check/:address  — gambling detection")
+	fmt.Println("   GET /api/mining-check/:address    — mining pool detection")
+	fmt.Println("   GET /api/cluster/:address         — co-spend wallet cluster")
 	fmt.Println(strings.Repeat("=", 60) + "\n")
 
 	r.Run(":8080")

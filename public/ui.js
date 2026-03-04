@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { satsToBTC } from './utils.js';
 import { mempoolGetAddress, mempoolGetUTXOs, mempoolGetTxs, mempoolGetTx, mempoolGetTxProjection } from './api.js';
+import { getAnnotation, setAnnotation, COLOR_PALETTE } from './annotations.js';
 
 // stub helpers in case graph.js isn't loaded first
 window.updateExpandBtn = window.updateExpandBtn || function() { /* fallback no-op */ };
@@ -173,6 +174,22 @@ export function showEntityView(nodeId) {
         html += `</div></div>`;
     }
 
+    // ── Expand Node action button ──────────────────────────────────────────
+    if (isAddress) {
+        const alreadyExpanded = window._expandedNodes && window._expandedNodes.has(nodeId);
+        html += `
+        <button
+            onclick="window.expandNode('${nodeId}')"
+            ${alreadyExpanded ? 'disabled' : ''}
+            class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border font-bold text-xs uppercase tracking-wider transition
+                   ${alreadyExpanded
+                     ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                     : 'bg-cyan-600 hover:bg-cyan-500 border-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_18px_rgba(6,182,212,0.5)]'}"
+            title="${alreadyExpanded ? 'Already expanded' : 'Fetch all connected transactions and addresses for this node'}">
+            ${alreadyExpanded ? '✓ Already Expanded' : '🔍 Expand Node'}
+        </button>`;
+    }
+
     // Entity info + mempool link
     html += `
     <div class="space-y-3">
@@ -266,6 +283,53 @@ export function showEntityView(nodeId) {
         html += `<div class="text-[9px] text-slate-400 italic">No timestamp data on connected edges.</div>`;
     }
     html += `</div>`;
+
+    // ── Annotations (notes + color) ──────────────────────────────────────────
+    const annot = getAnnotation(nodeId) || {};
+    const customName = annot.name || '';
+    const customColor = annot.color || '';
+    const customNotes = annot.notes || '';
+    
+    html += `
+    <div class="border-t border-slate-200 pt-4">
+        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">📝 Your Annotations</h4>
+        
+        <!-- Display Name section -->
+        <div class="mb-4">
+            <label class="text-[9px] text-slate-600 font-bold uppercase block mb-2">Display Name</label>
+            <input type="text" id="nodeName" placeholder="Custom display name (shows in labels instead of address)"
+                class="w-full p-2 rounded border border-slate-200 text-[9px] font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400" value="${customName}">
+        </div>
+        
+        <!-- Notes section -->
+        <div class="mb-4">
+            <label class="text-[9px] text-slate-600 font-bold uppercase block mb-2">Notes</label>
+            <textarea id="nodeNotes" placeholder="Add personal notes about this node..."
+                class="w-full h-20 p-2 rounded border border-slate-200 text-[9px] font-mono resize-none focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400">${customNotes}</textarea>
+        </div>
+        
+        <!-- Color picker section -->
+        <div class="mb-4">
+            <label class="text-[9px] text-slate-600 font-bold uppercase block mb-2">Node Color</label>
+            <div class="grid grid-cols-6 gap-2">
+                ${COLOR_PALETTE.map((col, idx) => `
+                <button onclick="window.setNodeColor('${nodeId}', '${col.hex}')"
+                    class="w-8 h-8 rounded border-2 transition ${customColor === col.hex ? 'border-slate-800 shadow-[0_0_8px_rgba(0,0,0,0.5)]' : 'border-slate-300 hover:border-slate-400'}"
+                    style="background-color: ${col.hex};"
+                    title="${col.name}"></button>
+                `).join('')}
+                <button onclick="window.clearNodeColor('${nodeId}')"
+                    class="w-8 h-8 rounded border-2 ${!customColor ? 'border-slate-800 shadow-[0_0_8px_rgba(0,0,0,0.3)]' : 'border-slate-300 hover:border-slate-400'} flex items-center justify-center text-[8px] font-bold text-slate-600 bg-slate-100"
+                    title="Default color">✓</button>
+            </div>
+        </div>
+        
+        <!-- Save button -->
+        <button onclick="window.saveNodeAnnotation('${nodeId}')"
+            class="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-bold rounded uppercase tracking-wider transition">
+            💾 Save Annotations
+        </button>
+    </div>`;
 
     // ── Live mempool enrichment block ────────────────────────────────────────
     const enrichFn = isAddress
@@ -547,3 +611,86 @@ export async function enrichTxFromMempool(txid) {
     btn.disabled = false;
     btn.innerHTML = '⟳ Refresh';
 }
+
+// =============================================================================
+// ANNOTATION MANAGEMENT (for global onclick handlers)
+// =============================================================================
+
+/**
+ * Save node annotation (notes + color)
+ */
+window.saveNodeAnnotation = function(nodeId) {
+    const nameEl = document.getElementById('nodeName');
+    const notesEl = document.getElementById('nodeNotes');
+    const name = nameEl ? nameEl.value : '';
+    const notes = notesEl ? notesEl.value : '';
+    
+    // Get the currently selected color
+    const annot = getAnnotation(nodeId) || {};
+    const selectedColor = annot.color || '';
+    
+    // Save the annotation with name, notes, and color
+    setAnnotation(nodeId, name, notes, selectedColor);
+    
+    // Update the graph display if available
+    if (window.updateGraphNodeColor) {
+        window.updateGraphNodeColor(nodeId, selectedColor);
+    }
+    if (window.updateGraphNodeLabel) {
+        window.updateGraphNodeLabel(nodeId, name);
+    }
+    
+    // Show feedback
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✓ Saved!';
+    btn.classList.add('bg-emerald-700');
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.classList.remove('bg-emerald-700');
+    }, 1500);
+};
+
+/**
+ * Set node custom color and update the graph
+ */
+window.setNodeColor = function(nodeId, hexColor) {
+    const annot = getAnnotation(nodeId) || {};
+    const name = annot.name || '';
+    const notes = annot.notes || '';
+    
+    // Save the annotation with new color, preserving name and notes
+    setAnnotation(nodeId, name, notes, hexColor);
+    
+    // Update the graph display if available
+    if (window.updateGraphNodeColor) {
+        window.updateGraphNodeColor(nodeId, hexColor);
+    }
+    
+    // Refresh the entity view to show updated color selection
+    if (window.showEntityView) {
+        window.showEntityView(nodeId);
+    }
+};
+
+/**
+ * Clear node custom color
+ */
+window.clearNodeColor = function(nodeId) {
+    const annot = getAnnotation(nodeId) || {};
+    const name = annot.name || '';
+    const notes = annot.notes || '';
+    
+    // Save the annotation with null color, preserving name and notes
+    setAnnotation(nodeId, name, notes, null);
+    
+    // Update the graph display if available
+    if (window.updateGraphNodeColor) {
+        window.updateGraphNodeColor(nodeId, null);
+    }
+    
+    // Refresh the entity view
+    if (window.showEntityView) {
+        window.showEntityView(nodeId);
+    }
+};

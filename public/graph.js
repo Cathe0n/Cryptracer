@@ -4,6 +4,8 @@ import { state } from './state.js';
 console.log('Cryptracker: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
+import { getNodeCustomColor, getNodeCustomName } from './annotations.js';
+import { showEntityView } from './ui.js';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // ─── D3 / simulation state ───────────────────────────────────────────────────
@@ -29,7 +31,14 @@ let rawLinks = [];
 let calendarTxDates = {};
 let calendarViewDate = new Date();
 let expandedNodes   = new Set(); // tracks which address nodes have been expanded
+window._expandedNodes = expandedNodes;  // expose for ui.js button state
 let selectedNodeId  = null;   // currently-selected node (used by toolbar button)
+
+// ── Wallet View (co-spend cluster collapse) ──────────────────────────────────
+let walletViewActive  = false;   // true when graph is in wallet/cluster view
+let walletGraphData   = null;    // the collapsed wallet graph (built on demand)
+let _fullGraphDataBak = null;    // stash of original address-level graph
+let _targetIdBak      = null;    // stash of original targetId before collapse
 
 // ── Trace-path state (kept at module level so ticked() can use it) ──────────
 let traceFinalAddr    = null;  // final destination address of current trace
@@ -389,11 +398,32 @@ function _renderGraphImpl(graphData, targetId) {
             return '#06b6d4'; // minimal: teal
         };
 
+        // Function to get node color, considering custom annotations
+        const getNodeColor = d => {
+            const customColor = getNodeCustomColor(d.id);
+            if (customColor) return customColor;
+            if (d.isTarget) return '#fbbf24';
+            // Multi-address wallet clusters: use a distinct green tint overlaid with risk
+            if (d.member_count > 1) {
+                if (d.risk >= 70) return '#ef4444';
+                if (d.risk >= 40) return '#f97316';
+                if (d.risk >= 10) return '#f59e0b';
+                return '#10b981'; // emerald-500 — "wallet" identity colour
+            }
+            return d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9');
+        };
+
         node = g.append("g").attr("class", "nodes")
             .selectAll("circle").data(nodes).enter().append("circle")
             .attr("class", "node")
-            .attr("r", d => d.isTarget ? 18 : (d.type === 'Transaction' ? 4 : (d.risk ? 12 : 7)))
-            .attr("fill", d => d.isTarget ? '#fbbf24' : (d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9')))
+            .attr("r", d => {
+            if (d.isTarget) return 18;
+            if (d.member_count > 1) return Math.min(11 + d.member_count * 0.9, 26); // wallet cluster
+            if (d.type === 'Transaction') return 4;
+            if (d.risk) return 12;
+            return 7;
+        })
+            .attr("fill", getNodeColor)
             .on("click", (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
             .on("mouseover", (ev, d) => highlightNeighbors(d, true))
             .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
@@ -403,7 +433,11 @@ function _renderGraphImpl(graphData, targetId) {
         label = g.append("g").attr("class", "labels")
             .selectAll("text").data(nodes).enter().append("text")
             .attr("class", "node-label")
-            .text(d => d.label)
+            .text(d => getNodeCustomName(d.id) || d.label)
+            .attr("title", d => {
+                const customName = getNodeCustomName(d.id);
+                return customName ? `${customName} (${d.label})` : d.label;
+            })
             .attr("dx", 12).attr("dy", ".35em")
             .attr("fill", "#1e293b").attr("font-size", "11px").attr("font-weight", "500");
 
@@ -858,7 +892,134 @@ async function expandNode(nodeId) {
         console.error('expandNode error:', err);
     }
 }
-window.expandNode = expandNode;
+window.expandNode     = expandNode;
+window.expandSelected = expandSelected;
+
+// ── Expand All ───────────────────────────────────────────────────────────────
+let _expandAllAbort = false;
+
+function stopExpandAll() {
+    _expandAllAbort = true;
+    const stopBtn = document.getElementById('stopExpandBtn');
+    if (stopBtn) stopBtn.style.display = 'none';
+    const loaderStop = document.getElementById('loaderStopBtn');
+    if (loaderStop) loaderStop.style.display = 'none';
+}
+window.stopExpandAll = stopExpandAll;
+
+async function expandAll() {
+    const btn = document.getElementById('expandAllBtn');
+    const stopBtn = document.getElementById('stopExpandBtn');
+    const loaderStop = document.getElementById('loaderStopBtn');
+    const setBtn = (running, remaining) => {
+        if (!btn) return;
+        if (!running) {
+            btn.disabled = false;
+            btn.textContent = '⚡ Expand All';
+            btn.classList.remove('bg-red-700', 'hover:bg-red-600');
+            btn.classList.add('bg-violet-700', 'hover:bg-violet-600');
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (loaderStop) loaderStop.style.display = 'none';
+        } else {
+            btn.disabled = false;
+            btn.textContent = `⚡ Expanding… ${remaining}`;
+            btn.classList.remove('bg-violet-700', 'hover:bg-violet-600');
+            btn.classList.add('bg-violet-900', 'hover:bg-violet-800');
+            if (stopBtn) stopBtn.style.display = '';
+            if (loaderStop) loaderStop.style.display = '';
+        }
+    };
+
+    // Second click = abort
+    if (btn && btn.textContent.startsWith('⏹')) {
+        _expandAllAbort = true;
+        setBtn(false, 0);
+        setBusy(false);
+        return;
+    }
+
+    _expandAllAbort = false;
+
+    // Snapshot unexpanded Address nodes — new nodes found during expansion are NOT
+    // auto-queued to prevent runaway growth on highly-connected graphs.
+    const queue = rawNodes
+        .filter(n => n.type === 'Address' && !expandedNodes.has(n.id))
+        .map(n => n.id);
+
+    if (queue.length === 0) {
+        setBusy(true, 'EXPAND ALL', 'All visible nodes already expanded.');
+        setTimeout(() => setBusy(false), 2500);
+        return;
+    }
+
+    setBtn(true, `0 / ${queue.length}`);
+    let done = 0;
+
+    for (const nodeId of queue) {
+        if (_expandAllAbort) break;
+        setBtn(true, `${done + 1} / ${queue.length}`);
+        setBusy(true, `EXPANDING ${done + 1} / ${queue.length}`,
+            nodeId.substring(0, 10) + '…' + nodeId.slice(-6));
+
+        if (!expandedNodes.has(nodeId)) {
+            expandedNodes.add(nodeId);
+            window._expandedNodes = expandedNodes;
+            updateExpandRings();
+
+            try {
+                const res  = await fetch(`/api/trace/${nodeId}`);
+                const data = await res.json();
+
+                if (data.graph?.nodes) {
+                    const anchor = rawNodes.find(n => n.id === nodeId);
+                    const ax = anchor?.x ?? 0, ay = anchor?.y ?? 0;
+                    const existingIds  = new Set(rawNodes.map(n => n.id));
+                    const existingKeys = new Set(rawLinks.map(l =>
+                        `${l.source?.id || l.source}|${l.target?.id || l.target}`));
+
+                    Object.entries(data.graph.nodes).forEach(([id, n]) => {
+                        if (existingIds.has(id)) return;
+                        const angle = Math.random() * 2 * Math.PI;
+                        const dist  = 80 + Math.random() * 80;
+                        rawNodes.push({ id, ...n, label: n.label || id, isTarget: false,
+                            x: ax + Math.cos(angle) * dist, y: ay + Math.sin(angle) * dist });
+                        fullGraphData.nodes[id] = n;
+                    });
+                    (data.graph.edges || []).forEach(e => {
+                        if (existingKeys.has(`${e.source}|${e.target}`)) return;
+                        rawLinks.push({ ...e });
+                        if (!fullGraphData.edges) fullGraphData.edges = [];
+                        fullGraphData.edges.push(e);
+                    });
+
+                    rebindGraphSelections();
+                    updateExpandRings();
+                    document.getElementById('nodeCount').textContent = rawNodes.length.toLocaleString();
+                    document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
+
+                    if (simulation) simulation.stop();
+                    simulation = d3.forceSimulation(rawNodes)
+                        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => (d.amount||0) > 1 ? 100 : 50))
+                        .force('charge', d3.forceManyBody().strength(-120))
+                        .force('center', d3.forceCenter(0, 0))
+                        .on('tick', ticked);
+                    refreshTimelineFromRawLinks();
+                }
+            } catch (err) {
+                expandedNodes.delete(nodeId);
+                console.error('expandAll error:', nodeId, err);
+            }
+        }
+        done++;
+        await new Promise(r => setTimeout(r, 400)); // throttle — 400ms between requests
+    }
+
+    setBtn(false, 0);
+    setBusy(true, 'EXPAND ALL COMPLETE', `Expanded ${done} node${done !== 1 ? 's' : ''}`);
+    fitGraphToScreen();
+    setTimeout(() => setBusy(false), 3000);
+}
+window.expandAll = expandAll;
 
 // =============================================================================
 // MISC CONVENIENCE HELPERS (toggle freeze/labels/layout etc.)
@@ -893,6 +1054,45 @@ export function toggleFreeze() {
             btn.parentElement.classList.add('bg-slate-800/90', 'border-slate-600');
         }
     }
+}
+
+/**
+ * Update a node's color in the graph visualization
+ * Called when user changes a node's custom color annotation
+ */
+export function updateGraphNodeColor(nodeId, hexColor) {
+    if (!node) return;
+    
+    // Update the visual representation
+    node.attr("fill", d => {
+        if (d.id === nodeId) {
+            return getNodeCustomColor(nodeId) || defaultNodeFill(d);
+        }
+        return defaultNodeFill(d);
+    });
+}
+
+/**
+ * Update a node's display label in the graph visualization
+ * Called when user changes a node's custom display name annotation
+ */
+export function updateGraphNodeLabel(nodeId, customName) {
+    if (!label) return;
+    
+    // Update the label text and tooltip
+    label.text(d => {
+        if (d.id === nodeId) {
+            return getNodeCustomName(nodeId) || d.label;
+        }
+        return getNodeCustomName(d.id) || d.label;
+    }).attr("title", d => {
+        if (d.id === nodeId) {
+            const name = getNodeCustomName(nodeId);
+            return name ? `${name} (${d.label})` : d.label;
+        }
+        const name = getNodeCustomName(d.id);
+        return name ? `${name} (${d.label})` : d.label;
+    });
 }
 
 // =============================================================================
@@ -1193,284 +1393,7 @@ export function toggleEdgeTooltips() {
 // =============================================================================
 // ENTITY INTELLIGENCE PANEL
 // =============================================================================
-function showEntityView(nodeId) {
-    if (!fullGraphData || !fullGraphData.nodes[nodeId]) return;
-
-    // Close trace panel if open (and clear its graph highlight)
-    const tv = document.getElementById('traceView');
-    if (tv && !tv.classList.contains('hidden')) {
-        tv.classList.add('hidden');
-        if (window.clearTrace) window.clearTrace();
-    }
-    const nodeData = fullGraphData.nodes[nodeId];
-    const allLinks = link.data();
-    const degree   = allLinks.filter(l => l.source.id === nodeId || l.target.id === nodeId).length;
-
-    let totalReceived = 0, totalSent = 0, incomingTx = 0, outgoingTx = 0;
-    const txEvents = [];
-
-    allLinks.forEach(l => {
-        if (l.target.id === nodeId) {
-            totalReceived += l.amount || 0; incomingTx++;
-            if (l.timestamp > 0)
-                txEvents.push({ dir: 'in', amount: l.amount || 0, ts: l.timestamp, peer: l.source.id || l.source });
-        } else if (l.source.id === nodeId) {
-            totalSent += l.amount || 0; outgoingTx++;
-            if (l.timestamp > 0)
-                txEvents.push({ dir: 'out', amount: l.amount || 0, ts: l.timestamp, peer: l.target.id || l.target });
-        }
-    });
-    txEvents.sort((a, b) => b.ts - a.ts);
-
-    const neighbors = new Set();
-    allLinks.forEach(l => {
-        if (l.source.id === nodeId) neighbors.add(l.target.id);
-        if (l.target.id === nodeId) neighbors.add(l.source.id);
-    });
-    const balance = totalReceived - totalSent;
-    const isAddress = nodeData.type === 'Address';
-
-    // ── Risk banner ──────────────────────────────────────────────────────────
-    const risk       = nodeData.risk || 0;
-    const rd         = nodeData.risk_data;
-    const hasReports = rd && rd.report_count > 0;
-    const hasError   = rd && rd.error;
-
-    // hasTaintOnly = risk is inherited from graph proximity (taint propagation),
-    // NOT from direct ChainAbuse reports for this address/tx.
-    // We must never show "NO RISK REPORTS ✅" when risk > 0 — that is contradictory.
-    const hasTaintOnly = !hasReports && !hasError && risk > 0;
-
-    let rc, rl, rbg, rbrd, rglow, ri;
-    if (hasError) {
-        rc='orange'; rl='API LIMIT REACHED';
-        rbg='bg-orange-50'; rbrd='border-orange-300'; rglow=''; ri='⏳';
-    } else if (hasTaintOnly) {
-        if (risk >= 70) {
-            rc='orange'; rl='HIGH TAINT RISK';
-            rbg='bg-amber-50'; rbrd='border-amber-300'; rglow='shadow-[0_0_20px_rgba(245,158,11,0.2)]'; ri='⚠️';
-        } else if (risk >= 40) {
-            rc='yellow'; rl='ELEVATED TAINT RISK';
-            rbg='bg-yellow-50'; rbrd='border-yellow-300'; rglow=''; ri='⚠️';
-        } else {
-            rc='slate'; rl='LOW TAINT RISK';
-            rbg='bg-slate-50'; rbrd='border-slate-300'; rglow=''; ri='🔗';
-        }
-    } else if (!hasReports && risk === 0) {
-        rc='emerald'; rl='NO RISK REPORTS';
-        rbg='bg-emerald-50'; rbrd='border-emerald-300'; rglow=''; ri='✅';
-    } else if (risk >= 70) {
-        rc='red'; rl='CRITICAL RISK';
-        rbg='bg-red-100'; rbrd='border-red-300'; rglow='shadow-[0_0_30px_rgba(239,68,68,0.4)]'; ri='🚨';
-    } else if (risk >= 40) {
-        rc='orange'; rl='HIGH RISK';
-        rbg='bg-orange-100'; rbrd='border-orange-300'; rglow='shadow-[0_0_25px_rgba(249,115,22,0.3)]'; ri='⚠️';
-    } else if (risk >= 20) {
-        rc='yellow'; rl='MEDIUM RISK';
-        rbg='bg-yellow-100'; rbrd='border-yellow-300'; rglow='shadow-[0_0_20px_rgba(234,179,8,0.2)]'; ri='⚠️';
-    } else {
-        rc='green'; rl='LOW RISK';
-        rbg='bg-green-100'; rbrd='border-green-300'; rglow=''; ri='✅';
-    }
-
-    let html = `<div class="space-y-4">`;
-
-    // Risk block
-    html += `
-    <div class="${rbg} ${rbrd} ${rglow} border rounded-lg p-4">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-${rc}-700 font-bold text-xs uppercase tracking-wider">${ri} ${rl}</span>
-            <span class="text-${rc}-700 text-2xl font-bold">${hasError ? '?' : risk}</span>
-        </div>
-        <div class="bg-white/60 rounded-full h-2 mb-3">
-            <div class="bg-${rc}-500 h-2 rounded-full transition-all duration-500"
-                 style="width: ${(hasReports || hasTaintOnly) ? Math.max(risk, 4) : 100}%"></div>
-        </div>`;
-
-    if (hasError) {
-        html += `<div class="text-[9px] text-orange-800 font-bold">${rd.error}</div>
-                 <div class="text-[9px] text-orange-700 mt-1">Risk data temporarily unavailable.</div>`;
-    } else if (hasReports) {
-        html += `<div class="grid grid-cols-2 gap-2 text-[9px]">
-            <div><div class="text-slate-500 uppercase">Reports</div><div class="font-bold text-slate-800">${rd.report_count}</div></div>
-            <div><div class="text-slate-500 uppercase">Verified</div><div class="font-bold text-slate-800">${rd.has_verified_reports ? '✓ Yes' : 'No'}</div></div>
-            <div><div class="text-slate-500 uppercase">Confidence</div><div class="font-bold text-slate-800">${(rd.avg_confidence_score * 100).toFixed(0)}%</div></div>
-            <div><div class="text-slate-500 uppercase">Lost</div><div class="font-bold text-slate-800">${rd.total_amount.toFixed(2)} BTC</div></div>
-        </div>`;
-    } else {
-        if (hasTaintOnly) {
-            html += `
-            <div class="text-[9px] text-amber-800 font-bold mb-1">No direct abuse reports for this address.</div>
-            <div class="text-[9px] text-amber-700 leading-relaxed">
-                Risk score of <strong>${risk}</strong> is inherited from graph proximity —
-                this entity is within a few hops of a flagged address. It does not indicate
-                confirmed involvement.
-            </div>`;
-        } else {
-            html += `<div class="text-[9px] text-emerald-700">No abuse reports found. Address appears clean.</div>`;
-        }
-    }
-    html += `</div>`;
-
-    if (hasReports && rd.categories && Object.keys(rd.categories).length > 0) {
-        html += `<div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <h4 class="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-3">⚠️ Reported Activities</h4>
-            <div class="space-y-2">`;
-        Object.entries(rd.categories).sort((a, b) => b[1] - a[1]).forEach(([cat, cnt]) => {
-            html += `<div class="flex items-center justify-between text-[9px]">
-                <span class="text-slate-600 capitalize">${cat}</span>
-                <span class="bg-red-100 text-red-600 px-2 py-1 rounded font-bold">${cnt}</span></div>`;
-        });
-        html += `</div></div>`;
-    }
-
-    if (hasReports && rd.reports?.length > 0) {
-        html += `<div class="border border-slate-200 rounded-lg p-3 bg-slate-50 max-h-60 overflow-y-auto custom-scrollbar">
-            <h4 class="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-3">📋 Recent Reports</h4>
-            <div class="space-y-3">`;
-        rd.reports.slice(0, 5).forEach(r => {
-            html += `<div class="bg-slate-100 p-2 rounded border border-slate-200">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-red-600 font-bold text-[9px] uppercase">${r.category}</span>
-                    ${r.is_verified ? '<span class="text-green-600 text-[8px]">✓ VERIFIED</span>' : '<span class="text-slate-500 text-[8px]">UNVERIFIED</span>'}
-                </div>
-                ${r.description ? `<p class="text-slate-600 text-[9px] leading-relaxed mb-2">${r.description.substring(0, 150)}${r.description.length > 150 ? '...' : ''}</p>` : ''}
-                <div class="flex items-center justify-between text-[8px] text-slate-500">
-                    <span>${r.blockchain || 'Bitcoin'}</span>
-                    ${r.amount > 0 ? `<span class="text-red-500">${r.amount} BTC lost</span>` : ''}
-                </div></div>`;
-        });
-        if (rd.reports.length > 5)
-            html += `<div class="text-center text-[9px] text-slate-500">+ ${rd.reports.length - 5} more reports</div>`;
-        html += `</div></div>`;
-    }
-
-    // Entity info + mempool link
-    html += `
-    <div class="space-y-3">
-        <div class="flex items-center gap-2 flex-wrap">
-            <span class="px-2 py-1 rounded text-[9px] font-bold ${isAddress ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-purple-100 text-purple-600 border border-purple-200'}">${nodeData.type}</span>
-            ${hasReports && risk >= 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-600 border border-red-200">🚨 CRITICAL RISK</span>' : ''}
-            ${hasReports && risk >= 40 && risk < 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-orange-100 text-orange-600 border border-orange-200">⚠️ HIGH RISK</span>' : ''}
-            ${nodeData.mixer_info && nodeData.mixer_info.flagged ? ('<span class="px-2 py-1 rounded text-[9px] font-bold bg-indigo-100 text-indigo-600 border border-indigo-200" title="Mixer heuristic score: '+(nodeData.mixer_info.score||0).toFixed(2)+'">🌀 MIXER '+(nodeData.mixer_info.mixer_type || '')+'</span>') : ''}
-            ${hasTaintOnly && risk >= 40 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-300" title="Risk inherited from nearby flagged nodes — no direct reports">🔗 TAINT ' + risk + '</span>' : ''}
-            <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}"
-               target="_blank" rel="noopener"
-               class="px-2 py-1 rounded text-[9px] font-bold bg-cyan-50 text-cyan-600 border border-cyan-200 hover:bg-cyan-100 transition">
-               🔍 mempool.space ↗
-            </a>
-        </div>
-
-        ${isAddress ? `
-        <div class="flex gap-2">
-            <button onclick="window.expandNode('${nodeId}')"
-                ${expandedNodes.has(nodeId) ? 'disabled' : ''}
-                class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg
-                       ${expandedNodes.has(nodeId)
-                           ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                           : 'bg-cyan-600 hover:bg-cyan-500 text-white'}
-                       text-[10px] font-bold uppercase tracking-widest transition shadow">
-                <span>${expandedNodes.has(nodeId) ? '✓' : '⊕'}</span>
-                <span>${expandedNodes.has(nodeId) ? 'Already Expanded' : 'Expand Search'}</span>
-            </button>
-        </div>` : ''}
-
-        <div>
-            <label class="text-[9px] text-slate-500 font-bold uppercase">Entity ID</label>
-            <div class="text-xs font-mono text-cyan-600 break-all mt-1">${nodeData.label}</div>
-        </div>
-    </div>
-
-    <div class="border-t border-slate-200 pt-4">
-        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Network Metrics</h4>
-        <div class="grid grid-cols-2 gap-3">
-            <div class="bg-slate-100 p-3 rounded border border-slate-200">
-                <div class="text-[9px] text-slate-500 uppercase">Connections</div>
-                <div class="text-lg font-bold text-slate-900">${degree}</div>
-            </div>
-            <div class="bg-slate-100 p-3 rounded border border-slate-200">
-                <div class="text-[9px] text-slate-500 uppercase">Neighbors</div>
-                <div class="text-lg font-bold text-slate-900">${neighbors.size}</div>
-            </div>
-            <div class="bg-green-100 p-3 rounded border border-green-200">
-                <div class="text-[9px] text-green-600 uppercase">Received</div>
-                <div class="text-sm font-bold text-green-700">${totalReceived.toFixed(4)} BTC</div>
-                <div class="text-[9px] text-slate-500 mt-1">${incomingTx} tx</div>
-            </div>
-            <div class="bg-orange-100 p-3 rounded border border-orange-200">
-                <div class="text-[9px] text-orange-600 uppercase">Sent</div>
-                <div class="text-sm font-bold text-orange-700">${totalSent.toFixed(4)} BTC</div>
-                <div class="text-[9px] text-slate-500 mt-1">${outgoingTx} tx</div>
-            </div>
-        </div>
-        <div class="mt-3 p-3 rounded ${balance >= 0 ? 'bg-cyan-100 border border-cyan-200' : 'bg-slate-100 border border-slate-200'}">
-            <div class="text-[9px] text-slate-500 uppercase">Graph Balance</div>
-            <div class="text-lg font-bold ${balance >= 0 ? 'text-cyan-600' : 'text-slate-500'}">${balance.toFixed(4)} BTC</div>
-        </div>
-    </div>`;
-
-    // Tx history
-    html += `<div class="border-t border-slate-200 pt-4">
-        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">🕒 Transaction History</h4>`;
-    if (txEvents.length > 0) {
-        html += `<div class="space-y-2 max-h-52 overflow-y-auto custom-scrollbar">`;
-        txEvents.forEach(tx => {
-            const dt  = new Date(tx.ts * 1000);
-            const d8  = dt.toISOString().split('T')[0];
-            const t8  = dt.toISOString().split('T')[1].substring(0, 8) + ' UTC';
-            const p   = (tx.peer || '').toString();
-            const dp  = p.length > 18 ? p.substring(0, 18) + '…' : p;
-            const isIn = tx.dir === 'in';
-            html += `<div class="flex items-start gap-2 p-2 rounded bg-slate-50 border border-slate-200">
-                <span class="mt-0.5 text-[11px] font-bold ${isIn ? 'text-green-600' : 'text-orange-600'}">${isIn ? '▼' : '▲'}</span>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between gap-1">
-                        <span class="text-[9px] font-bold ${isIn ? 'text-green-700' : 'text-orange-700'}">${isIn ? '+' : '-'}${tx.amount.toFixed(4)} BTC</span>
-                        <span class="text-[8px] text-slate-400 font-mono shrink-0">${t8}</span>
-                    </div>
-                    <div class="text-[8px] text-slate-400 font-mono mt-0.5">${d8}</div>
-                    <div class="text-[8px] text-slate-400 truncate">${isIn ? 'from' : 'to'}: <span class="font-mono text-slate-500">${dp}</span></div>
-                </div></div>`;
-        });
-        html += `</div>`;
-    } else {
-        html += `<div class="text-[9px] text-slate-400 italic">No timestamp data on connected edges.</div>`;
-    }
-    html += `</div>`;
-
-    // ── Live mempool enrichment block ────────────────────────────────────────
-    const enrichFn = isAddress
-        ? `window.enrichFromMempool('${nodeId}', '${nodeData.label}')`
-        : `window.enrichTxFromMempool('${nodeData.label}')`;
-
-    html += `
-    <div class="border-t border-slate-200 pt-4">
-        <div class="flex items-center justify-between mb-3">
-            <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🌐 Live On-Chain Data</h4>
-            <button id="btnFetchMempool" onclick="${enrichFn}"
-                class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[9px] font-bold rounded uppercase tracking-wider transition">
-                ⬇ Fetch
-            </button>
-        </div>
-        <div id="mempoolEnrichContent" class="text-[9px] text-slate-400 italic">
-            Click "Fetch" to pull live data from mempool.space.
-        </div>
-    </div>`;
-
-    if (nodeData.sources?.length > 0) {
-        html += `<div class="border-t border-slate-200 pt-4">
-            <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Intelligence Sources</h4>
-            <div class="space-y-1">
-                ${nodeData.sources.map(s => `<div class="text-[9px] font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded">${s}</div>`).join('')}
-            </div></div>`;
-    }
-
-    html += `</div>`;
-    document.getElementById('entityContent').innerHTML = html;
-    document.getElementById('liveView').classList.add('hidden');
-    document.getElementById('traceView')?.classList.add('hidden');
-    document.getElementById('entityView').classList.remove('hidden');
-}
+// Entity view is now handled by ui.js module (imported above)
 
 // =============================================================================
 // LIVE MEMPOOL ENRICHMENT — ADDRESS
@@ -1845,6 +1768,10 @@ function renderCalendar() {
 
 /** Convenience: resolve default fill for any node */
 function defaultNodeFill(d) {
+    // Check for custom color annotation first
+    const customColor = getNodeCustomColor(d.id);
+    if (customColor) return customColor;
+    
     if (d.isTarget)               return '#fbbf24';
     if (d.risk > 0)               return '#ef4444';
     if (d.type === 'Transaction') return '#6366f1';
@@ -2157,4 +2084,207 @@ export function clearPathHighlight() {
 
 // Graph module: exports D3 rendering and interaction functions
 // runSleuth is defined in main.js as the primary orchestrator
-export { expandNode, updateExpandRings, updateExpandBtn };
+export { expandNode, expandSelected, expandAll, updateExpandRings, updateExpandBtn };
+
+
+// =============================================================================
+// WALLET VIEW — co-spend cluster collapse
+// =============================================================================
+
+/**
+ * Build a "wallet graph" where every set of co-owned addresses (those sharing
+ * a cluster_id from the co-spend heuristic) is collapsed into a single node.
+ *
+ * Algorithm:
+ *   1. Map each address node to its wallet cluster (cluster_id from backend).
+ *      Singletons (cluster_size <= 1 or no cluster_id) map to themselves.
+ *   2. Transaction nodes are kept as-is (they are not clusterable).
+ *   3. Rebuild edges using cluster IDs; deduplicate and aggregate amounts.
+ *   4. Self-edges (both endpoints in the same cluster) are dropped.
+ *
+ * @param {object} graphData  The original address-level graph from the API.
+ * @returns {object}          A new graph with wallet nodes in place of address clusters.
+ */
+function buildWalletGraph(graphData) {
+    if (!graphData || !graphData.nodes) return graphData;
+
+    // ── Step 1: Assign each node to a cluster representative ─────────────────
+    // nodeToWallet maps every original node ID → the wallet/cluster ID to use.
+    const nodeToWallet = {};
+    for (const [id, node] of Object.entries(graphData.nodes)) {
+        if (node.type !== 'Address') {
+            // Transaction nodes are kept unchanged in wallet view.
+            nodeToWallet[id] = id;
+        } else if (node.cluster_id && node.cluster_size > 1) {
+            // Multi-address cluster: use a stable, display-safe wallet ID.
+            nodeToWallet[id] = 'wallet__' + node.cluster_id;
+        } else {
+            // Singleton address: keep its own ID.
+            nodeToWallet[id] = id;
+        }
+    }
+
+    // ── Step 2: Build wallet nodes ────────────────────────────────────────────
+    const walletNodes = {};
+
+    for (const [id, node] of Object.entries(graphData.nodes)) {
+        const wid = nodeToWallet[id];
+
+        if (!walletNodes[wid]) {
+            walletNodes[wid] = {
+                id:           wid,
+                label:        node.label || id,
+                type:         node.type,
+                risk:         node.risk  || 0,
+                entity_type:  node.entity_type  || 'unknown',
+                sources:      node.sources || [],
+                member_count: 1,
+                members:      [id],
+                cluster_id:   wid,
+                // Carry through detection info from the highest-risk member
+                mixer_info:    node.mixer_info    || null,
+                exchange_info: node.exchange_info || null,
+                gambling_info: node.gambling_info || null,
+                mining_info:   node.mining_info   || null,
+            };
+        } else {
+            const wn = walletNodes[wid];
+            wn.members.push(id);
+            wn.member_count++;
+
+            // Propagate highest risk
+            if ((node.risk || 0) > wn.risk) wn.risk = node.risk;
+
+            // Prefer a named entity type over 'unknown'
+            if (node.entity_type && node.entity_type !== 'unknown' &&
+                wn.entity_type === 'unknown') {
+                wn.entity_type = node.entity_type;
+            }
+
+            // Carry the most descriptive label: prefer a named service label
+            if (node.label && node.label !== id && wn.label === wn.members[0]) {
+                wn.label = node.label;
+            }
+
+            // Carry through detection results
+            if (!wn.mixer_info    && node.mixer_info)    wn.mixer_info    = node.mixer_info;
+            if (!wn.exchange_info && node.exchange_info) wn.exchange_info = node.exchange_info;
+            if (!wn.gambling_info && node.gambling_info) wn.gambling_info = node.gambling_info;
+            if (!wn.mining_info   && node.mining_info)   wn.mining_info   = node.mining_info;
+        }
+    }
+
+    // Finalise labels for multi-address wallet nodes
+    for (const [wid, wn] of Object.entries(walletNodes)) {
+        if (wn.member_count > 1) {
+            // Check whether any member has a meaningful label from WalletExplorer
+            const namedNode = wn.members
+                .map(m => graphData.nodes[m])
+                .find(n => n && n.label && n.label !== n.id && n.label.length < 50);
+            wn.label = namedNode
+                ? `${namedNode.label} (+${wn.member_count - 1})`
+                : `Wallet · ${wn.member_count} addrs`;
+        }
+    }
+
+    // ── Step 3: Build wallet edges (deduplicated, amounts aggregated) ─────────
+    const edgeMap = {};
+    for (const edge of (graphData.edges || [])) {
+        const srcId = edge.source?.id || edge.source;
+        const tgtId = edge.target?.id || edge.target;
+        const src = nodeToWallet[srcId] || srcId;
+        const tgt = nodeToWallet[tgtId] || tgtId;
+
+        // Drop self-edges (both endpoints collapsed into same wallet node)
+        if (src === tgt) continue;
+
+        const key = `${src}|${tgt}`;
+        if (!edgeMap[key]) {
+            edgeMap[key] = {
+                source:    src,
+                target:    tgt,
+                amount:    edge.amount    || 0,
+                timestamp: edge.timestamp || 0,
+                sources:   edge.sources   || [],
+            };
+        } else {
+            edgeMap[key].amount += edge.amount || 0;
+            // Keep the latest timestamp
+            if ((edge.timestamp || 0) > edgeMap[key].timestamp) {
+                edgeMap[key].timestamp = edge.timestamp;
+            }
+        }
+    }
+
+    return {
+        nodes:   walletNodes,
+        edges:   Object.values(edgeMap),
+        summary: graphData.summary,
+    };
+}
+
+/**
+ * Map a node ID from address space → wallet space.
+ * If the address belongs to a cluster, return the wallet node ID.
+ */
+function getWalletId(nodeId, graphData) {
+    if (!graphData || !nodeId) return nodeId;
+    const node = graphData.nodes[nodeId];
+    if (node && node.cluster_id && node.cluster_size > 1) {
+        return 'wallet__' + node.cluster_id;
+    }
+    return nodeId;
+}
+
+/**
+ * Toggle between Address View (default) and Wallet View (co-spend collapsed).
+ *
+ * In Wallet View:
+ *  - All addresses sharing a cluster (co-spend heuristic) are merged into one node.
+ *  - The merged node shows a member count badge and a combined risk/label.
+ *  - Edges are deduplicated across the collapsed boundary and amounts summed.
+ *  - The graph is much smaller and reveals the true inter-entity flow.
+ *
+ * Calling again toggles back to the full address view.
+ */
+export function toggleWalletView() {
+    const btn = document.getElementById('walletViewText');
+
+    if (!fullGraphData) {
+        // Nothing loaded yet — silently ignore
+        return;
+    }
+
+    walletViewActive = !walletViewActive;
+
+    if (walletViewActive) {
+        // Stash original data so we can restore it
+        _fullGraphDataBak = fullGraphData;
+        _targetIdBak      = currentTargetId;
+
+        // Build and render the collapsed wallet graph
+        walletGraphData = buildWalletGraph(fullGraphData);
+        const walletTargetId = getWalletId(currentTargetId, fullGraphData);
+
+        renderGraph(walletGraphData, walletTargetId);
+
+        if (btn) btn.textContent = '[ADDR VIEW]';
+
+        // Update legend note
+        const legend = document.getElementById('walletViewLegend');
+        if (legend) legend.classList.remove('hidden');
+
+    } else {
+        // Restore the original address-level graph
+        fullGraphData  = _fullGraphDataBak;
+        currentTargetId = _targetIdBak;
+        walletGraphData  = null;
+
+        if (_fullGraphDataBak) renderGraph(_fullGraphDataBak, _targetIdBak);
+
+        if (btn) btn.textContent = '[WALLET VIEW]';
+
+        const legend = document.getElementById('walletViewLegend');
+        if (legend) legend.classList.add('hidden');
+    }
+}
