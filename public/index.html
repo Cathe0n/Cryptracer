@@ -102,6 +102,14 @@
         .gap-3 { gap: 0.75rem; }
         .gap-4 { gap: 1rem; }
 
+        /* Wallet cluster node — dashed green ring style */
+        .wallet-cluster-ring {
+            stroke: #10b981;
+            stroke-dasharray: 5 3;
+            fill: none;
+            opacity: 0.8;
+        }
+
         /* Paint-order (SVG label halos — non-Tailwind, stays in custom CSS) */
         .node-label {
             paint-order: stroke;
@@ -132,6 +140,12 @@
         <div class="spinner mb-4"></div>
         <div id="loaderTitle" class="text-cyan-500 text-xs font-bold tracking-[0.2em] animate-pulse mb-2">RECONSTRUCTING TIMELINE...</div>
         <div id="loaderDetails" class="text-slate-400 text-[10px] font-mono max-w-md text-center leading-relaxed"></div>
+        <button id="loaderStopBtn"
+            onclick="stopExpandAll()"
+            style="display:none"
+            class="mt-6 bg-red-600 hover:bg-red-500 px-5 py-2.5 rounded border border-red-400 text-xs font-bold text-white tracking-widest uppercase transition animate-pulse">
+            ⏹ Stop Expanding
+        </button>
     </div>
 
     <header class="h-16 border-b border-slate-800 bg-slate-900/95 flex items-center px-8 justify-between shrink-0 z-50">
@@ -224,9 +238,17 @@
                                 <div class="w-4 h-4 rounded-full bg-indigo-100 border border-indigo-200"></div>
                                 <span class="text-slate-300">Mixer (heuristic)</span>
                             </div>
+                            <div class="flex items-center gap-2 text-[8px] text-slate-400">🎰 Gambling · ⛏️ Mining auto-detected</div>
                             <div class="flex items-center gap-2">
                                 <div class="w-4 h-4 rounded-full" style="background:#f97316"></div>
                                 <span class="text-slate-300">Trace Final Addr</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full" style="background:#10b981"></div>
+                                <span class="text-slate-300">Wallet Cluster</span>
+                            </div>
+                            <div id="walletViewLegend" class="hidden mt-2 p-2 rounded text-[8px]" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#6ee7b7">
+                                🔗 Wallet View active — addresses collapsed by co-spend
                             </div>
                             <!-- Arrow legend -->
                             <div class="flex items-center gap-2 pt-1 border-t border-slate-700/50 mt-1">
@@ -294,6 +316,7 @@
                         <div>• Use [TREE VIEW] to toggle hierarchy layout</div>
                         <div>• <span class="text-orange-400 font-bold">Trace Path</span> follows BTC forward using change detection</div>
                         <div>• Use [HIDE LABELS] for clarity</div>
+                        <div>• <span class="text-emerald-400 font-bold">[WALLET VIEW]</span> collapses co-owned addresses (co-spend heuristic) into wallet entities — reveals true inter-entity flow</div>
                     </div>
                 </div>
             </div>
@@ -316,6 +339,20 @@
             </div>
 
             <div class="absolute top-6 right-6 flex gap-2 z-40">
+                <button id="expandSelectedBtn"
+                    onclick="expandSelected()"
+                    disabled
+                    class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Select an address node to expand its neighbors">Expand node</button>
+                <button id="expandAllBtn"
+                    onclick="expandAll()"
+                    class="bg-violet-700/90 hover:bg-violet-600 px-3 py-2 rounded border border-violet-500 text-xs font-bold text-white shadow"
+                    title="Expand every unexpanded address node in the graph sequentially">⚡ Expand All</button>
+                <button id="stopExpandBtn"
+                    onclick="stopExpandAll()"
+                    style="display:none"
+                    class="bg-red-600/90 hover:bg-red-500 px-3 py-2 rounded border border-red-400 text-xs font-bold text-white shadow animate-pulse"
+                    title="Stop the running expand-all operation">⏹ Stop</button>
                 <button onclick="fitGraphToScreen()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Fit all nodes to screen">[FIT ALL]</button>
                 <button onclick="recenterGraph()" class="bg-cyan-700/90 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white shadow" title="Focus on target node">[FIND TARGET]</button>
                 <button onclick="toggleFreeze()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Freeze/unfreeze node positions">
@@ -328,6 +365,9 @@
                     <span id="timestampToggleText">[INFO]</span>
                 </button>
                 <button onclick="toggleLayout()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Re-run force simulation">[LAYOUT]</button>                <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="px-3 py-2 rounded border text-xs font-bold text-white shadow transition" style="background:rgba(194,65,12,0.85);border-color:#c2410c" title="Trace BTC forward to its final destination address">[TRACE PATH]</button>
+                <button onclick="toggleWalletView()" class="px-3 py-2 rounded border text-xs font-bold text-emerald-300 shadow transition" style="background:rgba(16,185,129,0.15);border-color:#10b981" title="Collapse co-owned addresses into wallet clusters (co-spend heuristic)">
+                    <span id="walletViewText">[WALLET VIEW]</span>
+                </button>
                 <button onclick="zoomOut()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom out">[-]</button>
                 <button onclick="zoomIn()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom in">[+]</button>
             </div>

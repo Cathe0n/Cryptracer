@@ -12,7 +12,6 @@ import (
 const DefaultMaxHops = 10
 
 // Hop represents one step in a forward trace chain.
-// Each hop is: currentAddress → sendingTx → nextAddress
 type Hop struct {
 	HopIndex       int     `json:"hop_index"`
 	FromAddr       string  `json:"from_addr"`
@@ -22,10 +21,9 @@ type Hop struct {
 	Timestamp      int64   `json:"timestamp"`
 	Label          string  `json:"label,omitempty"`
 	Risk           int     `json:"risk"`
-	DestConfidence string  `json:"dest_confidence"` // "high" | "medium" | "low"
+	DestConfidence string  `json:"dest_confidence"`          // "high" | "medium" | "low"
+	IsPeelingHop   bool    `json:"is_peeling_hop,omitempty"` // true when peeling chain detected
 
-	// MixerScore is set when a CoinJoin/mixer transaction is detected on this hop.
-	// A non-zero value means the trace was halted because funds entered a mixer.
 	MixerScore float64              `json:"mixer_score,omitempty"`
 	MixerType  aggregator.MixerType `json:"mixer_type,omitempty"`
 }
@@ -64,8 +62,7 @@ func StopReasonLabel(r string) string {
 	}
 }
 
-// isRoundBTC returns true if a BTC value is "round" — a signal that it's
-// an intentional payment rather than change.
+// isRoundBTC returns true if a BTC value is "round" — a signal of intentional payment.
 func isRoundBTC(btc float64) bool {
 	for _, step := range []float64{1, 0.5, 0.25, 0.1, 0.05, 0.01, 0.005, 0.001, 0.0001} {
 		remainder := math.Mod(btc, step)
@@ -76,65 +73,81 @@ func isRoundBTC(btc float64) bool {
 	return false
 }
 
-// scriptTypePriority ranks script types by how "modern" they are.
-// Outputs with newer, more common script types are preferred as real payments
-// versus change outputs which sometimes use older types.
 var scriptTypePriority = map[string]int{
-	"p2tr":   5, // Taproot — modern, unambiguously intentional
-	"p2wpkh": 4, // Native SegWit — most common modern payment type
-	"p2wsh":  3, // SegWit script hash — multi-sig / contract
-	"p2sh":   2, // Legacy SegWit wrapped
-	"p2pkh":  1, // Legacy — oldest, often change
+	"p2tr":   5,
+	"p2wpkh": 4,
+	"p2wsh":  3,
+	"p2sh":   2,
+	"p2pkh":  1,
 }
 
 type scoredOutput struct {
-	vout  blockstream.Vout
-	score int
-	conf  string
+	vout      blockstream.Vout
+	score     int
+	conf      string
+	isPeeling bool // set when this output was chosen via peeling heuristic
 }
 
 // pickDestination applies heuristics to choose the most likely "real"
-// destination output from a transaction:
+// destination output from a transaction. The scoring rules are:
 //
-//  1. Fresh address (+4) — output address not seen in any input
-//  2. Round amount (+2)  — BTC value is a round number
-//  3. Larger value (+1)  — prefer bigger output on ties
-//  4. Modern script (+1) — Taproot/SegWit outputs preferred over P2PKH
+//  1. Peeling chain boost (+8) — 1-in 2-out with one output >70% of input.
+//     The larger output is almost certainly the carried-forward change;
+//     the smaller one is the payment. We give a large bonus to the LARGER
+//     output (the "continuation") since the tracer follows the main chain.
+//  2. Fresh address (+4)       — output address not seen in any input
+//  3. Round amount (+2)        — BTC value is a round number
+//  4. Larger value (+1)        — prefer bigger output on ties
+//  5. Modern script (+1–5)     — Taproot/SegWit preferred over P2PKH
 //
 // Returns nil if no spendable outputs exist.
 func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutput {
 	var candidates []scoredOutput
 
-	for _, vout := range tx.Vout {
+	// ── Peeling chain detection ────────────────────────────────
+	// A peeling chain transaction has exactly 1 non-coinbase input and
+	// exactly 2 outputs where one output carries the bulk of the value
+	// forward (>70% of the total) — this is the "change" in peeling.
+	// We give a large score bonus to the large output so it is reliably
+	// chosen over the smaller "peeled" payment output.
+	isPeelingTx, peelingLargeIdx := detectPeelingPattern(tx)
+
+	for i, vout := range tx.Vout {
 		addr := vout.ScriptPubKeyAddress
-		// Skip OP_RETURN and undecodable outputs
 		if addr == "" || vout.ScriptPubKeyType == "op_return" {
 			continue
 		}
 
 		score := 0
+		isPeelingOut := false
+
+		// Peeling boost: large output in a peel-chain tx gets a dominant bonus
+		if isPeelingTx && i == peelingLargeIdx {
+			score += 8 // overwhelms all other signals
+			isPeelingOut = true
+		}
+
 		if !inputAddrs[addr] {
-			score += 4 // fresh address — strongest signal
+			score += 4
 		}
 		btc := float64(vout.Value) / 1e8
 		if isRoundBTC(btc) {
 			score += 2
 		}
 		if btc >= 0.001 {
-			score += 1 // non-dust
+			score += 1
 		}
 		if p, ok := scriptTypePriority[vout.ScriptPubKeyType]; ok {
-			score += p // favour modern script types
+			score += p
 		}
 
-		candidates = append(candidates, scoredOutput{vout, score, ""})
+		candidates = append(candidates, scoredOutput{vout, score, "", isPeelingOut})
 	}
 
 	if len(candidates) == 0 {
 		return nil
 	}
 
-	// Sort: higher score first, then higher value as tiebreaker
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].score != candidates[j].score {
 			return candidates[i].score > candidates[j].score
@@ -144,8 +157,10 @@ func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutpu
 
 	best := &candidates[0]
 
-	// Assign confidence label
+	// Assign confidence — peeling hops are intrinsically high-confidence
 	switch {
+	case best.isPeeling:
+		best.conf = "high"
 	case best.score >= 7:
 		best.conf = "high"
 	case best.score >= 4:
@@ -157,6 +172,61 @@ func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutpu
 	return best
 }
 
+// detectPeelingPattern identifies a "peel chain" transaction:
+//   - Exactly 1 real input (non-coinbase)
+//   - Exactly 2 non-OP_RETURN outputs
+//   - One output is significantly larger (>70% of total output value)
+//
+// Returns (isPeeling bool, indexOfLargeOutput int).
+// indexOfLargeOutput is -1 when isPeeling is false.
+func detectPeelingPattern(tx blockstream.Tx) (bool, int) {
+	// Count real inputs (skip coinbase)
+	realInputs := 0
+	for _, vin := range tx.Vin {
+		if vin.Prevout != nil {
+			realInputs++
+		}
+	}
+	if realInputs != 1 {
+		return false, -1
+	}
+
+	// Filter spendable outputs
+	type idxVal struct {
+		idx int
+		val int64
+	}
+	var spendable []idxVal
+	for i, vout := range tx.Vout {
+		if vout.ScriptPubKeyType == "op_return" || vout.ScriptPubKeyAddress == "" {
+			continue
+		}
+		spendable = append(spendable, idxVal{i, vout.Value})
+	}
+
+	if len(spendable) != 2 {
+		return false, -1
+	}
+
+	total := spendable[0].val + spendable[1].val
+	if total == 0 {
+		return false, -1
+	}
+
+	large := spendable[0]
+	if spendable[1].val > spendable[0].val {
+		large = spendable[1]
+	}
+
+	// The large output must be more than 70% of total to qualify as peeling
+	ratio := float64(large.val) / float64(total)
+	if ratio < 0.70 {
+		return false, -1
+	}
+
+	return true, large.idx
+}
+
 // buildTransactionIO converts a blockstream.Tx into the aggregator.TransactionIO
 // format so we can run mixer-detection heuristics inline during tracing.
 func buildTransactionIO(tx blockstream.Tx) aggregator.TransactionIO {
@@ -166,6 +236,7 @@ func buildTransactionIO(tx blockstream.Tx) aggregator.TransactionIO {
 	}
 	for _, vin := range tx.Vin {
 		if vin.Prevout == nil {
+			tio.HasCoinbase = true
 			continue
 		}
 		tio.Inputs = append(tio.Inputs, aggregator.TxInput{
@@ -187,12 +258,6 @@ func buildTransactionIO(tx blockstream.Tx) aggregator.TransactionIO {
 // TraceForward follows BTC from startAddr forward hop-by-hop, applying
 // change-detection heuristics at each transaction to find the most likely
 // final destination address.
-//
-//   - maxHops: maximum number of address→tx→address hops (default 10)
-//   - caKey:   ChainAbuse API key (empty = skip risk scoring)
-//
-// Tracing stops early when funds enter a mixer, reach a known service,
-// hit a high-risk address, or encounter a cycle.
 func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops int) TracePath {
 	if maxHops <= 0 {
 		maxHops = DefaultMaxHops
@@ -207,7 +272,6 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 	currentAddr := startAddr
 
 	for i := 0; i < maxHops; i++ {
-		// Honour context cancellation / deadline
 		select {
 		case <-ctx.Done():
 			path.StopReason = "timeout"
@@ -217,16 +281,14 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 		default:
 		}
 
-		// ── 1. Fetch live transactions for the current address ──────────────
+		// 1. Fetch live transactions for the current address
 		txs, err := blockstream.GetAddressTxs(currentAddr)
 		if err != nil || len(txs) == 0 {
 			path.StopReason = "no_outgoing_tx"
 			break
 		}
 
-		// ── 2. Find the most recent TX where this address is a SENDER ───────
-		// Blockstream returns txs newest-first. We scan for the first TX
-		// that has an input whose prevout address matches currentAddr.
+		// 2. Find the most recent TX where this address is a SENDER
 		var sendingTx *blockstream.Tx
 		for idx := range txs {
 			for _, vin := range txs[idx].Vin {
@@ -240,24 +302,20 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			}
 		}
 
-		// No outgoing TX found → all UTXOs are unspent, this is the end
 		if sendingTx == nil {
 			path.StopReason = "utxo"
 			break
 		}
 
-		// ── 3. Run mixer detection on this transaction ───────────────────────
-		// If the sending transaction looks like a CoinJoin, flag the hop and stop.
-		// Continuing past a mixer is meaningless — we can't follow the funds.
+		// 3. Run mixer detection
 		tio := buildTransactionIO(*sendingTx)
 		mixerResult := aggregator.IsCoinMixer(tio, 0.70)
 		if mixerResult.Flagged {
-			// Record the mixer hop with zero destination (funds are obfuscated)
 			hop := Hop{
 				HopIndex:       i + 1,
 				FromAddr:       currentAddr,
 				TxHash:         sendingTx.Txid,
-				ToAddr:         "", // can't determine — mixed
+				ToAddr:         "",
 				MixerScore:     mixerResult.Score,
 				MixerType:      mixerResult.MixerType,
 				DestConfidence: "low",
@@ -270,7 +328,7 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			break
 		}
 
-		// ── 4. Collect all input addresses for change detection ──────────────
+		// 4. Collect all input addresses for change detection
 		inputAddrs := map[string]bool{}
 		for _, vin := range sendingTx.Vin {
 			if vin.Prevout != nil && vin.Prevout.ScriptPubKeyAddress != "" {
@@ -278,7 +336,7 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			}
 		}
 
-		// ── 5. Pick most likely destination output ───────────────────────────
+		// 5. Pick most likely destination output (with peeling chain awareness)
 		dest := pickDestination(*sendingTx, inputAddrs)
 		if dest == nil {
 			path.StopReason = "no_destination"
@@ -293,7 +351,7 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			ts = sendingTx.Status.BlockTime
 		}
 
-		// ── 6. Enrich with label and optional risk scoring ───────────────────
+		// 6. Enrich with label and optional risk scoring
 		label := intel.GetLabel(nextAddr)
 		var risk int
 		if caKey != "" {
@@ -311,17 +369,17 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			Label:          label,
 			Risk:           risk,
 			DestConfidence: dest.conf,
+			IsPeelingHop:   dest.isPeeling,
 		}
 		path.Hops = append(path.Hops, hop)
 
-		// ── 7. Stop conditions ───────────────────────────────────────────────
+		// 7. Stop conditions
 		if risk >= 50 {
 			path.StopReason = "high_risk"
 			currentAddr = nextAddr
 			break
 		}
 		if label != "" {
-			// Reached an identified service (exchange, mixer, etc.) — end of trail
 			path.StopReason = "known_service"
 			currentAddr = nextAddr
 			break
