@@ -326,7 +326,7 @@ export function showEntityView(nodeId) {
         
         <!-- Save button -->
         <button onclick="window.saveNodeAnnotation('${nodeId}')"
-            class="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-bold rounded uppercase tracking-wider transition">
+            class="w-full px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-[9px] font-bold rounded uppercase tracking-wider transition shadow-lg shadow-cyan-900/20">
             💾 Save Annotations
         </button>
     </div>`;

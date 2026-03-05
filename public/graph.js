@@ -2085,6 +2085,7 @@ export function clearPathHighlight() {
 // Graph module: exports D3 rendering and interaction functions
 // runSleuth is defined in main.js as the primary orchestrator
 export { expandNode, expandSelected, expandAll, updateExpandRings, updateExpandBtn };
+export { saveSession, restoreSession, checkPendingSession };
 
 
 // =============================================================================
@@ -2286,5 +2287,101 @@ export function toggleWalletView() {
 
         const legend = document.getElementById('walletViewLegend');
         if (legend) legend.classList.add('hidden');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SESSION SAVE / LOAD
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SESSION_VERSION = 1;
+const PENDING_SESSION_KEY = 'cryptracker_pending_session';
+
+/**
+ * Save the current graph state to a downloadable .ctk file.
+ * Includes: graph data, annotations, expanded node list, and the search target.
+ */
+function saveSession() {
+    if (!fullGraphData || !rawNodes.length) {
+        alert('Nothing to save — run a search first.');
+        return;
+    }
+
+    // Pull annotations from localStorage
+    let annotations = {};
+    try {
+        const raw = localStorage.getItem('cryptracker_node_annotations');
+        if (raw) annotations = JSON.parse(raw);
+    } catch (_) {}
+
+    const session = {
+        version:        SESSION_VERSION,
+        saved_at:       new Date().toISOString(),
+        target:         currentTargetId || '',
+        graph:          fullGraphData,
+        annotations,
+        expanded_nodes: [...expandedNodes],
+    };
+
+    const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.href     = url;
+    a.download = `cryptracker-session-${currentTargetId ? currentTargetId.slice(0, 12) : 'graph'}-${ts}.ctk`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Restore a session object that was loaded from a .ctk file.
+ * Called either directly (in-page) or on app boot when a pending session exists.
+ */
+async function restoreSession(session) {
+    if (!session || session.version !== SESSION_VERSION) {
+        alert('Invalid or incompatible session file.');
+        return;
+    }
+
+    // 1. Restore annotations
+    if (session.annotations && Object.keys(session.annotations).length > 0) {
+        localStorage.setItem('cryptracker_node_annotations', JSON.stringify(session.annotations));
+    }
+
+    // 2. Render the graph
+    if (session.graph && session.target) {
+        document.getElementById('targetId').value = session.target;
+        await renderGraph(session.graph, session.target);
+        currentTargetId = session.target;
+        state.currentTargetId = session.target;
+    }
+
+    // 3. Restore expanded-node set (rings + button state)
+    if (Array.isArray(session.expanded_nodes)) {
+        session.expanded_nodes.forEach(id => expandedNodes.add(id));
+        window._expandedNodes = expandedNodes;
+        if (window.updateExpandRings) updateExpandRings();
+    }
+
+    // 4. Show a toast
+    const el = document.getElementById('loaderDetails');
+    if (el) {
+        el.textContent = `Session restored — ${Object.keys(session.graph?.nodes || {}).length} nodes, saved ${new Date(session.saved_at).toLocaleString()}`;
+    }
+}
+
+/**
+ * Check on app boot whether a session was queued for restore (from setup page).
+ */
+function checkPendingSession() {
+    const raw = sessionStorage.getItem(PENDING_SESSION_KEY);
+    if (!raw) return;
+    sessionStorage.removeItem(PENDING_SESSION_KEY);
+    try {
+        const session = JSON.parse(raw);
+        // Slight delay so D3 canvas is ready
+        setTimeout(() => restoreSession(session), 600);
+    } catch (e) {
+        console.error('Failed to restore pending session:', e);
     }
 }

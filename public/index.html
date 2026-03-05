@@ -338,38 +338,99 @@
                 <input type="range" id="timeSlider" min="0" max="100" value="100" class="w-full">
             </div>
 
-            <div class="absolute top-6 right-6 flex gap-2 z-40">
-                <button id="expandSelectedBtn"
-                    onclick="expandSelected()"
-                    disabled
-                    class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Select an address node to expand its neighbors">Expand node</button>
-                <button id="expandAllBtn"
-                    onclick="expandAll()"
-                    class="bg-violet-700/90 hover:bg-violet-600 px-3 py-2 rounded border border-violet-500 text-xs font-bold text-white shadow"
-                    title="Expand every unexpanded address node in the graph sequentially">⚡ Expand All</button>
-                <button id="stopExpandBtn"
-                    onclick="stopExpandAll()"
-                    style="display:none"
-                    class="bg-red-600/90 hover:bg-red-500 px-3 py-2 rounded border border-red-400 text-xs font-bold text-white shadow animate-pulse"
-                    title="Stop the running expand-all operation">⏹ Stop</button>
-                <button onclick="fitGraphToScreen()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Fit all nodes to screen">[FIT ALL]</button>
-                <button onclick="recenterGraph()" class="bg-cyan-700/90 hover:bg-cyan-600 px-3 py-2 rounded border border-cyan-600 text-xs font-bold text-white shadow" title="Focus on target node">[FIND TARGET]</button>
-                <button onclick="toggleFreeze()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Freeze/unfreeze node positions">
-                    <span id="freezeText">[FREEZE]</span>
-                </button>
-                <button onclick="toggleLabels()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Toggle node labels on/off">
-                    <span id="labelToggleText">[HIDE LABELS]</span>
-                </button>
-                <button onclick="toggleTimestamps()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Toggle transaction timestamps on/off">
-                    <span id="timestampToggleText">[INFO]</span>
-                </button>
-                <button onclick="toggleLayout()" class="bg-slate-800/90 hover:bg-slate-700 px-3 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Re-run force simulation">[LAYOUT]</button>                <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="px-3 py-2 rounded border text-xs font-bold text-white shadow transition" style="background:rgba(194,65,12,0.85);border-color:#c2410c" title="Trace BTC forward to its final destination address">[TRACE PATH]</button>
-                <button onclick="toggleWalletView()" class="px-3 py-2 rounded border text-xs font-bold text-emerald-300 shadow transition" style="background:rgba(16,185,129,0.15);border-color:#10b981" title="Collapse co-owned addresses into wallet clusters (co-spend heuristic)">
-                    <span id="walletViewText">[WALLET VIEW]</span>
-                </button>
-                <button onclick="zoomOut()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom out">[-]</button>
-                <button onclick="zoomIn()" class="bg-slate-800/90 hover:bg-slate-700 px-2 py-2 rounded border border-slate-600 text-xs font-bold text-slate-300 shadow" title="Zoom in">[+]</button>
+            <!-- ── Toolbar ─────────────────────────────────────────────── -->
+            <div class="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
+
+                <!-- Row 1: Expand controls -->
+                <div class="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
+                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest pr-1 border-r border-slate-700 mr-1">Expand</span>
+                    <button id="expandSelectedBtn"
+                        onclick="expandSelected()"
+                        disabled
+                        title="Select an address node first, then expand its connections"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold
+                               bg-slate-700 text-slate-300 border border-slate-600
+                               hover:bg-slate-600 hover:text-white transition
+                               disabled:opacity-30 disabled:cursor-not-allowed">
+                        ⤡ <span id="expandSelectedText">Expand Node</span>
+                    </button>
+                    <button id="expandAllBtn"
+                        onclick="expandAll()"
+                        title="Sequentially expand every unexpanded address node"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold text-white
+                               bg-violet-600 border border-violet-500 hover:bg-violet-500 transition">
+                        ⚡ Expand All
+                    </button>
+                    <button id="stopExpandBtn"
+                        onclick="stopExpandAll()"
+                        style="display:none"
+                        title="Stop the expand-all operation"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold text-white animate-pulse
+                               bg-red-600 border border-red-500 hover:bg-red-500 transition">
+                        ⏹ Stop
+                    </button>
+                </div>
+
+                <!-- Row 2: View controls -->
+                <div class="flex items-center gap-1 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
+                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest pr-1 border-r border-slate-700 mr-1">View</span>
+
+                    <button onclick="fitGraphToScreen()" title="Fit all nodes into view"
+                        class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
+                        ⊞ Fit All
+                    </button>
+                    <button onclick="recenterGraph()" title="Jump to target node"
+                        class="px-2.5 py-1.5 rounded text-[11px] font-bold text-cyan-100 bg-cyan-700 border border-cyan-600 hover:bg-cyan-600 transition">
+                        ◎ Target
+                    </button>
+                    <button onclick="toggleFreeze()" title="Freeze / unfreeze node positions"
+                        class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
+                        ❄ <span id="freezeText">Freeze</span>
+                    </button>
+                    <button onclick="toggleLabels()" title="Show / hide address labels"
+                        class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
+                        ☰ <span id="labelToggleText">Labels</span>
+                    </button>
+                    <button onclick="toggleTimestamps()" title="Toggle transaction info overlays"
+                        class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
+                        🕐 <span id="timestampToggleText">Info</span>
+                    </button>
+                    <button onclick="toggleLayout()" title="Re-run force layout"
+                        class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
+                        ⟳ Layout
+                    </button>
+
+                    <div class="w-px h-5 bg-slate-600 mx-0.5"></div>
+                    <button onclick="zoomOut()" title="Zoom out"
+                        class="w-7 h-7 flex items-center justify-center rounded text-sm font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">−</button>
+                    <button onclick="zoomIn()" title="Zoom in"
+                        class="w-7 h-7 flex items-center justify-center rounded text-sm font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">+</button>
+                </div>
+
+                <!-- Row 3: Analysis tools -->
+                <div class="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
+                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest pr-1 border-r border-slate-700 mr-1">Analyse</span>
+
+                    <button onclick="runTracePath(document.getElementById('targetId').value.trim())"
+                        title="Trace BTC forward to its final destination"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold text-white
+                               bg-orange-700 border border-orange-600 hover:bg-orange-600 transition">
+                        ▶ Trace Path
+                    </button>
+                    <button onclick="toggleWalletView()"
+                        title="Collapse co-owned addresses into wallet clusters"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold
+                               bg-emerald-900/70 text-emerald-300 border border-emerald-700 hover:bg-emerald-800 hover:text-emerald-200 transition">
+                        ⬡ <span id="walletViewText">Wallet View</span>
+                    </button>
+                    <button onclick="saveSession()"
+                        title="Save this investigation to a .ctk file"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold
+                               bg-amber-900/60 text-amber-300 border border-amber-700 hover:bg-amber-800 hover:text-amber-200 transition">
+                        💾 Save Session
+                    </button>
+                </div>
+
             </div>
         </div>
     </main>

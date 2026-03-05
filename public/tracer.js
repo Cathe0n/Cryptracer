@@ -68,7 +68,7 @@ function renderTracePanel(path) {
         + '<div class="text-[8px] uppercase tracking-wider" style="color:#67e8f9">Origin</div>'
         + '<div class="font-mono text-[9px] truncate" style="color:#e0f2fe" title="' + path.start + '">' + shortId(path.start) + '</div>'
         + '</div>'
-        + '<button onclick="window.investigateNode(\'' + path.start + '\')" class="ml-auto shrink-0 text-[8px] font-bold uppercase transition px-2 py-1 rounded" style="color:#06b6d4;border:1px solid #0e7490">\u2192 Graph</button>'
+        + '<button onclick="window.investigateNode(\'' + path.start + '\')" class="ml-auto shrink-0 text-[8px] font-bold uppercase transition px-2 py-1 rounded border border-cyan-700 text-cyan-400 hover:bg-cyan-900/50 hover:text-cyan-300">\uD83D\uDD0E Investigate</button>'
         + '</div>';
 
     // Hops
@@ -107,7 +107,7 @@ function renderTracePanel(path) {
             + '</div>'
             + '<div class="flex items-center justify-between text-[8px]" style="color:#64748b">'
             + '<span>' + fmtDate(hop.timestamp) + '</span>'
-            + '<button onclick="window.investigateNode(\'' + hop.to_addr + '\')" class="font-bold uppercase transition px-2 py-1 rounded" style="color:#06b6d4;border:1px solid #0e7490">\u2192 Graph</button>'
+            + '<button onclick="window.investigateNode(\'' + hop.to_addr + '\')" class="font-bold uppercase transition px-2 py-1 rounded border border-cyan-700 text-cyan-400 hover:bg-cyan-900/50 hover:text-cyan-300">\uD83D\uDD0E Investigate</button>'
             + '</div>'
             + '</div>';
     });
@@ -119,10 +119,10 @@ function renderTracePanel(path) {
 
     // Actions
     html += '<div class="flex gap-2 pt-2">'
-        + '<button onclick="window.investigateNode(\'' + path.final_addr + '\')" class="flex-1 py-2 rounded text-[9px] font-bold uppercase tracking-wider transition" style="background:#0e7490;color:#e0f2fe">'
+        + '<button onclick="window.investigateNode(\'' + path.final_addr + '\')" class="flex-1 py-2 rounded text-[9px] font-bold uppercase tracking-wider transition bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-900/20">'
         + '\uD83D\uDD0E Investigate Final'
         + '</button>'
-        + '<button onclick="window.clearTrace()" class="px-3 py-2 rounded text-[9px] font-bold uppercase" style="background:#1e293b;color:#94a3b8;border:1px solid #334155">'
+        + '<button onclick="window.clearTrace()" class="px-3 py-2 rounded text-[9px] font-bold uppercase transition bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-200">'
         + '\u2715 Clear'
         + '</button>'
         + '</div>';

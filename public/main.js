@@ -1,4 +1,4 @@
-import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, toggleWalletView, expandNode, expandSelected, expandAll } from './graph.js';
+import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, toggleWalletView, expandNode, expandSelected, expandAll, saveSession, restoreSession, checkPendingSession } from './graph.js';
 import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool, showEntityView } from './ui.js';
 import { runTracePath, closeTraceView } from './tracer.js';
@@ -34,6 +34,12 @@ window.toggleWalletView    = toggleWalletView;
 window.expandNode          = expandNode;
 window.expandSelected      = expandSelected;
 window.expandAll           = expandAll;
+window.saveSession         = saveSession;
+window.restoreSession      = restoreSession;
+window.checkPendingSession = checkPendingSession;
 
-// Boot network stats ticker
-window.addEventListener('DOMContentLoaded', () => initNetworkStats());
+// Boot network stats ticker and restore any pending session
+window.addEventListener('DOMContentLoaded', () => {
+    initNetworkStats();
+    checkPendingSession();
+});
