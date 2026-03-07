@@ -125,7 +125,7 @@ go run main.go
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -171,7 +171,7 @@ The application will:
 
 ---
 
-## 📖 Usage
+## Usage
 
 ### Web Interface
 
