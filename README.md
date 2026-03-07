@@ -1,29 +1,14 @@
-# 🔓 Cryptracker – Bitcoin Transaction Forensics & Money Flow Analysis
+#  Cryptracker – Bitcoin Transaction Forensics & Money Flow Analysis
 
 > **Advanced on-chain intelligence platform for Bitcoin transaction tracing, mixer detection, and money flow visualization.**
 
 ![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go) ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?logo=javascript) ![Neo4j](https://img.shields.io/badge/Neo4j-Graph%20Database-008CC1?logo=neo4j) ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
+<img width="1600" height="771" alt="image" src="https://github.com/user-attachments/assets/e392b00f-9b63-4e90-8c61-1c5fe252909f" />
 
-## 📋 Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [Data Import](#data-import)
-- [Project Structure](#project-structure)
-- [Technologies](#technologies)
-- [Contributing](#contributing)
-
----
-
-## 🎯 Overview
+## Overview
 
 **Cryptracker** is a research thesis project designed for advanced Bitcoin transaction analysis. It reconstructs money flows on the blockchain by:
 
@@ -37,9 +22,9 @@ This tool is intended for **academic research**, **compliance investigations**, 
 
 ---
 
-## ✨ Features
+##  Features
 
-### 🔍 Core Capabilities
+###  Core Capabilities
 
 - **Forward Path Tracing**: Follow Bitcoin from a starting address through multiple hops using intelligent heuristics
   - Fresh address detection (addresses not seen in inputs)
@@ -70,7 +55,7 @@ This tool is intended for **academic research**, **compliance investigations**, 
   - Edge tooltips with transaction amounts and timestamps
   - Dynamic expansion of address nodes in the graph
 
-### 📊 Data Integration
+### Data Integration
 
 - **Blockstream API**: Real-time transaction and address data
 - **Mempool.space API**: Live network statistics and fee recommendations
@@ -80,35 +65,7 @@ This tool is intended for **academic research**, **compliance investigations**, 
 
 ---
 
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Frontend (Public)                         │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ D3.js Graph Visualization | Mempool.space API        │  │
-│  │ Interactive Dashboard     | Live Network Stats       │  │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                              ↓ HTTP/JSON ↓
-┌─────────────────────────────────────────────────────────────┐
-│                  Backend (Go + Gin)                          │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ Config Management    | Trace API Endpoints           │  │
-│  │ Runtime Updates      | Mixer/Exchange Detection      │  │
-│  │ API Key Management   | Risk Scoring                  │  │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-         ↓          ↓            ↓           ↓
-    ┌─────────┬──────────┬──────────────┬────────────┐
-    │          │          │              │            │
-   Neo4j   Blockstream Bitquery    ChainAbuse   Mempool
-  Database     API        API           API         API
-```
-
----
-
-## 📦 Prerequisites
+##  Prerequisites
 
 ### System Requirements
 
@@ -120,10 +77,10 @@ This tool is intended for **academic research**, **compliance investigations**, 
 
 | Service | Purpose | Free Tier | Getting Started |
 |---------|---------|-----------|-----------------|
-| **ChainAbuse** | Risk/abuse data | ✅ Yes | [chainabuse.com](https://www.chainabuse.com) |
-| **Bitquery** | Extended transaction flows | ✅ Limited | [bitquery.io](https://bitquery.io) |
-| **Blockstream** | Real-time blockchain data | ✅ Unlimited | Free public API |
-| **Mempool.space** | Live fees & network stats | ✅ Unlimited | Free public API |
+| **ChainAbuse** | Risk/abuse data |  Yes | [chainabuse.com](https://www.chainabuse.com) |
+| **Bitquery** | Extended transaction flows |  Limited | [bitquery.io](https://bitquery.io) |
+| **Blockstream** | Real-time blockchain data |  Unlimited | Free public API |
+| **Mempool.space** | Live fees & network stats |  Unlimited | Free public API |
 
 ### Database
 
@@ -133,7 +90,7 @@ This tool is intended for **academic research**, **compliance investigations**, 
 
 ---
 
-## 🚀 Installation
+##  Installation
 
 ### 1. Clone the Repository
 
@@ -203,12 +160,12 @@ The application will:
 
 ```
 ============================================================
-🔓 Cryptracker is READY
+ Cryptracer is READY
 ============================================================
-✅ Database:        Connected
-🌐 Main App:        http://localhost:8080/ui/index.html
-🛡️  ChainAbuse:      Enabled
-📡 Bitquery:        Enabled
+ Database:        Connected
+ Main App:        http://localhost:8080/ui/index.html
+ ChainAbuse:      Enabled
+ Bitquery:        Enabled
 ============================================================
 ```
 
@@ -265,255 +222,7 @@ The application will:
 
 ---
 
-## 🔌 API Reference
-
-### Base URL
-```
-http://localhost:8080/api
-```
-
-### Endpoints
-
-#### 1. **POST /api/config/test**
-
-Test and save configuration.
-
-**Request:**
-```json
-{
-  "neo4j_uri": "bolt://localhost:7687",
-  "neo4j_user": "neo4j",
-  "neo4j_pass": "password",
-  "chainabuse_key": "your_key",
-  "bitquery_key": "your_key"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Configuration saved and connected."
-}
-```
-
----
-
-#### 2. **GET /api/config**
-
-Get current configuration (passwords omitted).
-
-**Response:**
-```json
-{
-  "config": {
-    "neo4j_uri": "bolt://localhost:7687",
-    "neo4j_user": "neo4j",
-    "neo4j_pass": "",
-    "chainabuse_key": "***",
-    "bitquery_key": "***"
-  },
-  "initialized": true
-}
-```
-
----
-
-#### 3. **GET /api/trace/:id**
-
-Reconstruct a complete transaction graph for a Bitcoin address using verified on-chain data and risk intelligence.
-
-**Parameters:**
-- `id` (string, required): Bitcoin address
-
-**Query Params:**
-- None
-
-**Response:**
-```json
-{
-  "graph": {
-    "nodes": {
-      "addr_1": {
-        "id": "addr_1",
-        "type": "Address",
-        "label": "1A1z...",
-        "risk": 15.5,
-        "risk_data": {
-          "report_count": 2,
-          "is_verified": true,
-          "categories": ["fraud"],
-          "confidence_score": 0.85
-        }
-      },
-      "tx_1": {
-        "id": "tx_1",
-        "type": "Transaction",
-        "label": "abc123...",
-        "timestamp": 1704067200
-      }
-    },
-    "edges": [
-      {
-        "source": "addr_1",
-        "target": "tx_1",
-        "amount": 0.5,
-        "label": "SENT_TO"
-      }
-    ]
-  }
-}
-```
-
----
-
-#### 4. **GET /api/trace-path/:address**
-
-Trace forward from an address using change-detection heuristics.
-
-**Parameters:**
-- `address` (string, required): Starting Bitcoin address
-
-**Query Params:**
-- `hops` (int, optional): Maximum hops to trace (1-20, default: 10)
-
-**Response:**
-```json
-{
-  "path": {
-    "start_address": "1A1z...",
-    "final_address": "3J98...",
-    "total_hops": 5,
-    "stop_reason": "utxo",
-    "hops": [
-      {
-        "hop_index": 0,
-        "current_address": "1A1z...",
-        "tx_hash": "abc123...",
-        "next_address": "3J98...",
-        "amount_btc": 0.5,
-        "confidence": 0.95
-      }
-    ]
-  }
-}
-```
-
----
-
-#### 5. **GET /api/history/:address**
-
-Fetch recent transactions for an address from Blockstream.
-
-**Parameters:**
-- `address` (string, required): Bitcoin address
-
-**Response:**
-```json
-[
-  {
-    "txid": "abc123...",
-    "status": {
-      "confirmed": true,
-      "block_height": 842000,
-      "block_time": 1704067200
-    },
-    "vin": [...],
-    "vout": [...]
-  }
-]
-```
-
----
-
-#### 6. **GET /api/mixer-check/:txid**
-
-Analyze a transaction for coin mixer signatures.
-
-**Parameters:**
-- `txid` (string, required): Transaction ID (hex)
-
-**Query Params:**
-- `threshold` (float, optional): Detection threshold (0-1, default: 0.70)
-
-**Response:**
-```json
-{
-  "txid": "abc123...",
-  "inputs": 3,
-  "outputs": 8,
-  "threshold": 0.70,
-  "result": {
-    "flagged": true,
-    "score": 0.82,
-    "mixer_type": "uniform_outputs",
-    "breakdown": {
-      "uniform_scripts": 0.75,
-      "rbf_disabled": 0.90,
-      "round_amounts": 0.80
-    }
-  }
-}
-```
-
----
-
-#### 7. **GET /api/exchange-check/:address**
-
-Detect if an address exhibits exchange-like behavior.
-
-**Parameters:**
-- `address` (string, required): Bitcoin address
-
-**Response:**
-```json
-{
-  "address": "1A1z...",
-  "tx_count": 127,
-  "result": {
-    "flagged": true,
-    "score": 0.68,
-    "indicators": {
-      "high_volume": true,
-      "output_uniformity": 0.72,
-      "behavior_consistency": 0.65
-    }
-  }
-}
-```
-
----
-
-#### 8. **GET /api/debug/bitquery/:address**
-
-(Debug endpoint) Fetch raw Bitquery wallet flows.
-
-**Parameters:**
-- `address` (string, required): Bitcoin address
-
-**Requires:** `BITQUERY_KEY` configured
-
-**Response:**
-```json
-{
-  "address": "1A1z...",
-  "count": 15,
-  "flows": [
-    {
-      "tx_hash": "abc123...",
-      "from_addr": "...",
-      "to_addr": "...",
-      "value_btc": 0.5,
-      "timestamp": 1704067200,
-      "direction": "in"
-    }
-  ]
-}
-```
-
----
-
-## 📥 Data Import
+##  Data Import
 
 Import pre-fetched blockchain data from TSV files into Neo4j for offline analysis.
 
@@ -538,59 +247,6 @@ index  tx_hash  vout/vin  scriptpubkey_type  value_btc  ...  address
 1      def456   0         p2wpkh             1.25       ...  3J98...
 ```
 
-### Batch Processing
-
-The importer processes data in 2,000-row batches:
-
-```
-✅ Finished loading ./data/Blockchair_bitcoin_inputs_20260130.tsv
-✅ Finished loading ./data/Blockchair_bitcoin_outputs_20260130.tsv
-```
-
----
-
-## 📁 Project Structure
-
-```
-money-tracer/
-├── main.go                          # Entry point, Gin server, API routes
-├── go.mod                           # Go module dependencies
-├── .env                             # Environment configuration (not tracked)
-├── .gitignore                       # Git ignore rules
-│
-├── db/
-│   └── neo4j.go                     # Neo4j driver, graph operations
-│
-├── internal/
-│   ├── aggregator/
-│   │   └── aggregator.go            # FTM building, mixer & exchange detection
-│   ├── blockstream/
-│   │   └── client.go                # Blockstream API wrapper
-│   ├── bitquery/
-│   │   └── client.go                # Bitquery GraphQL client
-│   ├── intel/
-│   │   └── intel.go                 # ChainAbuse risk scoring
-│   └── tracer/
-│       └── tracer.go                # Forward path tracing logic
-│
-├── parser/
-│   └── tsv_parser.go                # TSV file importer for Neo4j
-│
-├── public/                          # Frontend (vanilla JS + D3.js)
-│   ├── index.html                   # Main dashboard
-│   ├── setup.html                   # Configuration wizard
-│   ├── main.js                      # Module entry point
-│   ├── graph.js                     # D3.js graph renderer & controls
-│   ├── api.js                       # Mempool.space API client
-│   ├── ui.js                        # Panel rendering & enrichment
-│   ├── tracer.js                    # Forward trace panel
-│   ├── state.js                     # Global state & constants
-│   └── utils.js                     # Formatting utilities
-│
-└── data/                            # TSV/CSV data files (gitignored)
-    └── THIS IS WHERE THE TSV AND CSV FILE IS STORED.txt
-```
-
 ### Key Modules
 
 | Module | Purpose |
@@ -604,7 +260,7 @@ money-tracer/
 
 ---
 
-## 🛠️ Technologies
+##  Technologies
 
 ### Backend
 
@@ -615,14 +271,6 @@ money-tracer/
 | **Neo4j Go Driver** | 5.28.4 | Graph database client |
 | **godotenv** | 1.5.1 | Environment variable loading |
 
-### Frontend
-
-| Technology | Purpose |
-|---|---|
-| **D3.js v7** | Graph visualization & physics simulation |
-| **Tailwind CSS 2.2.19** | Utility-first styling |
-| **JetBrains Mono** | Monospace font |
-| **Vanilla JavaScript (ES6)** | No frameworks; modular imports |
 
 ### Data Sources
 
@@ -636,147 +284,6 @@ money-tracer/
 
 ---
 
-## 🔐 Security Considerations
-
-### API Keys
-
-- **Never commit `.env` to version control** (already gitignored)
-- Keys are stored in memory only; restart to clear
-- Passwords are never returned to the client
-- Configure keys at startup or via the setup UI
-
-### Database
-
-- Use strong credentials for Neo4j
-- Restrict network access to the database
-- Consider running Neo4j locally or behind a firewall
-
-### Client-Side
-
-- All frontend code is vanilla JavaScript (no transpilation)
-- No sensitive data is stored in localStorage without encryption
-- Session data is lost on page reload
-
----
-
-## 🐛 Troubleshooting
-
-### Database Connection Failed
-
-```
-❌ Database connection failed: dial tcp: lookup neo4j...
-```
-
-**Solution:**
-1. Verify Neo4j is running: `telnet localhost 7687`
-2. Check credentials in `.env`
-3. Use the setup UI to reconfigure: [http://localhost:8080/ui/setup.html](http://localhost:8080/ui/setup.html)
-
-### API Key Errors
-
-```
-⚠️ ChainAbuse API key not set — risk scoring disabled
-```
-
-**Solution:**
-Add keys to `.env` or configure via the setup UI. Features gracefully degrade if keys are missing.
-
-### Out of Memory on Large Graphs
-
-D3.js graphs with >5,000 nodes may slow down. Consider:
-- Reducing the scope of the initial query
-- Filtering nodes by risk score
-- Using the "Freeze" button to disable physics simulation
-
-### No Transactions Found
-
-```
-⚠️ Database not configured
-```
-
-**Solution:**
-1. Run `go run main.go --import` to load TSV data
-2. Configure Neo4j in setup UI
-3. Ensure TSV files exist in `./data/`
-
----
-
-## 📄 License
-
-This project is released under the **MIT License**. See [LICENSE](LICENSE) for details.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! To contribute:
-
-1. **Fork** the repository
-2. **Create a feature branch**: `git checkout -b feature/your-feature`
-3. **Commit changes**: `git commit -m "Add your feature"`
-4. **Push to branch**: `git push origin feature/your-feature`
-5. **Submit a pull request**
-
-### Development Setup
-
-```bash
-# Install dependencies
-go mod download
-
-# Run with Go directly
-go run main.go
-
-# Or build and run
-go build -o money-tracer.exe main.go
-./money-tracer.exe
-```
-
-### Code Style
-
-- Follow Go conventions (gofmt, golint)
-- Use clear variable names
-- Add comments for complex logic
-- Test API changes
-
----
-
-## 📞 Support
-
-For issues, questions, or feature requests:
-
-- **Create an Issue** on GitHub
-- **Email**: your-email@example.com
-- **Documentation**: See inline code comments
-
----
-
-## 🎓 Academic Citation
-
-If you use Cryptracker in research, please cite:
-
-```bibtex
-@misc{cryptracker2026,
-  title={Cryptracker: Advanced Bitcoin Transaction Forensics and Money Flow Analysis},
-  author={Your Name},
-  year={2026},
-  howpublished={\url{https://github.com/yourusername/money-tracer}},
-  note={Research Thesis Project}
-}
-```
-
----
-
-## 📈 Roadmap
-
-- [ ] WebSocket support for real-time graph updates
-- [ ] Multi-address batch analysis
-- [ ] Automated mixer detection reporting
-- [ ] Integration with additional blockchain APIs (Ethereum, Monero)
-- [ ] Machine learning-based address clustering
-- [ ] PDF report generation
-- [ ] Mobile-responsive UI improvements
-
----
 
 **Last Updated:** March 2, 2026  
 **Status:** Active Development 🚀
