@@ -3,7 +3,7 @@
  * Handles storing and retrieving custom notes and colors for nodes
  */
 
-const STORAGE_KEY = 'cryptracker_node_annotations';
+const STORAGE_KEY = 'cryptracer_node_annotations';
 
 /**
  * Get all annotations

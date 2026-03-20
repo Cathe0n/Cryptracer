@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Application Workflow — Bitcoin Forensics</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Source+Code+Pro:wght@400;500&display=swap');
+  :root {
+    --page:#faf9f7; --rule:#000000; --text:#000000;
+    --text-mid:#000000; --text-dim:#000000; --border:#000000;
+    --serif:'EB Garamond',Georgia,serif; --mono:'Source Code Pro','Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#d4d0ca;font-family:var(--serif);padding:40px 20px 60px;}
+  .paper{background:var(--page);max-width:900px;margin:0 auto;padding:52px 56px 68px;
+    box-shadow:0 2px 4px rgba(0,0,0,.08),0 10px 40px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.04);}
+  .fig-number{font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--text-dim);text-align:center;margin-bottom:8px;}
+  .fig-title{font-size:17px;font-weight:600;text-align:center;letter-spacing:-.01em;
+    line-height:1.3;margin-bottom:6px;}
+  .fig-subtitle{font-size:12.5px;font-style:italic;color:var(--text-mid);line-height:1.55;
+    text-align:center;max-width:580px;margin:0 auto 20px;}
+  .rule-double{height:4px;position:relative;margin-bottom:26px;}
+  .rule-double::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--rule);}
+  .rule-double::after{content:'';position:absolute;top:3px;left:0;right:0;height:1px;background:var(--rule);}
+  .rule-single{border:none;border-top:1px solid var(--border);margin:24px 0;}
+  svg{display:block;width:100%;height:auto;}
+  .fig-caption{margin-top:24px;padding-top:14px;border-top:1px solid var(--border);}
+  .fig-caption-body{font-size:11.5px;font-style:italic;color:var(--text-mid);line-height:1.7;}
+  .fig-caption-head{font-weight:600;font-size:12px;font-style:normal;}
+  .legend{display:flex;flex-wrap:wrap;gap:12px 22px;margin-top:14px;}
+  .legend-item{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--text-mid);font-style:italic;}
+  .legend-swatch{width:20px;height:12px;border:1px solid;flex-shrink:0;}
+  @media print{body{background:white;padding:0;}
+    .paper{box-shadow:none;max-width:100%;padding:32px 48px 48px;}}
+</style>
+</head>
+<body>
+<div class="paper">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FULL SVG FLOWCHART
+  ═══════════════════════════════════════════════════════════ -->
+  <svg viewBox="0 0 760 830" xmlns="http://www.w3.org/2000/svg"
+       font-family="'EB Garamond', Georgia, serif">
+    <defs>
+      <!-- Arrow markers -->
+      <marker id="arr" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto">
+        <path d="M0,0.5 L6,3.5 L0,6.5 Z" fill="#000000"/>
+      </marker>
+      <marker id="arr-amber" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto">
+        <path d="M0,0.5 L6,3.5 L0,6.5 Z" fill="#000000"/>
+      </marker>
+      <marker id="arr-left" markerWidth="7" markerHeight="7" refX="2" refY="3.5" orient="auto">
+        <path d="M7,0.5 L1,3.5 L7,6.5 Z" fill="#000000"/>
+      </marker>
+    </defs>
+
+    <!-- ══════════════════════════════════════════════════
+         MAIN PROCESSING REGION (grey box)
+    ══════════════════════════════════════════════════ -->
+    <rect x="230" y="150" width="430" height="488" fill="#eceef2" stroke="#c8ccd8" stroke-width="1"/>
+    <text x="238" y="164" font-family="'Source Code Pro',monospace" font-size="7.5" fill="#000000" letter-spacing="2">APPLICATION PROCESSING PIPELINE</text>
+
+    <!-- ══ COLUMN HEADERS ══ -->
+    <!-- Left header -->
+    <text x="165" y="14" text-anchor="middle" font-family="'Source Code Pro',monospace"
+          font-size="8" fill="#000000" letter-spacing="2">EXTERNAL DATA SOURCES</text>
+    <line x1="20" y1="18" x2="310" y2="18" stroke="#000000" stroke-width="1"/>
+
+    <!-- Center header -->
+    <text x="445" y="14" text-anchor="middle" font-family="'Source Code Pro',monospace"
+          font-size="8" fill="#000000" letter-spacing="2">INVESTIGATOR INPUT</text>
+    <line x1="320" y1="18" x2="570" y2="18" stroke="#000000" stroke-width="1"/>
+
+    <!-- ══════════════════════════════════════════════════
+         TOP ROW — Sources (left) | Input (center)
+    ══════════════════════════════════════════════════ -->
+
+    <!-- LEFT: External API source nodes (purple fill) -->
+    <!-- mempool.space -->
+    <rect x="20" y="24" width="150" height="36" fill="#f0eaf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="95" y="39" text-anchor="middle" font-size="11" font-weight="600" fill="#000000">mempool.space</text>
+    <text x="95" y="53" text-anchor="middle" font-size="9" font-style="italic" fill="#000000">Live TX &amp; UTXO data</text>
+
+    <!-- ChainAbuse API -->
+    <rect x="20" y="72" width="150" height="36" fill="#f0eaf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="95" y="87" text-anchor="middle" font-size="11" font-weight="600" fill="#000000">ChainAbuse API</text>
+    <text x="95" y="101" text-anchor="middle" font-size="9" font-style="italic" fill="#000000">Abuse reports &amp; risk scores</text>
+
+    <!-- WalletExplorer -->
+    <rect x="20" y="120" width="150" height="36" fill="#f0eaf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="95" y="135" text-anchor="middle" font-size="11" font-weight="600" fill="#000000">WalletExplorer</text>
+    <text x="95" y="149" text-anchor="middle" font-size="9" font-style="italic" fill="#000000">Exchange cluster labels</text>
+
+    <!-- Blockstream -->
+    <rect x="20" y="168" width="150" height="36" fill="#f0eaf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="95" y="183" text-anchor="middle" font-size="11" font-weight="600" fill="#000000">Blockstream (Esplora)</text>
+    <text x="95" y="197" text-anchor="middle" font-size="9" font-style="italic" fill="#000000">Real-time blockchain data</text>
+
+    <!-- CENTER: Investigator Input node -->
+    <rect x="345" y="24" width="200" height="36" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="445" y="40" text-anchor="middle" font-size="11.5" fill="#000000">Address / TX Lookup</text>
+    <text x="445" y="54" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">or TSV File Import</text>
+
+    <!-- ══ CONNECTOR ARROWS from sources and input → into process box ══ -->
+
+    <!-- Sources: horizontal stubs to collection line at x=200 -->
+    <line x1="170" y1="42" x2="200" y2="42" stroke="#000000" stroke-width="1"/>
+    <line x1="170" y1="90" x2="200" y2="90" stroke="#000000" stroke-width="1"/>
+    <line x1="170" y1="138" x2="200" y2="138" stroke="#000000" stroke-width="1"/>
+    <line x1="170" y1="186" x2="200" y2="186" stroke="#000000" stroke-width="1"/>
+    <!-- Vertical collection at x=200 -->
+    <line x1="200" y1="42" x2="200" y2="186" stroke="#000000" stroke-width="1"/>
+    <!-- Arrow from collection to process box left edge (entering data enrichment cy=185) -->
+    <line x1="200" y1="114" x2="335" y2="114" stroke="#000000" stroke-width="1"/>
+    <!-- Turn down to enrichment -->
+    <line x1="335" y1="114" x2="335" y2="185" stroke="#000000" stroke-width="1"/>
+    <line x1="335" y1="185" x2="343" y2="185" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Center Input node arrow down to Go Backend -->
+    <line x1="445" y1="60" x2="445" y2="172" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ① Go HTTP Backend -->
+    <rect x="345" y="172" width="200" height="38" fill="#e4ecf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="445" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#000000">Go HTTP Backend</text>
+    <text x="445" y="202" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">(main.go) — REST API server</text>
+
+    <!-- ↓ -->
+    <line x1="445" y1="210" x2="445" y2="228" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ② Multi-Source Data Enrichment -->
+    <rect x="345" y="228" width="200" height="38" fill="#e4ecf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="445" y="245" text-anchor="middle" font-size="11.5" font-weight="600" fill="#000000">Multi-Source Data Enrichment</text>
+    <text x="445" y="259" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">intel.go — data fusion</text>
+
+    <!-- ↓ -->
+    <line x1="445" y1="266" x2="445" y2="284" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ③ Data Normalisation -->
+    <rect x="345" y="284" width="200" height="36" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="445" y="299" text-anchor="middle" font-size="11" fill="#000000">Normalisation of JSON Data</text>
+    <text x="445" y="312" text-anchor="middle" font-size="9" font-style="italic" fill="#000000">aggregator.go</text>
+
+    <!-- ↓ -->
+    <line x1="445" y1="320" x2="445" y2="338" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ④ Graph Construction -->
+    <rect x="345" y="338" width="200" height="38" fill="#e4ecf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="445" y="354" text-anchor="middle" font-size="11.5" font-weight="600" fill="#000000">Graph Construction</text>
+    <text x="445" y="368" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">UTXO Model &amp; Graph Theory</text>
+
+    <!-- Branch spread from Graph Construction -->
+    <line x1="445" y1="376" x2="445" y2="386" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="386" x2="605" y2="386" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="386" x2="285" y2="396" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="605" y1="386" x2="605" y2="396" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Branch nodes: Address Nodes | Transaction Edges -->
+    <rect x="238" y="396" width="142" height="36" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="309" y="411" text-anchor="middle" font-size="11" fill="#000000">Nodes = Addresses</text>
+    <text x="309" y="425" text-anchor="middle" font-size="9" font-style="italic" fill="#000000">Address entities</text>
+
+    <rect x="514" y="396" width="142" height="36" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="585" y="411" text-anchor="middle" font-size="11" fill="#000000">Edges = Transactions</text>
+    <text x="585" y="425" text-anchor="middle" font-size="9" font-style="italic" fill="#000000">Directed fund flows</text>
+
+    <!-- Merge back to Address Clustering -->
+    <line x1="285" y1="432" x2="285" y2="444" stroke="#000000" stroke-width="1"/>
+    <line x1="605" y1="432" x2="605" y2="444" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="444" x2="605" y2="444" stroke="#000000" stroke-width="1"/>
+    <line x1="445" y1="444" x2="445" y2="454" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ⑤ Clustering Heuristics -->
+    <rect x="345" y="454" width="200" height="38" fill="#e4ecf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="445" y="470" text-anchor="middle" font-size="11.5" font-weight="600" fill="#000000">Clustering Heuristics</text>
+    <text x="445" y="484" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">cluster.go — wallet grouping</text>
+
+    <!-- Branch spread from Clustering -->
+    <line x1="445" y1="492" x2="445" y2="502" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="502" x2="605" y2="502" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="502" x2="285" y2="512" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="605" y1="502" x2="605" y2="512" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Branch nodes: Common-Input | Change-Address -->
+    <rect x="238" y="512" width="142" height="40" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="309" y="528" text-anchor="middle" font-size="11" fill="#000000">Common-Input</text>
+    <text x="309" y="542" text-anchor="middle" font-size="10" font-style="italic" fill="#000000">Ownership Heuristic</text>
+
+    <rect x="514" y="512" width="142" height="40" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="585" y="528" text-anchor="middle" font-size="11" fill="#000000">Change-Address</text>
+    <text x="585" y="542" text-anchor="middle" font-size="10" font-style="italic" fill="#000000">Detection</text>
+
+    <!-- Merge back to Entity Classification -->
+    <line x1="285" y1="552" x2="285" y2="562" stroke="#000000" stroke-width="1"/>
+    <line x1="605" y1="552" x2="605" y2="562" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="562" x2="605" y2="562" stroke="#000000" stroke-width="1"/>
+    <line x1="445" y1="562" x2="445" y2="572" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ⑥ Entity & Obfuscation Detection -->
+    <rect x="345" y="572" width="200" height="38" fill="#e4ecf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="445" y="587" text-anchor="middle" font-size="11.5" font-weight="600" fill="#000000">Entity &amp; Obfuscation Detection</text>
+    <text x="445" y="601" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">cluster.go — heuristic scoring</text>
+
+    <!-- Branch spread from Entity Detection -->
+    <line x1="445" y1="610" x2="445" y2="620" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="620" x2="605" y2="620" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="620" x2="285" y2="630" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="605" y1="620" x2="605" y2="630" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Branch nodes: Mixer/CoinJoin | Exchange/Mining/Gambling -->
+    <rect x="238" y="630" width="142" height="40" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="309" y="646" text-anchor="middle" font-size="11" fill="#000000">Mixer / CoinJoin</text>
+    <text x="309" y="660" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">Pattern Recognition</text>
+
+    <rect x="514" y="630" width="142" height="40" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="585" y="646" text-anchor="middle" font-size="10.5" fill="#000000">Exchange / Gambling</text>
+    <text x="585" y="660" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">/ Mining Classification</text>
+
+    <!-- Merge back to Intelligence Aggregation -->
+    <line x1="285" y1="670" x2="285" y2="680" stroke="#000000" stroke-width="1"/>
+    <line x1="605" y1="670" x2="605" y2="680" stroke="#000000" stroke-width="1"/>
+    <line x1="285" y1="680" x2="605" y2="680" stroke="#000000" stroke-width="1"/>
+    <!-- Arrow enters bottom of process box via Intelligence Aggregation -->
+
+    <!-- End of process box — ProvenanceNode / Intelligence Aggregation sits at the bottom -->
+    <!-- small stem -->
+    <line x1="445" y1="680" x2="445" y2="638" stroke="none"/><!-- invisible (already merged above) -->
+
+    <!-- ══════════════════════════════════════════════════
+         BELOW PROCESS BOX — Output nodes
+    ══════════════════════════════════════════════════ -->
+
+    <!-- Merge stem continues from process box down -->
+    <line x1="445" y1="638" x2="445" y2="680" stroke="none"/>
+    <!-- actual exit arrow from bottom merge -->
+    <line x1="445" y1="680" x2="445" y2="700" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ⑦ Intelligence Aggregation / Neo4j -->
+    <rect x="345" y="700" width="200" height="38" fill="#e4ecf8" stroke="#000000" stroke-width="1.5"/>
+    <text x="445" y="716" text-anchor="middle" font-size="11.5" font-weight="600" fill="#000000">Intelligence Aggregation</text>
+    <text x="445" y="730" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">intel.go — ProvenanceNode{}</text>
+
+    <!-- ↓ -->
+    <line x1="445" y1="738" x2="445" y2="756" stroke="#000000" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- ⑧ Neo4j Graph Database -->
+    <rect x="345" y="756" width="200" height="38" fill="#e4f0ea" stroke="#000000" stroke-width="1.5"/>
+    <text x="445" y="772" text-anchor="middle" font-size="11.5" font-weight="600" fill="#000000">Neo4j Graph Database</text>
+    <text x="445" y="786" text-anchor="middle" font-size="9.5" font-style="italic" fill="#000000">neo4j.go — persistent graph</text>
+
+  </svg>
+
+  <!-- OUTPUT SECTION (below SVG, in HTML for the amber nodes) -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:0;margin-top:-35px;padding-left:17%;">
+
+    <div style="display:flex;justify-content:center;height:22px;">
+      <svg width="2" height="22"><line x1="1" y1="0" x2="1" y2="16" stroke="#000000" stroke-width="1"/><polygon points="-2,14 4,14 1,20" fill="#000000"/></svg>
+    </div>
+
+    <!-- Interactive Graph Canvas -->
+    <div style="width:200px;padding:10px 12px;background:#fdf4e0;border:1.5px solid #000000;text-align:center;">
+      <div style="font-size:12px;font-weight:600;color:#000000;font-family:'EB Garamond',Georgia,serif;">Interactive Graph Canvas</div>
+      <div style="font-size:10px;font-style:italic;color:#000000;font-family:'EB Garamond',Georgia,serif;">graph.js — force-directed viz</div>
+    </div>
+
+    <div style="display:flex;justify-content:center;height:22px;">
+      <svg width="2" height="22"><line x1="1" y1="0" x2="1" y2="16" stroke="#000000" stroke-width="1"/><polygon points="-2,14 4,14 1,20" fill="#000000"/></svg>
+    </div>
+
+    <!-- Entity Intelligence Panel -->
+    <div style="width:200px;padding:10px 12px;background:#fdf4e0;border:1.5px solid #000000;text-align:center;">
+      <div style="font-size:12px;font-weight:600;color:#000000;font-family:'EB Garamond',Georgia,serif;">Entity Intelligence Panel</div>
+      <div style="font-size:10px;font-style:italic;color:#000000;font-family:'EB Garamond',Georgia,serif;">ui.js — risk scores &amp; annotations</div>
+    </div>
+
+  </div>
+
+  <hr class="rule-single">
+
+  <!-- Caption -->
+  <div class="fig-caption">
+    <div class="fig-caption-body">
+    </div>
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#f0eaf8;border-color:#000000;"></div>
+        External data source
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#e4ecf8;border-color:#000000;"></div>
+        Primary processing node
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#ffffff;border-color:#000000;"></div>
+        Sub-routine / branch node
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#e4f0ea;border-color:#000000;"></div>
+        Graph persistence layer
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#fdf4e0;border-color:#000000;"></div>
+        Visualisation output
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

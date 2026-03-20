@@ -1,7 +1,7 @@
 import { state } from './state.js';
-// D3.js Graph Renderer — Cryptracker
+// D3.js Graph Renderer — Cryptrace
 // Mempool.space API integrated for live on-chain enrichment
-console.log('Cryptracker: D3 Renderer Loaded');
+console.log('Cryptrace: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
 import { getNodeCustomColor, getNodeCustomName } from './annotations.js';
@@ -399,16 +399,38 @@ function _renderGraphImpl(graphData, targetId) {
         };
 
         // Function to get node color, considering custom annotations
+        // Mixer type colour map — aligned with aggregator.go MixerType constants
+        // Sources: Schnoering & Vazirgiannis (2023), Shojaeinasab et al. (2023)
+        const MIXER_NODE_COLORS = {
+            'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed', // violet-700
+            'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9', // violet-800
+            'JoinMarket':                    '#0891b2', // cyan-600
+            'Whirlpool (Samourai)':          '#0e7490', // cyan-700
+            'Centralized Mixer':             '#b45309', // amber-700
+            'Generic CoinJoin':              '#4f46e5', // indigo-600
+        };
+
         const getNodeColor = d => {
             const customColor = getNodeCustomColor(d.id);
             if (customColor) return customColor;
             if (d.isTarget) return '#fbbf24';
-            // Multi-address wallet clusters: use a distinct green tint overlaid with risk
+            // Mixer transaction nodes: colour by specific mixer protocol
+            if (d.mixer_info && d.mixer_info.is_mixer) {
+                const mt = d.mixer_info.raw && d.mixer_info.raw.mixer_type;
+                return MIXER_NODE_COLORS[mt] || '#7c3aed';
+            }
+            // Entity-type based colours for known address classifications
+            if (d.entity_type === 'mixer')    return '#7c3aed';
+            if (d.entity_type === 'exchange') return '#0284c7';
+            if (d.entity_type === 'darknet')  return '#be123c';
+            if (d.entity_type === 'gambling') return '#d97706';
+            if (d.entity_type === 'mining')   return '#64748b';
+            // Multi-address wallet clusters: emerald with risk overlay
             if (d.member_count > 1) {
                 if (d.risk >= 70) return '#ef4444';
                 if (d.risk >= 40) return '#f97316';
                 if (d.risk >= 10) return '#f59e0b';
-                return '#10b981'; // emerald-500 — "wallet" identity colour
+                return '#10b981';
             }
             return d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9');
         };
@@ -2294,8 +2316,8 @@ export function toggleWalletView() {
 // SESSION SAVE / LOAD
 // ═══════════════════════════════════════════════════════════════════════════
 
-const SESSION_VERSION = 1;
-const PENDING_SESSION_KEY = 'cryptracker_pending_session';
+const SESSION_VERSION = 1; // Increment if session format changes
+const PENDING_SESSION_KEY = 'cryptrace_pending_session';
 
 /**
  * Save the current graph state to a downloadable .ctk file.
@@ -2345,7 +2367,7 @@ async function restoreSession(session) {
 
     // 1. Restore annotations
     if (session.annotations && Object.keys(session.annotations).length > 0) {
-        localStorage.setItem('cryptracker_node_annotations', JSON.stringify(session.annotations));
+        localStorage.setItem('cryptrace_node_annotations', JSON.stringify(session.annotations));
     }
 
     // 2. Render the graph

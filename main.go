@@ -21,6 +21,8 @@ import (
 
 // ─── Runtime config ───────────────────────────────────────────────────────────
 
+// configMutex guards both currentConfig and dbInitialized. All reads and
+// writes to either field must be performed while holding this lock.
 var (
 	configMutex   sync.RWMutex
 	currentConfig struct {
@@ -30,7 +32,7 @@ var (
 		ChainAbuseKey string
 		BitqueryKey   string
 	}
-	dbInitialized bool
+	dbInitialized bool // guarded by configMutex
 )
 
 type Config struct {
@@ -123,16 +125,32 @@ func updateConfig(config Config) (string, error) {
 	return "Configuration saved and connected.", nil
 }
 
+// getConfig returns a safe copy of the current config. The password is never
+// sent back to the client.
 func getConfig() Config {
 	configMutex.RLock()
 	defer configMutex.RUnlock()
 	return Config{
 		Neo4jURI:      currentConfig.Neo4jURI,
 		Neo4jUser:     currentConfig.Neo4jUser,
-		Neo4jPass:     "", // never send the password back to the client
+		Neo4jPass:     "", // never expose the password
 		ChainAbuseKey: currentConfig.ChainAbuseKey,
 		BitqueryKey:   currentConfig.BitqueryKey,
 	}
+}
+
+// isDBInitialized returns the current dbInitialized value under a read lock.
+func isDBInitialized() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return dbInitialized
+}
+
+// readKeys returns caKey and bqKey under a single read lock.
+func readKeys() (caKey, bqKey string) {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return currentConfig.ChainAbuseKey, currentConfig.BitqueryKey
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -140,25 +158,33 @@ func getConfig() Config {
 func main() {
 	loadEnv()
 	defer func() {
-		if dbInitialized {
+		if isDBInitialized() {
 			db.Close()
 		}
 	}()
 
-	// CLI import mode
+	// CLI import mode — paths passed as arguments, not hard-coded.
 	if len(os.Args) > 1 && os.Args[1] == "--import" {
-		if !dbInitialized {
+		if !isDBInitialized() {
 			log.Println("⚠️  Database not configured — DB writes will be skipped.")
 		}
+		inputPath := "./data/Blockchair_bitcoin_inputs.tsv"
+		outputPath := "./data/Blockchair_bitcoin_outputs.tsv"
+		if len(os.Args) > 2 {
+			inputPath = os.Args[2]
+		}
+		if len(os.Args) > 3 {
+			outputPath = os.Args[3]
+		}
 		fmt.Println("\n[SYSTEM] 🚀 Starting High-Speed Data Import...")
-		parser.ImportData("./data/Blockchair_bitcoin_inputs_20260130.tsv", true)
-		parser.ImportData("./data/Blockchair_bitcoin_outputs_20260130.tsv", false)
+		parser.ImportData(inputPath, true)
+		parser.ImportData(outputPath, false)
 		return
 	}
 
 	r := gin.Default()
 
-	// ── Logging middleware ────────────────────────────────────────────────────
+	// ── Logging middleware ────────────────────────────────────────────────
 	r.Use(func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
@@ -167,7 +193,7 @@ func main() {
 
 	r.Static("/ui", "./public")
 
-	// ── Config endpoints ──────────────────────────────────────────────────────
+	// ── Config endpoints ──────────────────────────────────────────────────
 
 	r.POST("/api/config/test", func(c *gin.Context) {
 		var config Config
@@ -185,35 +211,29 @@ func main() {
 	})
 
 	r.GET("/api/config", func(c *gin.Context) {
-		c.JSON(200, gin.H{"config": getConfig(), "initialized": dbInitialized})
+		c.JSON(200, gin.H{"config": getConfig(), "initialized": isDBInitialized()})
 	})
 
-	// ── Main forensic graph API ───────────────────────────────────────────────
+	// ── Main forensic graph API ───────────────────────────────────────────
 
 	r.GET("/api/trace/:id", func(c *gin.Context) {
 		start := time.Now()
 		id := c.Param("id")
 
-		if !dbInitialized {
+		if !isDBInitialized() {
 			log.Printf("⚠️  Database not configured — local DB queries will be skipped for %s", id)
 		}
-
 		log.Printf("\n🔎 [INVESTIGATION] Target: %s", id)
 
-		configMutex.RLock()
-		caKey := currentConfig.ChainAbuseKey
-		bqKey := currentConfig.BitqueryKey
-		configMutex.RUnlock()
-
+		caKey, bqKey := readKeys()
 		graph := aggregator.BuildVerifiedFTM(c.Request.Context(), id, caKey, bqKey)
 
 		log.Printf("✅ [INVESTIGATION] Complete: %d nodes, %d edges in %v",
 			len(graph.Nodes), len(graph.Edges), time.Since(start))
-
 		c.JSON(200, gin.H{"graph": graph})
 	})
 
-	// ── Live history ──────────────────────────────────────────────────────────
+	// ── Live history ──────────────────────────────────────────────────────
 
 	r.GET("/api/history/:address", func(c *gin.Context) {
 		address := c.Param("address")
@@ -229,7 +249,7 @@ func main() {
 		c.JSON(200, txs)
 	})
 
-	// ── Forward path tracer ───────────────────────────────────────────────────
+	// ── Forward path tracer ───────────────────────────────────────────────
 
 	r.GET("/api/trace-path/:address", func(c *gin.Context) {
 		start := time.Now()
@@ -242,10 +262,7 @@ func main() {
 			}
 		}
 
-		configMutex.RLock()
-		caKey := currentConfig.ChainAbuseKey
-		configMutex.RUnlock()
-
+		caKey, _ := readKeys()
 		log.Printf("🔍 [TRACE-PATH] Forward tracing from: %s (max %d hops)", address, hops)
 
 		path := tracer.TraceForward(c.Request.Context(), address, caKey, hops)
@@ -254,13 +271,8 @@ func main() {
 		c.JSON(200, gin.H{"path": path})
 	})
 
-	// ── Mixer detection endpoint ──────────────────────────────────────────────
-	// POST /api/mixer-check/:txid
-	// Fetches a live transaction from Blockstream and runs all mixer-detection
-	// heuristics against it.  Returns the full MixerResult with breakdown scores.
-	//
-	// Query params:
-	//   threshold  float64  detection threshold 0–1 (default 0.70)
+	// ── Mixer detection ───────────────────────────────────────────────────
+
 	r.GET("/api/mixer-check/:txid", func(c *gin.Context) {
 		start := time.Now()
 		txid := c.Param("txid")
@@ -284,7 +296,6 @@ func main() {
 			return
 		}
 
-		// Build aggregator.TransactionIO from the live blockstream data
 		tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
 		for _, vin := range tx.Vin {
 			if vin.Prevout == nil {
@@ -305,9 +316,10 @@ func main() {
 		}
 
 		result := aggregator.IsCoinMixer(tio, threshold)
+		sweeper := aggregator.IsSweeperTransaction(tio)
 
-		log.Printf("✅ [MIXER-CHECK] %s — score=%.2f flagged=%v type=%s (%v)",
-			txid, result.Score, result.Flagged, result.MixerType, time.Since(start))
+		log.Printf("✅ [MIXER-CHECK] %s — score=%.2f flagged=%v type=%s sweeper=%v (%v)",
+			txid, result.Score, result.Flagged, result.MixerType, sweeper.IsSweeper, time.Since(start))
 
 		c.JSON(200, gin.H{
 			"txid":      txid,
@@ -315,17 +327,15 @@ func main() {
 			"outputs":   len(tio.Outputs),
 			"threshold": threshold,
 			"result":    result,
+			"sweeper":   sweeper,
 		})
 	})
 
-	// ── Exchange detection endpoint ───────────────────────────────────────────
-	// GET /api/exchange-check/:address
-	// Fetches recent transactions for an address and runs exchange-detection
-	// heuristics across all of them.
+	// ── Exchange detection ────────────────────────────────────────────────
+
 	r.GET("/api/exchange-check/:address", func(c *gin.Context) {
 		start := time.Now()
 		address := c.Param("address")
-
 		log.Printf("🏦 [EXCHANGE-CHECK] Analysing address: %s", address)
 
 		txs, err := blockstream.GetAddressTxs(address)
@@ -334,55 +344,19 @@ func main() {
 			return
 		}
 
-		// Convert to aggregator.TransactionIO slice
-		tios := make([]aggregator.TransactionIO, 0, len(txs))
-		for _, tx := range txs {
-			tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
-			for _, vin := range tx.Vin {
-				if vin.Prevout == nil {
-					continue
-				}
-				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
-					Address:  vin.Prevout.ScriptPubKeyAddress,
-					Value:    float64(vin.Prevout.Value) / 1e8,
-					Sequence: vin.Sequence,
-				})
-			}
-			for _, vout := range tx.Vout {
-				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
-					Address:    vout.ScriptPubKeyAddress,
-					Value:      float64(vout.Value) / 1e8,
-					ScriptType: vout.ScriptPubKeyType,
-				})
-			}
-			tios = append(tios, tio)
-		}
-
+		tios := buildTIOs(txs)
 		result := aggregator.IsExchangeAddress(tios, 0.60)
 
 		log.Printf("✅ [EXCHANGE-CHECK] %s — score=%.2f flagged=%v (%v)",
 			address, result.Score, result.Flagged, time.Since(start))
-
-		c.JSON(200, gin.H{
-			"address":  address,
-			"tx_count": len(tios),
-			"result":   result,
-		})
+		c.JSON(200, gin.H{"address": address, "tx_count": len(tios), "result": result})
 	})
 
-	// ── Debug: raw Bitquery output ────────────────────────────────────────────
+	// ── Cluster (co-spend) endpoint ───────────────────────────────────────
 
-	// ── Cluster (co-spend) endpoint ───────────────────────────────────────────
-	// GET /api/cluster/:address
-	// Returns the wallet cluster that contains `address` — i.e. all Bitcoin
-	// addresses that have been proven (via co-spend) to be controlled by the
-	// same entity as the given address.
-	//
-	// Response: { address, cluster_id, member_count, members: []string }
 	r.GET("/api/cluster/:address", func(c *gin.Context) {
 		start := time.Now()
 		address := c.Param("address")
-
 		log.Printf("🔗 [CLUSTER] Looking up cluster for: %s", address)
 
 		cluster, err := db.GetClusterForAddress(c.Request.Context(), address)
@@ -414,7 +388,6 @@ func main() {
 
 		log.Printf("✅ [CLUSTER] %s → cluster %s (%d members) in %v",
 			address, cluster["cluster_id"], len(memberStrs), time.Since(start))
-
 		c.JSON(200, gin.H{
 			"address":      address,
 			"cluster_id":   cluster["cluster_id"],
@@ -423,12 +396,11 @@ func main() {
 		})
 	})
 
-	// ── Gambling detection endpoint ───────────────────────────────────────────
-	// GET /api/gambling-check/:address
+	// ── Gambling detection ────────────────────────────────────────────────
+
 	r.GET("/api/gambling-check/:address", func(c *gin.Context) {
 		start := time.Now()
 		address := c.Param("address")
-
 		log.Printf("🎰 [GAMBLING-CHECK] Analysing address: %s", address)
 
 		txs, err := blockstream.GetAddressTxs(address)
@@ -436,49 +408,19 @@ func main() {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
 		}
-
-		tios := make([]aggregator.TransactionIO, 0, len(txs))
-		for _, tx := range txs {
-			tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
-			for _, vin := range tx.Vin {
-				if vin.Prevout == nil {
-					tio.HasCoinbase = true
-					continue
-				}
-				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
-					Address:  vin.Prevout.ScriptPubKeyAddress,
-					Value:    float64(vin.Prevout.Value) / 1e8,
-					Sequence: vin.Sequence,
-				})
-			}
-			for _, vout := range tx.Vout {
-				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
-					Address:    vout.ScriptPubKeyAddress,
-					Value:      float64(vout.Value) / 1e8,
-					ScriptType: vout.ScriptPubKeyType,
-				})
-			}
-			tios = append(tios, tio)
-		}
-
+		tios := buildTIOsWithCoinbase(txs)
 		result := aggregator.IsGamblingAddress(tios, 0.55)
 
 		log.Printf("✅ [GAMBLING-CHECK] %s — score=%.2f flagged=%v (%v)",
 			address, result.Score, result.Flagged, time.Since(start))
-
-		c.JSON(200, gin.H{
-			"address":  address,
-			"tx_count": len(tios),
-			"result":   result,
-		})
+		c.JSON(200, gin.H{"address": address, "tx_count": len(tios), "result": result})
 	})
 
-	// ── Mining pool detection endpoint ────────────────────────────────────────
-	// GET /api/mining-check/:address
+	// ── Mining pool detection ─────────────────────────────────────────────
+
 	r.GET("/api/mining-check/:address", func(c *gin.Context) {
 		start := time.Now()
 		address := c.Param("address")
-
 		log.Printf("⛏️  [MINING-CHECK] Analysing address: %s", address)
 
 		txs, err := blockstream.GetAddressTxs(address)
@@ -486,52 +428,20 @@ func main() {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
 		}
-
-		tios := make([]aggregator.TransactionIO, 0, len(txs))
-		for _, tx := range txs {
-			tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
-			for _, vin := range tx.Vin {
-				if vin.Prevout == nil {
-					tio.HasCoinbase = true
-					continue
-				}
-				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
-					Address:  vin.Prevout.ScriptPubKeyAddress,
-					Value:    float64(vin.Prevout.Value) / 1e8,
-					Sequence: vin.Sequence,
-				})
-			}
-			for _, vout := range tx.Vout {
-				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
-					Address:    vout.ScriptPubKeyAddress,
-					Value:      float64(vout.Value) / 1e8,
-					ScriptType: vout.ScriptPubKeyType,
-				})
-			}
-			tios = append(tios, tio)
-		}
-
+		tios := buildTIOsWithCoinbase(txs)
 		result := aggregator.IsMiningPoolAddress(tios, 0.55)
 
 		log.Printf("✅ [MINING-CHECK] %s — score=%.2f flagged=%v (%v)",
 			address, result.Score, result.Flagged, time.Since(start))
-
-		c.JSON(200, gin.H{
-			"address":  address,
-			"tx_count": len(tios),
-			"result":   result,
-		})
+		c.JSON(200, gin.H{"address": address, "tx_count": len(tios), "result": result})
 	})
 
-	// ── Debug: raw Bitquery output ────────────────────────────────────────────
+	// ── Debug: raw Bitquery output ────────────────────────────────────────
 
 	r.GET("/api/debug/bitquery/:address", func(c *gin.Context) {
 		address := c.Param("address")
 
-		configMutex.RLock()
-		bqKey := currentConfig.BitqueryKey
-		configMutex.RUnlock()
-
+		_, bqKey := readKeys()
 		if bqKey == "" {
 			c.JSON(400, gin.H{"error": "Bitquery key not configured — add BITQUERY_KEY to .env"})
 			return
@@ -544,12 +454,42 @@ func main() {
 		c.JSON(200, gin.H{"address": address, "count": len(flows), "flows": flows})
 	})
 
-	// ─── Boot banner ──────────────────────────────────────────────────────────
+	// ── Address mixer check (all 3 layers) ────────────────────────────────
+
+	r.GET("/api/mixer-check-address/:address", func(c *gin.Context) {
+		start := time.Now()
+		address := c.Param("address")
+		log.Printf("🔀 [MIXER-ADDR] Analysing address: %s", address)
+
+		txs, err := blockstream.GetAddressTxs(address)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
+			return
+		}
+		tios := buildTIOsWithCoinbase(txs)
+
+		score, flagged, notes := aggregator.CombinedMixingScore(address, tios, 0)
+		addrResult := aggregator.IsMixingAddress(address, tios, 0)
+
+		log.Printf("✅ [MIXER-ADDR] %s — combined=%.2f flagged=%v (%v)",
+			address, score, flagged, time.Since(start))
+		c.JSON(200, gin.H{
+			"address":        address,
+			"tx_count":       len(tios),
+			"combined_score": score,
+			"flagged":        flagged,
+			"top_notes":      notes,
+			"features":       addrResult.Features,
+			"breakdown":      addrResult.Breakdown,
+		})
+	})
+
+	// ─── Boot banner ──────────────────────────────────────────────────────
 	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("🔓 Cryptracker is READY")
+	fmt.Println("🔓 Cryptracer is READY")
 	fmt.Println(strings.Repeat("=", 60))
 
-	if dbInitialized {
+	if isDBInitialized() {
 		fmt.Println("✅ Database:        Connected")
 		fmt.Println("🌐 Main App:        http://localhost:8080/ui/index.html")
 	} else {
@@ -557,12 +497,13 @@ func main() {
 		fmt.Println("🔧 Setup:           http://localhost:8080/ui/setup.html")
 	}
 
-	if currentConfig.ChainAbuseKey != "" {
+	caKey, bqKey := readKeys()
+	if caKey != "" {
 		fmt.Println("🛡️  ChainAbuse:      Enabled")
 	} else {
 		fmt.Println("⚠️  ChainAbuse:      Disabled (no API key)")
 	}
-	if currentConfig.BitqueryKey != "" {
+	if bqKey != "" {
 		fmt.Println("📡 Bitquery:        Enabled")
 	} else {
 		fmt.Println("⚠️  Bitquery:        Disabled (no API key)")
@@ -570,12 +511,73 @@ func main() {
 
 	fmt.Println(strings.Repeat("-", 60))
 	fmt.Println("📡 Endpoints:")
-	fmt.Println("   GET /api/mixer-check/:txid         — mixer analysis")
-	fmt.Println("   GET /api/exchange-check/:address  — exchange analysis")
-	fmt.Println("   GET /api/gambling-check/:address  — gambling detection")
-	fmt.Println("   GET /api/mining-check/:address    — mining pool detection")
-	fmt.Println("   GET /api/cluster/:address         — co-spend wallet cluster")
+	fmt.Println("   GET /api/mixer-check/:txid              — per-tx mixer analysis")
+	fmt.Println("   GET /api/mixer-check-address/:address   — full 3-layer mixer analysis")
+	fmt.Println("   GET /api/exchange-check/:address        — exchange analysis")
+	fmt.Println("   GET /api/gambling-check/:address        — gambling detection")
+	fmt.Println("   GET /api/mining-check/:address          — mining pool detection")
+	fmt.Println("   GET /api/cluster/:address               — co-spend wallet cluster")
+	fmt.Println("   GET /api/trace-path/:address            — forward hop tracer")
 	fmt.Println(strings.Repeat("=", 60) + "\n")
 
 	r.Run(":8080")
+}
+
+// ─── Shared TX conversion helpers ────────────────────────────────────────────
+
+// buildTIOs converts blockstream.Tx slices into aggregator.TransactionIO slices
+// without coinbase detection (used by exchange-check).
+func buildTIOs(txs []blockstream.Tx) []aggregator.TransactionIO {
+	tios := make([]aggregator.TransactionIO, 0, len(txs))
+	for _, tx := range txs {
+		tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
+		for _, vin := range tx.Vin {
+			if vin.Prevout == nil {
+				continue
+			}
+			tio.Inputs = append(tio.Inputs, aggregator.TxInput{
+				Address:  vin.Prevout.ScriptPubKeyAddress,
+				Value:    float64(vin.Prevout.Value) / 1e8,
+				Sequence: vin.Sequence,
+			})
+		}
+		for _, vout := range tx.Vout {
+			tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
+				Address:    vout.ScriptPubKeyAddress,
+				Value:      float64(vout.Value) / 1e8,
+				ScriptType: vout.ScriptPubKeyType,
+			})
+		}
+		tios = append(tios, tio)
+	}
+	return tios
+}
+
+// buildTIOsWithCoinbase is like buildTIOs but also sets HasCoinbase when a
+// coinbase input (nil Prevout) is detected. Used by gambling and mining checks.
+func buildTIOsWithCoinbase(txs []blockstream.Tx) []aggregator.TransactionIO {
+	tios := make([]aggregator.TransactionIO, 0, len(txs))
+	for _, tx := range txs {
+		tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
+		for _, vin := range tx.Vin {
+			if vin.Prevout == nil {
+				tio.HasCoinbase = true
+				continue
+			}
+			tio.Inputs = append(tio.Inputs, aggregator.TxInput{
+				Address:  vin.Prevout.ScriptPubKeyAddress,
+				Value:    float64(vin.Prevout.Value) / 1e8,
+				Sequence: vin.Sequence,
+			})
+		}
+		for _, vout := range tx.Vout {
+			tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
+				Address:    vout.ScriptPubKeyAddress,
+				Value:      float64(vout.Value) / 1e8,
+				ScriptType: vout.ScriptPubKeyType,
+			})
+		}
+		tios = append(tios, tio)
+	}
+	return tios
 }

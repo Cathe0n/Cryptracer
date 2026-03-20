@@ -3,7 +3,7 @@ import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool, showEntityView } from './ui.js';
 import { runTracePath, closeTraceView } from './tracer.js';
 
-console.log('Cryptracker: D3 Renderer Loaded (Modular)');
+console.log('Cryptracer: D3 Renderer Loaded (Modular)');
 // Backend uses Blockstream API, Frontend uses Mempool.space for live enrichment.
 
 // =============================================================================

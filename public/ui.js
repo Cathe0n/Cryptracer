@@ -64,202 +64,386 @@ export function showEntityView(nodeId) {
     // non-zero risk score — that combination is actively misleading.
     const hasTaintOnly = !hasReports && !hasError && risk > 0;
 
-    let rc, rl, rbg, rbrd, rglow, ri;
+    // Resolve risk card accent colour as a concrete CSS colour value (not a
+    // dynamic Tailwind class) so text is always readable regardless of theme.
+    let accentColor, accentBg, accentLabel, accentIcon, accentGlow;
     if (hasError) {
-        rc='orange'; rl='API LIMIT REACHED';
-        rbg='bg-orange-50'; rbrd='border-orange-300'; rglow=''; ri='⏳';
+        accentColor='#c2410c'; accentBg='#fff7ed'; accentLabel='API LIMIT REACHED'; accentIcon='⏳'; accentGlow='';
     } else if (hasTaintOnly) {
-        // Risk is graph-proximity taint, NOT direct reports — use a neutral amber tone
         if (risk >= 70) {
-            rc='orange'; rl='HIGH TAINT RISK';
-            rbg='bg-amber-50'; rbrd='border-amber-300'; rglow='shadow-[0_0_20px_rgba(245,158,11,0.2)]'; ri='⚠️';
+            accentColor='#b45309'; accentBg='#fffbeb'; accentLabel='HIGH TAINT RISK'; accentIcon='⚠️';
+            accentGlow='box-shadow:0 0 20px rgba(245,158,11,0.2)';
         } else if (risk >= 40) {
-            rc='yellow'; rl='ELEVATED TAINT RISK';
-            rbg='bg-yellow-50'; rbrd='border-yellow-300'; rglow=''; ri='⚠️';
+            accentColor='#92400e'; accentBg='#fefce8'; accentLabel='ELEVATED TAINT RISK'; accentIcon='⚠️'; accentGlow='';
         } else {
-            rc='slate'; rl='LOW TAINT RISK';
-            rbg='bg-slate-50'; rbrd='border-slate-300'; rglow=''; ri='🔗';
+            accentColor='#374151'; accentBg='#f8fafc'; accentLabel='LOW TAINT RISK'; accentIcon='🔗'; accentGlow='';
         }
     } else if (!hasReports && risk === 0) {
-        rc='emerald'; rl='NO RISK REPORTS';
-        rbg='bg-emerald-50'; rbrd='border-emerald-300'; rglow=''; ri='✅';
+        accentColor='#065f46'; accentBg='#f0fdf4'; accentLabel='NO RISK REPORTS'; accentIcon='✅'; accentGlow='';
     } else if (risk >= 70) {
-        rc='red'; rl='CRITICAL RISK';
-        rbg='bg-red-100'; rbrd='border-red-300'; rglow='shadow-[0_0_30px_rgba(239,68,68,0.4)]'; ri='🚨';
+        accentColor='#b91c1c'; accentBg='#fef2f2'; accentLabel='CRITICAL RISK'; accentIcon='🚨';
+        accentGlow='box-shadow:0 0 30px rgba(239,68,68,0.35)';
     } else if (risk >= 40) {
-        rc='orange'; rl='HIGH RISK';
-        rbg='bg-orange-100'; rbrd='border-orange-300'; rglow='shadow-[0_0_25px_rgba(249,115,22,0.3)]'; ri='⚠️';
+        accentColor='#c2410c'; accentBg='#fff7ed'; accentLabel='HIGH RISK'; accentIcon='⚠️';
+        accentGlow='box-shadow:0 0 25px rgba(249,115,22,0.25)';
     } else if (risk >= 20) {
-        rc='yellow'; rl='MEDIUM RISK';
-        rbg='bg-yellow-100'; rbrd='border-yellow-300'; rglow='shadow-[0_0_20px_rgba(234,179,8,0.2)]'; ri='⚠️';
+        accentColor='#92400e'; accentBg='#fefce8'; accentLabel='MEDIUM RISK'; accentIcon='⚠️'; accentGlow='';
     } else {
-        rc='green'; rl='LOW RISK';
-        rbg='bg-green-100'; rbrd='border-green-300'; rglow=''; ri='✅';
+        accentColor='#065f46'; accentBg='#f0fdf4'; accentLabel='LOW RISK'; accentIcon='✅'; accentGlow='';
     }
 
-    let html = `<div class="space-y-4">`;
+    // Inject a scoped <style> that beats the parent dark theme's !important rules.
+    // We use #entityContent as a high-specificity anchor so our rules win even
+    // if the parent also uses !important on lower-specificity selectors.
+    let html = `
+    <style id="ep-theme">
+      #entityContent { color: #1e293b !important; background: transparent !important; }
+      #entityContent .ep-wrap { display:flex; flex-direction:column; gap:12px; }
+      #entityContent .ep-card {
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+        color: #1e293b !important;
+      }
+      #entityContent .ep-card-accent-amber { border-left: 4px solid #b45309 !important; }
+      #entityContent .ep-card-accent-orange { border-left: 4px solid #c2410c !important; }
+      #entityContent .ep-card-accent-red    { border-left: 4px solid #b91c1c !important; }
+      #entityContent .ep-card-accent-green  { border-left: 4px solid #065f46 !important; }
+      #entityContent .ep-card-accent-slate  { border-left: 4px solid #475569 !important; }
+      #entityContent .ep-card-accent-indigo { border-left: 4px solid #6366f1 !important; }
+      #entityContent .ep-card-accent-sky    { border-left: 4px solid #0ea5e9 !important; }
+      #entityContent .ep-card-accent-violet { border-left: 4px solid #8b5cf6 !important; }
+      #entityContent .ep-card-accent-amber2 { border-left: 4px solid #f59e0b !important; }
+      #entityContent .ep-label {
+        font-size: 8px !important; color: #475569 !important;
+        font-weight: 600 !important; text-transform: uppercase !important;
+        letter-spacing: 0.05em !important; margin-bottom: 2px !important;
+        display: block !important;
+      }
+      #entityContent .ep-value {
+        font-size: 10px !important; color: #0f172a !important;
+        font-weight: 700 !important;
+      }
+      #entityContent .ep-value-lg {
+        font-size: 22px !important; font-weight: 800 !important; line-height: 1 !important;
+      }
+      #entityContent .ep-body {
+        font-size: 9px !important; color: #334155 !important; line-height: 1.5 !important;
+      }
+      #entityContent .ep-body-sm {
+        font-size: 8px !important; color: #475569 !important; line-height: 1.4 !important;
+      }
+      #entityContent .ep-heading {
+        font-size: 10px !important; color: #334155 !important;
+        font-weight: 700 !important; text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+      }
+      #entityContent .ep-accent { color: inherit !important; }
+      #entityContent .ep-grid2 {
+        display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important;
+      }
+      #entityContent .ep-grid2-span { grid-column: span 2 !important; }
+      #entityContent .ep-bar-track {
+        background: #e2e8f0 !important; border-radius: 9999px !important;
+        height: 6px !important; margin: 8px 0 !important;
+      }
+      #entityContent .ep-bar-fill {
+        height: 6px !important; border-radius: 9999px !important;
+        transition: width 0.4s !important;
+      }
+      #entityContent .ep-divider {
+        border-top: 1px solid #e2e8f0 !important; padding-top: 14px !important;
+      }
+      #entityContent .ep-row {
+        display: flex !important; align-items: center !important;
+        justify-content: space-between !important;
+      }
+      #entityContent .ep-badge {
+        display: inline-block !important; padding: 3px 8px !important;
+        border-radius: 4px !important; font-size: 9px !important;
+        font-weight: 700 !important; margin: 2px !important;
+      }
+      #entityContent .ep-footer {
+        font-size: 8px !important; font-weight: 600 !important;
+        border-radius: 4px !important; padding: 5px 8px !important;
+        margin-top: 8px !important;
+      }
+      #entityContent .ep-breakdown-row {
+        display: flex !important; align-items: center !important;
+        justify-content: space-between !important;
+        font-size: 8px !important; margin-top: 5px !important;
+      }
+      #entityContent .ep-breakdown-label { color: #334155 !important; font-weight: 500 !important; }
+      #entityContent .ep-breakdown-pct   { font-family: monospace !important; font-weight: 700 !important; color: #1e293b !important; }
+      #entityContent .ep-minibar-track {
+        width: 60px !important; height: 4px !important;
+        background: #e2e8f0 !important; border-radius: 9999px !important;
+        margin-right: 4px !important; display: inline-block !important; vertical-align: middle !important;
+      }
+      #entityContent .ep-minibar-fill {
+        height: 4px !important; border-radius: 9999px !important; display: block !important;
+      }
+      #entityContent a.ep-link {
+        color: #0e7490 !important; text-decoration: none !important; font-size: 9px !important;
+      }
+      #entityContent input.ep-input, #entityContent textarea.ep-input {
+        background: #ffffff !important; color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important; border-radius: 6px !important;
+        font-size: 9px !important; font-family: monospace !important;
+        padding: 7px 8px !important; width: 100% !important;
+        box-sizing: border-box !important; outline: none !important;
+      }
+      #entityContent textarea.ep-input { height: 72px !important; resize: none !important; }
+      #entityContent button.ep-btn-primary {
+        width: 100% !important; padding: 9px !important;
+        border-radius: 6px !important; border: none !important;
+        background: #0891b2 !important; color: #ffffff !important;
+        font-size: 9px !important; font-weight: 700 !important;
+        text-transform: uppercase !important; letter-spacing: 0.05em !important;
+        cursor: pointer !important;
+      }
+      #entityContent button.ep-btn-expand {
+        width: 100% !important; padding: 10px !important;
+        border-radius: 8px !important; border: none !important;
+        background: #0891b2 !important; color: #ffffff !important;
+        font-size: 11px !important; font-weight: 700 !important;
+        text-transform: uppercase !important; cursor: pointer !important;
+      }
+      #entityContent button.ep-btn-disabled {
+        background: #f1f5f9 !important; color: #94a3b8 !important;
+        border: 1px solid #e2e8f0 !important; cursor: not-allowed !important;
+      }
+      #entityContent .ep-tx-row {
+        display: flex !important; align-items: flex-start !important;
+        gap: 8px !important; padding: 8px !important;
+        border-radius: 6px !important; background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important; margin-bottom: 5px !important;
+      }
+      #entityContent .ep-green { color: #14532d !important; }
+      #entityContent .ep-red   { color: #7c2d12 !important; }
+      #entityContent .ep-mono  { font-family: monospace !important; color: #334155 !important; font-size: 11px !important; word-break: break-all !important; }
+    </style>
+    <div class="ep-wrap">`;
 
-    // Risk block
-    // Progress bar width:
-    //   - Direct reports: fill proportionally to risk score (min 4% for visibility)
-    //   - Taint only:     fill proportionally to taint score
-    //   - Clean (score=0): fill 100% in green to signal "all clear"
+
     const barWidth = (hasReports || hasTaintOnly) ? Math.max(risk, 4) : 100;
 
+    // White card with a coloured left-border accent. All body text is slate-900
+    // so it is legible on any background colour.
+    // Pick accent class from risk level
+    let accentClass;
+    if (hasError)                                        accentClass = 'ep-card-accent-orange';
+    else if (hasTaintOnly && risk >= 70)                 accentClass = 'ep-card-accent-orange';
+    else if (hasTaintOnly && risk >= 40)                 accentClass = 'ep-card-accent-amber';
+    else if (hasTaintOnly)                               accentClass = 'ep-card-accent-slate';
+    else if (!hasReports && risk === 0)                  accentClass = 'ep-card-accent-green';
+    else if (risk >= 70)                                 accentClass = 'ep-card-accent-red';
+    else if (risk >= 40)                                 accentClass = 'ep-card-accent-orange';
+    else if (risk >= 20)                                 accentClass = 'ep-card-accent-amber';
+    else                                                 accentClass = 'ep-card-accent-green';
+
     html += `
-    <div class="${rbg} ${rbrd} ${rglow} border rounded-lg p-4">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-${rc}-700 font-bold text-xs uppercase tracking-wider">${ri} ${rl}</span>
-            <span class="text-${rc}-700 text-2xl font-bold">${hasError ? '?' : risk}</span>
+    <div class="ep-card ${accentClass}">
+        <div class="ep-row" style="margin-bottom:8px">
+            <span class="ep-heading" style="color:${accentColor}!important">${accentIcon} ${accentLabel}</span>
+            <span class="ep-value-lg" style="color:${accentColor}!important">${hasError ? '?' : risk}</span>
         </div>
-        <div class="bg-white/60 rounded-full h-2 mb-3">
-            <div class="bg-${rc}-500 h-2 rounded-full transition-all duration-500"
-                 style="width: ${barWidth}%"></div>
+        <div class="ep-bar-track">
+            <div class="ep-bar-fill" style="width:${barWidth}%;background:${accentColor}"></div>
         </div>`;
 
     if (hasError) {
-        html += `<div class="text-[9px] text-orange-800 font-bold">${rd.error}</div>
-                 <div class="text-[9px] text-orange-700 mt-1">Risk data temporarily unavailable.</div>`;
+        html += `<div class="ep-body" style="font-weight:700!important">${rd.error}</div>
+                 <div class="ep-body" style="margin-top:4px!important">Risk data temporarily unavailable.</div>`;
     } else if (hasTaintOnly) {
-        // Explain taint clearly — do NOT claim the address is clean
         html += `
-        <div class="text-[9px] text-amber-800 font-bold mb-1">No direct abuse reports for this address.</div>
-        <div class="text-[9px] text-amber-700 leading-relaxed">
+        <div class="ep-body" style="font-weight:700!important;margin-bottom:4px!important">No direct abuse reports for this address.</div>
+        <div class="ep-body">
             Risk score of <strong>${risk}</strong> is inherited from graph proximity —
-            this address is within a few hops of a flagged entity. It does not indicate
-            confirmed involvement.
+            this address is within a few hops of a flagged entity. It does not indicate confirmed involvement.
         </div>`;
     } else if (hasReports) {
-        html += `<div class="grid grid-cols-2 gap-2 text-[9px]">
-            <div><div class="text-slate-500 uppercase">Reports</div><div class="font-bold text-slate-800">${rd.report_count}</div></div>
-            <div><div class="text-slate-500 uppercase">Verified</div><div class="font-bold text-slate-800">${rd.has_verified_reports ? '✓ Yes' : 'No'}</div></div>
-            <div><div class="text-slate-500 uppercase">Confidence</div><div class="font-bold text-slate-800">${(rd.avg_confidence_score * 100).toFixed(0)}%</div></div>
-            <div><div class="text-slate-500 uppercase">Lost</div><div class="font-bold text-slate-800">${rd.total_amount.toFixed(2)} BTC</div></div>
+        html += `<div class="ep-grid2">
+            <div><span class="ep-label">Reports</span><span class="ep-value">${rd.report_count}</span></div>
+            <div><span class="ep-label">Verified</span><span class="ep-value">${rd.has_verified_reports ? '✓ Yes' : 'No'}</span></div>
+            <div><span class="ep-label">Confidence</span><span class="ep-value">${(rd.avg_confidence_score * 100).toFixed(0)}%</span></div>
+            <div><span class="ep-label">Lost</span><span class="ep-value">${rd.total_amount.toFixed(2)} BTC</span></div>
         </div>`;
     } else {
-        html += `<div class="text-[9px] text-emerald-700">No abuse reports found. Address appears clean.</div>`;
+        html += `<div class="ep-body" style="font-weight:500!important">No abuse reports found. Address appears clean.</div>`;
     }
     html += `</div>`;
 
     if (hasReports && rd.categories && Object.keys(rd.categories).length > 0) {
-        html += `<div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <h4 class="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-3">⚠️ Reported Activities</h4>
-            <div class="space-y-2">`;
+        html += `<div class="ep-card">
+            <div class="ep-heading" style="color:#b91c1c!important;margin-bottom:8px">⚠️ Reported Activities</div>
+            <div>`;
         Object.entries(rd.categories).sort((a, b) => b[1] - a[1]).forEach(([cat, cnt]) => {
-            html += `<div class="flex items-center justify-between text-[9px]">
-                <span class="text-slate-600 capitalize">${cat}</span>
-                <span class="bg-red-100 text-red-600 px-2 py-1 rounded font-bold">${cnt}</span></div>`;
+            html += `<div class="ep-row" style="margin-bottom:5px">
+                <span class="ep-body" style="text-transform:capitalize!important;font-weight:500!important">${cat}</span>
+                <span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px;font-weight:700;font-size:9px">${cnt}</span></div>`;
         });
         html += `</div></div>`;
     }
 
     if (hasReports && rd.reports?.length > 0) {
-        html += `<div class="border border-slate-200 rounded-lg p-3 bg-slate-50 max-h-60 overflow-y-auto custom-scrollbar">
-            <h4 class="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-3">📋 Recent Reports</h4>
-            <div class="space-y-3">`;
+        html += `<div class="ep-card" style="max-height:240px;overflow-y:auto">
+            <div class="ep-heading" style="margin-bottom:8px">📋 Recent Reports</div>
+            <div>`;
         rd.reports.slice(0, 5).forEach(r => {
-            html += `<div class="bg-slate-100 p-2 rounded border border-slate-200">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-red-600 font-bold text-[9px] uppercase">${r.category}</span>
-                    ${r.is_verified ? '<span class="text-green-600 text-[8px]">✓ VERIFIED</span>' : '<span class="text-slate-500 text-[8px]">UNVERIFIED</span>'}
+            html += `<div class="ep-card" style="margin-bottom:6px;padding:8px!important">
+                <div class="ep-row" style="margin-bottom:4px">
+                    <span class="ep-body" style="color:#b91c1c!important;font-weight:700!important;text-transform:uppercase!important">${r.category}</span>
+                    ${r.is_verified ? '<span class="ep-body-sm" style="color:#15803d!important;font-weight:600!important">✓ VERIFIED</span>' : '<span class="ep-body-sm">UNVERIFIED</span>'}
                 </div>
-                ${r.description ? `<p class="text-slate-600 text-[9px] leading-relaxed mb-2">${r.description.substring(0, 150)}${r.description.length > 150 ? '...' : ''}</p>` : ''}
-                <div class="flex items-center justify-between text-[8px] text-slate-500">
-                    <span>${r.blockchain || 'Bitcoin'}</span>
-                    ${r.amount > 0 ? `<span class="text-red-500">${r.amount} BTC lost</span>` : ''}
+                ${r.description ? `<p class="ep-body" style="margin-bottom:4px">${r.description.substring(0, 150)}${r.description.length > 150 ? '...' : ''}</p>` : ''}
+                <div class="ep-row">
+                    <span class="ep-body-sm">${r.blockchain || 'Bitcoin'}</span>
+                    ${r.amount > 0 ? `<span class="ep-body-sm" style="color:#dc2626!important;font-weight:600!important">${r.amount} BTC lost</span>` : ''}
                 </div></div>`;
         });
         if (rd.reports.length > 5)
-            html += `<div class="text-center text-[9px] text-slate-500">+ ${rd.reports.length - 5} more reports</div>`;
+            html += `<div class="ep-body-sm" style="text-align:center;padding-top:4px">+ ${rd.reports.length - 5} more reports</div>`;
         html += `</div></div>`;
     }
 
     // ── Expand Node action button ──────────────────────────────────────────
     if (isAddress) {
         const alreadyExpanded = window._expandedNodes && window._expandedNodes.has(nodeId);
-        html += `
-        <button
-            onclick="window.expandNode('${nodeId}')"
-            ${alreadyExpanded ? 'disabled' : ''}
-            class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border font-bold text-xs uppercase tracking-wider transition
-                   ${alreadyExpanded
-                     ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
-                     : 'bg-cyan-600 hover:bg-cyan-500 border-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_18px_rgba(6,182,212,0.5)]'}"
-            title="${alreadyExpanded ? 'Already expanded' : 'Fetch all connected transactions and addresses for this node'}">
-            ${alreadyExpanded ? '✓ Already Expanded' : '🔍 Expand Node'}
-        </button>`;
+        html += alreadyExpanded
+            ? `<button disabled class="ep-btn-expand ep-btn-disabled">✓ Already Expanded</button>`
+            : `<button onclick="window.expandNode('${nodeId}')" class="ep-btn-expand">🔍 Expand Node</button>`;
     }
 
     // Entity info + mempool link
     html += `
-    <div class="space-y-3">
-        <div class="flex items-center gap-2 flex-wrap">
-            <span class="px-2 py-1 rounded text-[9px] font-bold ${isAddress ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-purple-100 text-purple-600 border border-purple-200'}">${nodeData.type}</span>
-            ${hasReports && risk >= 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-600 border border-red-200">🚨 CRITICAL RISK</span>' : ''}
-            ${hasReports && risk >= 40 && risk < 70 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-orange-100 text-orange-600 border border-orange-200">⚠️ HIGH RISK</span>' : ''}
-            ${nodeData.mixer_info && nodeData.mixer_info.is_mixer ? ('<span class="px-2 py-1 rounded text-[9px] font-bold bg-indigo-100 text-indigo-600 border border-indigo-200" title="Mixer detection — confidence: '+(nodeData.mixer_info.confidence||0)+'%">🌀 MIXER (Conf: '+(nodeData.mixer_info.confidence||0)+'%)</span>') : ''}
-            ${hasTaintOnly && risk >= 40 ? '<span class="px-2 py-1 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-300" title="Score inherited from proximity to flagged nodes — no direct reports">🔗 TAINT ' + risk + '</span>' : ''}
-            <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}"
-               target="_blank" rel="noopener"
-               class="px-2 py-1 rounded text-[9px] font-bold bg-cyan-50 text-cyan-600 border border-cyan-200 hover:bg-cyan-100 transition">
-               🔍 mempool.space ↗
-            </a>
+    <div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px">
+            <span class="ep-badge" style="background:${isAddress ? '#dbeafe' : '#ede9fe'};color:${isAddress ? '#1e40af' : '#5b21b6'};border:1px solid ${isAddress ? '#bfdbfe' : '#ddd6fe'}">${nodeData.type}</span>
+            ${hasReports && risk >= 70 ? `<span class="ep-badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">🚨 CRITICAL RISK</span>` : ''}
+            ${hasReports && risk >= 40 && risk < 70 ? `<span class="ep-badge" style="background:#ffedd5;color:#9a3412;border:1px solid #fdba74">⚠️ HIGH RISK</span>` : ''}
+            ${nodeData.mixer_info?.is_mixer ? `<span class="ep-badge" style="background:#2e1065;color:#c4b5fd;border:1px solid #7c3aed">🌀 ${nodeData.mixer_info.raw?.mixer_type||'MIXER'} (${nodeData.mixer_info.confidence||0}%)</span>` : ''}
+            ${nodeData.entity_type === 'exchange' || nodeData.exchange_info?.flagged ? `<span class="ep-badge" style="background:#e0f2fe;color:#075985;border:1px solid #bae6fd">🏦 EXCHANGE</span>` : ''}
+            ${nodeData.entity_type === 'gambling' || nodeData.gambling_info?.flagged ? `<span class="ep-badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe">🎰 GAMBLING</span>` : ''}
+            ${nodeData.entity_type === 'mining' || nodeData.mining_info?.flagged ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">⛏️ MINING POOL</span>` : ''}
+            ${hasTaintOnly && risk >= 40 ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">🔗 TAINT ${risk}</span>` : ''}
+            <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}" target="_blank" rel="noopener"
+               class="ep-badge ep-link" style="background:#ecfeff;border:1px solid #a5f3fc">🔍 mempool.space ↗</a>
         </div>
         <div>
-            <label class="text-[9px] text-slate-500 font-bold uppercase">Entity ID</label>
-            <div class="text-xs font-mono text-cyan-600 break-all mt-1">${nodeData.label}</div>
+            <span class="ep-label">Entity ID</span>
+            <div class="ep-mono">${nodeData.label}</div>
         </div>
     </div>
 
-    <div class="border-t border-slate-200 pt-4">
-        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Network Metrics</h4>
-        <div class="grid grid-cols-2 gap-3">
-            <div class="bg-slate-100 p-3 rounded border border-slate-200">
-                <div class="text-[9px] text-slate-500 uppercase">Connections</div>
-                <div class="text-lg font-bold text-slate-900">${degree}</div>
+    <div class="ep-divider">
+        <div class="ep-heading" style="margin-bottom:10px">Network Metrics</div>
+        <div class="ep-grid2">
+            <div class="ep-card"><span class="ep-label">Connections</span><span class="ep-value" style="font-size:18px!important">${degree}</span></div>
+            <div class="ep-card"><span class="ep-label">Neighbors</span><span class="ep-value" style="font-size:18px!important">${neighbors.size}</span></div>
+            <div class="ep-card" style="background:#dcfce7!important;border-color:#bbf7d0!important">
+                <span class="ep-label" style="color:#14532d!important">Received</span>
+                <span class="ep-value" style="color:#14532d!important;font-size:13px!important">${totalReceived.toFixed(4)} BTC</span>
+                <span class="ep-body-sm" style="color:#166534!important;display:block">${incomingTx} tx</span>
             </div>
-            <div class="bg-slate-100 p-3 rounded border border-slate-200">
-                <div class="text-[9px] text-slate-500 uppercase">Neighbors</div>
-                <div class="text-lg font-bold text-slate-900">${neighbors.size}</div>
-            </div>
-            <div class="bg-green-100 p-3 rounded border border-green-200">
-                <div class="text-[9px] text-green-600 uppercase">Received</div>
-                <div class="text-sm font-bold text-green-700">${totalReceived.toFixed(4)} BTC</div>
-                <div class="text-[9px] text-slate-500 mt-1">${incomingTx} tx</div>
-            </div>
-            <div class="bg-orange-100 p-3 rounded border border-orange-200">
-                <div class="text-[9px] text-orange-600 uppercase">Sent</div>
-                <div class="text-sm font-bold text-orange-700">${totalSent.toFixed(4)} BTC</div>
-                <div class="text-[9px] text-slate-500 mt-1">${outgoingTx} tx</div>
+            <div class="ep-card" style="background:#ffedd5!important;border-color:#fed7aa!important">
+                <span class="ep-label" style="color:#7c2d12!important">Sent</span>
+                <span class="ep-value" style="color:#7c2d12!important;font-size:13px!important">${totalSent.toFixed(4)} BTC</span>
+                <span class="ep-body-sm" style="color:#9a3412!important;display:block">${outgoingTx} tx</span>
             </div>
         </div>
-        <div class="mt-3 p-3 rounded ${balance >= 0 ? 'bg-cyan-100 border border-cyan-200' : 'bg-slate-100 border border-slate-200'}">
-            <div class="text-[9px] text-slate-500 uppercase">Graph Balance</div>
-            <div class="text-lg font-bold ${balance >= 0 ? 'text-cyan-600' : 'text-slate-500'}">${balance.toFixed(4)} BTC</div>
+        <div class="ep-card" style="margin-top:8px;background:${balance >= 0 ? '#cffafe' : '#f1f5f9'}!important;border-color:${balance >= 0 ? '#a5f3fc' : '#e2e8f0'}!important">
+            <span class="ep-label">Graph Balance</span>
+            <span class="ep-value" style="font-size:18px!important;color:${balance >= 0 ? '#0e7490' : '#334155'}!important">${balance.toFixed(4)} BTC</span>
         </div>
     </div>`;
 
-    // Mixer detection explanation (if available)
+    // ── Detection panels (mixer / exchange / gambling / mining) ─────────────
+    function mkBreakdown(entries, barColor) {
+        return Object.entries(entries).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k,v])=>{
+            const pct=Math.round(v*100);
+            const lbl=k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+            return `<div class="ep-breakdown-row"><span class="ep-breakdown-label">${lbl}</span><div style="display:flex;align-items:center;gap:4px"><span class="ep-minibar-track"><span class="ep-minibar-fill" style="width:${Math.min(pct*2,100)}%;background:${barColor}"></span></span><span class="ep-breakdown-pct">${pct}%</span></div></div>`;
+        }).join('');
+    }
+
     if (nodeData.mixer_info) {
-        const conf = nodeData.mixer_info.confidence || 0;
-        const expl = nodeData.mixer_info.explanation && nodeData.mixer_info.explanation.length > 0
-            ? nodeData.mixer_info.explanation
-            : (nodeData.mixer_info.raw && nodeData.mixer_info.raw.notes ? nodeData.mixer_info.raw.notes.join('; ') : 'No explanation available');
-        html += `
-        <div class="mt-4 p-3 rounded border border-indigo-200 bg-indigo-50">
-            <div class="flex items-center justify-between">
-                <div class="text-[10px] font-bold text-indigo-700">🌀 Mixer detection</div>
-                <div class="text-[10px] text-slate-500">Confidence: <span class="font-bold text-indigo-700">${conf}%</span></div>
+        const conf=nodeData.mixer_info.confidence||0;
+        const expl=nodeData.mixer_info.explanation?.length>0?nodeData.mixer_info.explanation:(nodeData.mixer_info.raw?.notes?nodeData.mixer_info.raw.notes.join('; '):'No explanation available');
+        const mixerType=nodeData.mixer_info.raw?.mixer_type||'';
+        const rows=mkBreakdown(nodeData.mixer_info.raw?.breakdown||{},'#6366f1');
+        // Mixer-type specific accent colours and detection method source
+        // Schnoering & Vazirgiannis (2023); Shojaeinasab et al. (2023)
+        const MIXER_PANEL = {
+            'Wasabi Wallet 1.x (CoinJoin)': { bg:'#2e1065', border:'#7c3aed', bar:'#8b5cf6', text:'#c4b5fd', method:'ZeroLink/Chaumian CoinJoin \u2014 Schnoering & Vazirgiannis (2023) \u00a72.2\u20132.3' },
+            'Wasabi Wallet 2.0 (WabiSabi)': { bg:'#2e1065', border:'#6d28d9', bar:'#7c3aed', text:'#c4b5fd', method:'WabiSabi protocol, variable denominations \u2014 Schnoering & Vazirgiannis (2023) \u00a72.4' },
+            'JoinMarket':                    { bg:'#083344', border:'#0891b2', bar:'#06b6d4', text:'#67e8f9', method:'Peer-coordinated CoinJoin, equal denominations, n\u22653 \u2014 Schnoering & Vazirgiannis (2023) \u00a72.1' },
+            'Whirlpool (Samourai)':          { bg:'#042f2e', border:'#0e7490', bar:'#0891b2', text:'#67e8f9', method:'Fixed pool denomination, exactly 5\u00d75 structure \u2014 Schnoering & Vazirgiannis (2023) \u00a72.5' },
+            'Centralized Mixer':             { bg:'#451a03', border:'#b45309', bar:'#d97706', text:'#fcd34d', method:'1-in 2-out, P2SH, >5\u00d7 output ratio, input >1 BTC \u2014 Shojaeinasab et al. (2023) \u00a73.3' },
+            'Generic CoinJoin':              { bg:'#1e1b4b', border:'#4f46e5', bar:'#6366f1', text:'#a5b4fc', method:'Equal denominations, multiple participants \u2014 heuristic pattern match' },
+        };
+        const mp = MIXER_PANEL[mixerType] || { bg:'#1e1b4b', border:'#6366f1', bar:'#6366f1', text:'#a5b4fc', method:'Heuristic pattern match' };
+        html+=`<div class="ep-card" style="background:${mp.bg};border:1px solid ${mp.border}">
+            <div class="ep-row" style="margin-bottom:6px">
+                <span class="ep-heading" style="color:${mp.text}!important">🌀 Coin Mixer / CoinJoin</span>
+                <span class="ep-body-sm">Conf: <strong style="color:${mp.text}">${conf}%</strong></span>
             </div>
-            <div class="text-[9px] text-slate-600 mt-2">${expl}</div>
+            ${mixerType?`<div class="ep-body" style="font-weight:700!important;color:${mp.text}!important;margin-bottom:2px">${mixerType}</div>`:''}
+            ${mixerType?`<div class="ep-body" style="font-size:9px;color:#94a3b8;margin-bottom:6px;font-style:italic">${mp.method}</div>`:''}
+            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${conf}%;background:${mp.bar}"></div></div>
+            <div class="ep-body" style="margin-bottom:6px">${expl}</div>
+            ${rows?`<div style="border-top:1px solid ${mp.border};padding-top:6px">${rows}</div>`:''}
+            <div class="ep-footer" style="background:${mp.bg};color:${mp.text};border-top:1px solid ${mp.border}">⚠️ Mixer transactions deliberately obscure the origin of funds. Tracing beyond this point is unreliable.</div>
+        </div>`;
+    }
+    if (nodeData.exchange_info?.flagged||nodeData.entity_type==='exchange') {
+        const ei=nodeData.exchange_info||{};
+        const ec=Math.round((ei.score||0)*100);
+        const en2=(ei.notes||[]).join('; ')||'Exchange / custodial service pattern detected.';
+        const ename=nodeData.label&&nodeData.label!==nodeId?nodeData.label:null;
+        const rows=mkBreakdown(ei.breakdown||{},'#0ea5e9');
+        html+=`<div class="ep-card ep-card-accent-sky">
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#075985!important">🏦 Exchange / Custodial Service</span><span class="ep-body-sm">Conf: <strong style="color:#075985">${ec}%</strong></span></div>
+            ${ename?`<div class="ep-body" style="font-weight:700!important;color:#0c4a6e!important;margin-bottom:4px">${ename}</div>`:''}
+            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${ec}%;background:#0ea5e9"></div></div>
+            <div class="ep-body" style="margin-bottom:6px">${en2}</div>
+            ${rows?`<div style="border-top:1px solid #e2e8f0;padding-top:6px">${rows}</div>`:''}
+            <div class="ep-footer" style="background:#e0f2fe;color:#075985">ℹ️ Funds entering an exchange may be harder to trace. Exchanges apply KYC and may respond to legal requests.</div>
+        </div>`;
+    }
+    if (nodeData.gambling_info?.flagged||nodeData.entity_type==='gambling') {
+        const gi=nodeData.gambling_info||{};
+        const gc=Math.round((gi.score||0)*100);
+        const gn=(gi.notes||[]).join('; ')||'Gambling / gaming service pattern detected.';
+        const rows=mkBreakdown(gi.breakdown||{},'#8b5cf6');
+        html+=`<div class="ep-card ep-card-accent-violet">
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#5b21b6!important">🎰 Gambling / Gaming Service</span><span class="ep-body-sm">Conf: <strong style="color:#5b21b6">${gc}%</strong></span></div>
+            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${gc}%;background:#8b5cf6"></div></div>
+            <div class="ep-body" style="margin-bottom:6px">${gn}</div>
+            ${rows?`<div style="border-top:1px solid #e2e8f0;padding-top:6px">${rows}</div>`:''}
+            <div class="ep-footer" style="background:#ede9fe;color:#5b21b6">ℹ️ Gambling services are often unlicensed. Funds may be commingled and hard to attribute.</div>
+        </div>`;
+    }
+    if (nodeData.mining_info?.flagged||nodeData.entity_type==='mining') {
+        const mi=nodeData.mining_info||{};
+        const mc=Math.round((mi.score||0)*100);
+        const mn=(mi.notes||[]).join('; ')||'Mining pool pattern detected.';
+        const rows=mkBreakdown(mi.breakdown||{},'#f59e0b');
+        html+=`<div class="ep-card ep-card-accent-amber2">
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#92400e!important">⛏️ Mining Pool</span><span class="ep-body-sm">Conf: <strong style="color:#92400e">${mc}%</strong></span></div>
+            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${mc}%;background:#f59e0b"></div></div>
+            <div class="ep-body" style="margin-bottom:6px">${mn}</div>
+            ${rows?`<div style="border-top:1px solid #e2e8f0;padding-top:6px">${rows}</div>`:''}
+            <div class="ep-footer" style="background:#fef3c7;color:#92400e">ℹ️ Coinbase flows through mining pools — generally benign unless co-mingled with flagged funds.</div>
         </div>`;
     }
 
     // Tx history
-    html += `<div class="border-t border-slate-200 pt-4">
-        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">🕒 Transaction History</h4>`;
+    html += `<div class="ep-divider">
+        <div class="ep-heading" style="margin-bottom:10px">🕒 Transaction History</div>`;
     if (txEvents.length > 0) {
-        html += `<div class="space-y-2 max-h-52 overflow-y-auto custom-scrollbar">`;
+        html += `<div style="display:flex;flex-direction:column;gap:5px;max-height:210px;overflow-y:auto">`;
         txEvents.forEach(tx => {
             const dt  = new Date(tx.ts * 1000);
             const d8  = dt.toISOString().split('T')[0];
@@ -267,20 +451,20 @@ export function showEntityView(nodeId) {
             const p   = (tx.peer || '').toString();
             const dp  = p.length > 18 ? p.substring(0, 18) + '…' : p;
             const isIn = tx.dir === 'in';
-            html += `<div class="flex items-start gap-2 p-2 rounded bg-slate-50 border border-slate-200">
-                <span class="mt-0.5 text-[11px] font-bold ${isIn ? 'text-green-600' : 'text-orange-600'}">${isIn ? '▼' : '▲'}</span>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between gap-1">
-                        <span class="text-[9px] font-bold ${isIn ? 'text-green-700' : 'text-orange-700'}">${isIn ? '+' : '-'}${tx.amount.toFixed(4)} BTC</span>
-                        <span class="text-[8px] text-slate-400 font-mono shrink-0">${t8}</span>
+            html += `<div class="ep-tx-row">
+                <span class="${isIn ? 'ep-green' : 'ep-red'}" style="font-size:11px;font-weight:700;margin-top:1px">${isIn ? '▼' : '▲'}</span>
+                <div style="flex:1;min-width:0">
+                    <div class="ep-row">
+                        <span class="ep-body" style="font-weight:700!important;color:${isIn?'#14532d':'#7c2d12'}!important">${isIn?'+':'-'}${tx.amount.toFixed(4)} BTC</span>
+                        <span class="ep-body-sm" style="font-family:monospace;white-space:nowrap">${t8}</span>
                     </div>
-                    <div class="text-[8px] text-slate-400 font-mono mt-0.5">${d8}</div>
-                    <div class="text-[8px] text-slate-400 truncate">${isIn ? 'from' : 'to'}: <span class="font-mono text-slate-500">${dp}</span></div>
+                    <div class="ep-body-sm" style="font-family:monospace;margin-top:2px">${d8}</div>
+                    <div class="ep-body-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isIn?'from':'to'}: <span style="font-family:monospace;color:#334155">${dp}</span></div>
                 </div></div>`;
         });
         html += `</div>`;
     } else {
-        html += `<div class="text-[9px] text-slate-400 italic">No timestamp data on connected edges.</div>`;
+        html += `<div class="ep-body-sm" style="font-style:italic">No timestamp data on connected edges.</div>`;
     }
     html += `</div>`;
 
@@ -289,46 +473,28 @@ export function showEntityView(nodeId) {
     const customName = annot.name || '';
     const customColor = annot.color || '';
     const customNotes = annot.notes || '';
-    
+
     html += `
-    <div class="border-t border-slate-200 pt-4">
-        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">📝 Your Annotations</h4>
-        
-        <!-- Display Name section -->
-        <div class="mb-4">
-            <label class="text-[9px] text-slate-600 font-bold uppercase block mb-2">Display Name</label>
-            <input type="text" id="nodeName" placeholder="Custom display name (shows in labels instead of address)"
-                class="w-full p-2 rounded border border-slate-200 text-[9px] font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400" value="${customName}">
+    <div class="ep-divider">
+        <div class="ep-heading" style="margin-bottom:10px">📝 Your Annotations</div>
+        <div style="margin-bottom:10px">
+            <span class="ep-label">Display Name</span>
+            <input type="text" id="nodeName" placeholder="Custom display name..." class="ep-input" value="${customName}">
         </div>
-        
-        <!-- Notes section -->
-        <div class="mb-4">
-            <label class="text-[9px] text-slate-600 font-bold uppercase block mb-2">Notes</label>
-            <textarea id="nodeNotes" placeholder="Add personal notes about this node..."
-                class="w-full h-20 p-2 rounded border border-slate-200 text-[9px] font-mono resize-none focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400">${customNotes}</textarea>
+        <div style="margin-bottom:10px">
+            <span class="ep-label">Notes</span>
+            <textarea id="nodeNotes" placeholder="Add personal notes about this node..." class="ep-input">${customNotes}</textarea>
         </div>
-        
-        <!-- Color picker section -->
-        <div class="mb-4">
-            <label class="text-[9px] text-slate-600 font-bold uppercase block mb-2">Node Color</label>
-            <div class="grid grid-cols-6 gap-2">
-                ${COLOR_PALETTE.map((col, idx) => `
-                <button onclick="window.setNodeColor('${nodeId}', '${col.hex}')"
-                    class="w-8 h-8 rounded border-2 transition ${customColor === col.hex ? 'border-slate-800 shadow-[0_0_8px_rgba(0,0,0,0.5)]' : 'border-slate-300 hover:border-slate-400'}"
-                    style="background-color: ${col.hex};"
-                    title="${col.name}"></button>
-                `).join('')}
+        <div style="margin-bottom:10px">
+            <span class="ep-label">Node Color</span>
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:6px">
+                ${COLOR_PALETTE.map(col => `<button onclick="window.setNodeColor('${nodeId}','${col.hex}')"
+                    style="width:30px;height:30px;border-radius:5px;border:2px solid ${customColor===col.hex?'#1e293b':'#cbd5e1'};background:${col.hex};cursor:pointer" title="${col.name}"></button>`).join('')}
                 <button onclick="window.clearNodeColor('${nodeId}')"
-                    class="w-8 h-8 rounded border-2 ${!customColor ? 'border-slate-800 shadow-[0_0_8px_rgba(0,0,0,0.3)]' : 'border-slate-300 hover:border-slate-400'} flex items-center justify-center text-[8px] font-bold text-slate-600 bg-slate-100"
-                    title="Default color">✓</button>
+                    style="width:30px;height:30px;border-radius:5px;border:2px solid ${!customColor?'#1e293b':'#cbd5e1'};background:#f1f5f9;font-size:10px;font-weight:700;cursor:pointer;color:#334155" title="Default">✓</button>
             </div>
         </div>
-        
-        <!-- Save button -->
-        <button onclick="window.saveNodeAnnotation('${nodeId}')"
-            class="w-full px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-[9px] font-bold rounded uppercase tracking-wider transition shadow-lg shadow-cyan-900/20">
-            💾 Save Annotations
-        </button>
+        <button onclick="window.saveNodeAnnotation('${nodeId}')" class="ep-btn-primary">💾 Save Annotations</button>
     </div>`;
 
     // ── Live mempool enrichment block ────────────────────────────────────────
@@ -337,28 +503,25 @@ export function showEntityView(nodeId) {
         : `window.enrichTxFromMempool('${nodeData.label}')`;
 
     html += `
-    <div class="border-t border-slate-200 pt-4">
-        <div class="flex items-center justify-between mb-3">
-            <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🌐 Live On-Chain Data</h4>
-            <button id="btnFetchMempool" onclick="${enrichFn}"
-                class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[9px] font-bold rounded uppercase tracking-wider transition">
-                ⬇ Fetch
-            </button>
+    <div class="ep-divider">
+        <div class="ep-row" style="margin-bottom:10px">
+            <div class="ep-heading">🌐 Live On-Chain Data</div>
+            <button id="btnFetchMempool" onclick="${enrichFn}" class="ep-btn-primary" style="width:auto!important;padding:5px 12px!important">⬇ Fetch</button>
         </div>
-        <div id="mempoolEnrichContent" class="text-[9px] text-slate-400 italic">
+        <div id="mempoolEnrichContent" class="ep-body-sm" style="font-style:italic">
             Click "Fetch" to pull live data from mempool.space.
         </div>
     </div>`;
 
     if (nodeData.sources?.length > 0) {
-        html += `<div class="border-t border-slate-200 pt-4">
-            <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Intelligence Sources</h4>
-            <div class="space-y-1">
-                ${nodeData.sources.map(s => `<div class="text-[9px] font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded">${s}</div>`).join('')}
+        html += `<div class="ep-divider">
+            <div class="ep-heading" style="margin-bottom:8px">Intelligence Sources</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+                ${nodeData.sources.map(s => `<div class="ep-body" style="font-family:monospace;background:#f1f5f9;padding:4px 8px;border-radius:4px">${s}</div>`).join('')}
             </div></div>`;
     }
 
-    html += `</div>`;
+    html += `</div>`; // close ep-wrap
     document.getElementById('entityContent').innerHTML = html;
     document.getElementById('liveView').classList.add('hidden');
     document.getElementById('entityView').classList.remove('hidden');
@@ -375,8 +538,8 @@ export async function enrichFromMempool(nodeId, address) {
     if (!el) return;
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="inline-block animate-spin">⟳</span> Loading…';
-    el.innerHTML = `<div class="text-[9px] text-slate-400 animate-pulse">Querying mempool.space…</div>`;
+    btn.innerHTML = '⟳ Loading…';
+    el.innerHTML = `<div style="font-size:9px;color:#475569;font-style:italic">Querying mempool.space…</div>`;
 
     try {
         const [addrData, utxos, txs] = await Promise.all([
@@ -388,6 +551,9 @@ export async function enrichFromMempool(nodeId, address) {
         const confirmedBal = (cs.funded_txo_sum || 0) - (cs.spent_txo_sum || 0);
         const mempoolBal   = (ms.funded_txo_sum || 0) - (ms.spent_txo_sum || 0);
 
+        const C  = 'class="ep-card"';
+        const C2 = 'class="ep-card ep-grid2-span"';
+
         const recentTxRows = (txs || []).slice(0, 5).map(tx => {
             const confirmed = tx.status?.confirmed;
             const sizeVb    = tx.weight ? Math.ceil(tx.weight / 4) : (tx.size || 0);
@@ -395,74 +561,53 @@ export async function enrichFromMempool(nodeId, address) {
             const time      = tx.status?.block_time
                 ? new Date(tx.status.block_time * 1000).toISOString().split('T')[0]
                 : 'Unconfirmed';
-            return `<div class="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+            return `<div class="ep-row" style="padding:5px 0;border-bottom:1px solid #f1f5f9">
                 <div>
-                    <a href="https://mempool.space/tx/${tx.txid}" target="_blank"
-                       class="text-cyan-600 hover:underline font-mono text-[8px]">${tx.txid.substring(0, 14)}…</a>
-                    <div class="text-[8px] text-slate-400">${time} ${confirmed ? `· Block #${tx.status.block_height}` : '· ⏳ Mempool'}</div>
+                    <a href="https://mempool.space/tx/${tx.txid}" target="_blank" class="ep-link" style="font-family:monospace">${tx.txid.substring(0, 14)}…</a>
+                    <div class="ep-body-sm">${time} ${confirmed ? `· Block #${tx.status.block_height}` : '· ⏳ Mempool'}</div>
                 </div>
-                <div class="text-right shrink-0 ml-2">
-                    <div class="text-[8px] text-slate-600 font-bold">${(tx.fee || 0).toLocaleString()} sat</div>
-                    <div class="text-[8px] text-slate-400">${feeRate} sat/vB</div>
+                <div style="text-align:right;margin-left:8px">
+                    <div class="ep-body" style="font-weight:700!important">${(tx.fee || 0).toLocaleString()} sat</div>
+                    <div class="ep-body-sm">${feeRate} sat/vB</div>
                 </div></div>`;
         }).join('');
 
         const utxoRows = (utxos || []).slice(0, 5).map(u => `
-            <div class="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+            <div class="ep-row" style="padding:5px 0;border-bottom:1px solid #f1f5f9">
                 <div>
-                    <a href="https://mempool.space/tx/${u.txid}" target="_blank"
-                       class="text-cyan-600 hover:underline font-mono text-[8px]">${u.txid.substring(0, 14)}…:${u.vout}</a>
-                    <div class="text-[8px] text-slate-400">${u.status?.confirmed ? '✅ Confirmed' : '⏳ Unconfirmed'}</div>
+                    <a href="https://mempool.space/tx/${u.txid}" target="_blank" class="ep-link" style="font-family:monospace">${u.txid.substring(0, 14)}…:${u.vout}</a>
+                    <div class="ep-body-sm">${u.status?.confirmed ? '✅ Confirmed' : '⏳ Unconfirmed'}</div>
                 </div>
-                <div class="text-[8px] font-bold text-green-700 shrink-0 ml-2">${satsToBTC(u.value)} BTC</div>
+                <div class="ep-body" style="font-weight:700!important;color:#14532d!important;margin-left:8px">${satsToBTC(u.value)} BTC</div>
             </div>`).join('');
 
         el.innerHTML = `
-        <div class="grid grid-cols-2 gap-2 mb-3">
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Confirmed Balance</div>
-                <div class="font-bold text-slate-800 text-[10px]">${satsToBTC(confirmedBal)} BTC</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Mempool Δ</div>
-                <div class="font-bold text-[10px] ${mempoolBal >= 0 ? 'text-green-700' : 'text-red-700'}">${mempoolBal >= 0 ? '+' : ''}${satsToBTC(mempoolBal)} BTC</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Total TXs</div>
-                <div class="font-bold text-slate-800 text-[10px]">${(cs.tx_count || 0).toLocaleString()}</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Pending TXs</div>
-                <div class="font-bold text-[10px] ${ms.tx_count > 0 ? 'text-yellow-700' : 'text-slate-400'}">${ms.tx_count > 0 ? ms.tx_count + ' pending' : 'None'}</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">UTXOs</div>
-                <div class="font-bold text-slate-800 text-[10px]">${(utxos || []).length}</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Total Received</div>
-                <div class="font-bold text-slate-800 text-[10px]">${satsToBTC(cs.funded_txo_sum || 0)} BTC</div>
-            </div>
+        <div class="ep-grid2" style="margin-bottom:10px">
+            <div class="ep-card"><span class="ep-label">Confirmed Balance</span><span class="ep-value">${satsToBTC(confirmedBal)} BTC</span></div>
+            <div class="ep-card"><span class="ep-label">Mempool Δ</span><span class="ep-value" style="color:${mempoolBal >= 0 ? '#14532d' : '#991b1b'}!important">${mempoolBal >= 0 ? '+' : ''}${satsToBTC(mempoolBal)} BTC</span></div>
+            <div class="ep-card"><span class="ep-label">Total TXs</span><span class="ep-value">${(cs.tx_count || 0).toLocaleString()}</span></div>
+            <div class="ep-card"><span class="ep-label">Pending TXs</span><span class="ep-value" style="color:${ms.tx_count > 0 ? '#92400e' : '#475569'}!important">${ms.tx_count > 0 ? ms.tx_count + ' pending' : 'None'}</span></div>
+            <div class="ep-card"><span class="ep-label">UTXOs</span><span class="ep-value">${(utxos || []).length}</span></div>
+            <div class="ep-card"><span class="ep-label">Total Received</span><span class="ep-value">${satsToBTC(cs.funded_txo_sum || 0)} BTC</span></div>
         </div>
         ${recentTxRows ? `
-        <div class="mb-3">
-            <div class="text-[9px] font-bold text-slate-500 uppercase mb-2">Recent Transactions</div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">${recentTxRows}</div>
+        <div style="margin-bottom:10px">
+            <div class="ep-heading" style="margin-bottom:6px">Recent Transactions</div>
+            <div class="ep-card">${recentTxRows}</div>
         </div>` : ''}
         ${utxoRows ? `
-        <div class="mb-2">
-            <div class="text-[9px] font-bold text-slate-500 uppercase mb-2">UTXOs (Unspent Outputs)</div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">${utxoRows}</div>
-            ${(utxos || []).length > 5 ? `<div class="text-[8px] text-slate-400 mt-1 text-center">+ ${utxos.length - 5} more UTXOs</div>` : ''}
-        </div>` : `<div class="text-[9px] text-slate-400 italic">No UTXOs — fully spent address.</div>`}
-        <div class="mt-2 text-right">
-            <a href="https://mempool.space/address/${encodeURIComponent(address)}" target="_blank"
-               class="text-[9px] text-cyan-600 hover:underline">Full history on mempool.space ↗</a>
+        <div style="margin-bottom:6px">
+            <div class="ep-heading" style="margin-bottom:6px">UTXOs (Unspent Outputs)</div>
+            <div class="ep-card">${utxoRows}</div>
+            ${(utxos || []).length > 5 ? `<div class="ep-body-sm" style="text-align:center;margin-top:4px">+ ${utxos.length - 5} more UTXOs</div>` : ''}
+        </div>` : `<div class="ep-body-sm" style="font-style:italic">No UTXOs — fully spent address.</div>`}
+        <div style="margin-top:8px;text-align:right">
+            <a href="https://mempool.space/address/${encodeURIComponent(address)}" target="_blank" class="ep-link">Full history on mempool.space ↗</a>
         </div>`;
 
     } catch (err) {
-        el.innerHTML = `<div class="text-[9px] text-red-500">⚠️ ${err.message}</div>
-            <div class="text-[8px] text-slate-400 mt-1">mempool.space may be unreachable or rate-limited.</div>`;
+        el.innerHTML = `<div class="ep-body" style="color:#dc2626!important;font-weight:700!important">⚠️ ${err.message}</div>
+            <div class="ep-body-sm" style="margin-top:4px">mempool.space may be unreachable or rate-limited.</div>`;
     }
 
     btn.disabled = false;
@@ -478,8 +623,8 @@ export async function enrichTxFromMempool(txid) {
     if (!el) return;
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="inline-block animate-spin">⟳</span> Loading…';
-    el.innerHTML = `<div class="text-[9px] text-slate-400 animate-pulse">Querying mempool.space…</div>`;
+    btn.innerHTML = '⟳ Loading…';
+    el.innerHTML = `<div style="font-size:9px;color:#475569;font-style:italic">Querying mempool.space…</div>`;
 
     try {
         const tx = await mempoolGetTx(txid);
@@ -490,6 +635,11 @@ export async function enrichTxFromMempool(txid) {
         const blockTime = tx.status?.block_time
             ? new Date(tx.status.block_time * 1000).toLocaleString() : '—';
 
+        const C  = 'background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px';
+        const C2 = 'background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px;grid-column:span 2';
+        const L  = 'font-size:8px;color:#475569;font-weight:600;text-transform:uppercase;margin-bottom:2px';
+        const V  = 'font-size:10px;font-weight:700;color:#0f172a';
+
         let projectionHTML = '';
         if (!confirmed) {
             try {
@@ -497,12 +647,12 @@ export async function enrichTxFromMempool(txid) {
                 if (projections && projections.length > 0) {
                     const p = projections[0];
                     projectionHTML = `
-                    <div class="bg-yellow-50 border border-yellow-200 rounded p-2 col-span-2">
-                        <div class="text-[8px] text-yellow-600 uppercase mb-1 font-bold">🔮 Mempool Projection</div>
-                        <div class="font-bold text-yellow-800 text-[10px]">
-                            Projected for Block <span class="font-mono">~#${p.blockHeight.toLocaleString()}</span>
+                    <div class="ep-card ep-grid2-span" style="background:#fefce8!important;border-color:#fde68a!important;margin-bottom:8px">
+                        <span class="ep-label" style="color:#92400e!important">🔮 Mempool Projection</span>
+                        <div class="ep-value" style="color:#78350f!important">
+                            Projected for Block <span style="font-family:monospace">~#${p.blockHeight.toLocaleString()}</span>
                         </div>
-                        <div class="text-[8px] text-slate-500 mt-0.5">Position in block: <span class="font-mono">${p.positionInBlock}%</span> | Fee Rate: <span class="font-mono">${p.feerate.toFixed(1)} sat/vB</span></div>
+                        <div class="ep-body-sm" style="margin-top:2px">Position: <span style="font-family:monospace">${p.positionInBlock}%</span> · Fee Rate: <span style="font-family:monospace">${p.feerate.toFixed(1)} sat/vB</span></div>
                     </div>`;
                 }
             } catch (projErr) {
@@ -513,65 +663,44 @@ export async function enrichTxFromMempool(txid) {
         const inputRows = (tx.vin || []).slice(0, 5).map(inp => {
             const addr = inp.prevout?.scriptpubkey_address || 'Coinbase';
             const val  = inp.prevout?.value || 0;
-            return `<div class="flex justify-between text-[8px] py-0.5 border-b border-slate-100 last:border-0">
-                <span class="font-mono text-slate-600 truncate max-w-[130px]">${addr}</span>
-                <span class="text-orange-600 font-bold shrink-0 ml-2">${satsToBTC(val)} BTC</span></div>`;
+            return `<div class="ep-row" style="padding:4px 0;border-bottom:1px solid #f1f5f9">
+                <span class="ep-body" style="font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px">${addr}</span>
+                <span class="ep-body" style="color:#9a3412!important;font-weight:700!important;margin-left:8px;white-space:nowrap">${satsToBTC(val)} BTC</span></div>`;
         }).join('');
 
         const outputRows = (tx.vout || []).slice(0, 5).map(out => {
             const addr = out.scriptpubkey_address || out.scriptpubkey_type || 'Unknown';
-            return `<div class="flex justify-between text-[8px] py-0.5 border-b border-slate-100 last:border-0">
-                <span class="font-mono text-slate-600 truncate max-w-[130px]">${addr}</span>
-                <span class="text-green-600 font-bold shrink-0 ml-2">${satsToBTC(out.value)} BTC</span></div>`;
+            return `<div class="ep-row" style="padding:4px 0;border-bottom:1px solid #f1f5f9">
+                <span class="ep-body" style="font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px">${addr}</span>
+                <span class="ep-body" style="color:#14532d!important;font-weight:700!important;margin-left:8px;white-space:nowrap">${satsToBTC(out.value)} BTC</span></div>`;
         }).join('');
 
         el.innerHTML = `
-        <div class="grid grid-cols-2 gap-2 mb-3">
-            <div class="bg-slate-50 border border-slate-200 rounded p-2 col-span-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Status</div>
-                <div class="font-bold text-[10px] ${confirmed ? 'text-green-700' : 'text-yellow-700'}">
+        <div class="ep-grid2" style="margin-bottom:10px">
+            <div class="ep-card ep-grid2-span">
+                <span class="ep-label">Status</span>
+                <span class="ep-value" style="color:${confirmed ? '#14532d' : '#92400e'}!important">
                     ${confirmed ? `✅ Confirmed · Block #${tx.status.block_height}` : '⏳ Unconfirmed (Mempool)'}
-                </div>
+                </span>
             </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Fee</div>
-                <div class="font-bold text-slate-800 text-[10px]">${(tx.fee || 0).toLocaleString()} sat</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Fee Rate</div>
-                <div class="font-bold text-slate-800 text-[10px]">${feeRate} sat/vB</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Size</div>
-                <div class="font-bold text-slate-800 text-[10px]">${sizeVb} vBytes</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Total Output</div>
-                <div class="font-bold text-slate-800 text-[10px]">${satsToBTC(totalOut)} BTC</div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Inputs / Outputs</div>
-                <div class="font-bold text-slate-800 text-[10px]">${(tx.vin||[]).length} in / ${(tx.vout||[]).length} out</div>
-            </div>
-            ${confirmed ? `<div class="bg-slate-50 border border-slate-200 rounded p-2 col-span-2">
-                <div class="text-[8px] text-slate-400 uppercase mb-0.5">Block Time</div>
-                <div class="font-bold text-slate-800 text-[10px]">${blockTime}</div>
-            </div>` : ''}
+            <div class="ep-card"><span class="ep-label">Fee</span><span class="ep-value">${(tx.fee || 0).toLocaleString()} sat</span></div>
+            <div class="ep-card"><span class="ep-label">Fee Rate</span><span class="ep-value">${feeRate} sat/vB</span></div>
+            <div class="ep-card"><span class="ep-label">Size</span><span class="ep-value">${sizeVb} vBytes</span></div>
+            <div class="ep-card"><span class="ep-label">Total Output</span><span class="ep-value">${satsToBTC(totalOut)} BTC</span></div>
+            <div class="ep-card ep-grid2-span"><span class="ep-label">Inputs / Outputs</span><span class="ep-value">${(tx.vin||[]).length} in / ${(tx.vout||[]).length} out</span></div>
+            ${confirmed ? `<div class="ep-card ep-grid2-span"><span class="ep-label">Block Time</span><span class="ep-value">${blockTime}</span></div>` : ''}
         </div>
         ${projectionHTML}
-        ${inputRows ? `<div class="mb-2">
-            <div class="text-[9px] font-bold text-slate-500 uppercase mb-1">
-                Inputs${(tx.vin||[]).length > 5 ? ` (5 of ${tx.vin.length})` : ''}</div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">${inputRows}</div>
+        ${inputRows ? `<div style="margin-bottom:8px">
+            <div class="ep-heading" style="margin-bottom:6px">Inputs${(tx.vin||[]).length > 5 ? ` (5 of ${tx.vin.length})` : ''}</div>
+            <div class="ep-card">${inputRows}</div>
         </div>` : ''}
-        ${outputRows ? `<div class="mb-2">
-            <div class="text-[9px] font-bold text-slate-500 uppercase mb-1">
-                Outputs${(tx.vout||[]).length > 5 ? ` (5 of ${tx.vout.length})` : ''}</div>
-            <div class="bg-slate-50 border border-slate-200 rounded p-2">${outputRows}</div>
+        ${outputRows ? `<div style="margin-bottom:8px">
+            <div class="ep-heading" style="margin-bottom:6px">Outputs${(tx.vout||[]).length > 5 ? ` (5 of ${tx.vout.length})` : ''}</div>
+            <div class="ep-card">${outputRows}</div>
         </div>` : ''}
-        <div class="mt-2 text-right">
-            <a href="https://mempool.space/tx/${encodeURIComponent(txid)}" target="_blank"
-               class="text-[9px] text-cyan-600 hover:underline">Full TX on mempool.space ↗</a>
+        <div style="margin-top:6px;text-align:right">
+            <a href="https://mempool.space/tx/${encodeURIComponent(txid)}" target="_blank" class="ep-link">Full TX on mempool.space ↗</a>
         </div>`;
 
     } catch (err) {
@@ -604,8 +733,8 @@ export async function enrichTxFromMempool(txid) {
             }
         }
 
-        el.innerHTML = `<div class="text-[9px] text-red-500">${errorMessage}</div>
-            <div class="text-[8px] text-slate-400 mt-1">${detailMessage}</div>`;
+        el.innerHTML = `<div class="ep-body" style="color:#dc2626!important;font-weight:700!important">${errorMessage}</div>
+            <div class="ep-body-sm" style="margin-top:4px">${detailMessage}</div>`;
     }
 
     btn.disabled = false;
@@ -644,10 +773,10 @@ window.saveNodeAnnotation = function(nodeId) {
     const btn = event.target;
     const originalText = btn.textContent;
     btn.textContent = '✓ Saved!';
-    btn.classList.add('bg-emerald-700');
+    btn.style.background = '#047857';
     setTimeout(() => {
         btn.textContent = originalText;
-        btn.classList.remove('bg-emerald-700');
+        btn.style.background = '#0891b2';
     }, 1500);
 };
 

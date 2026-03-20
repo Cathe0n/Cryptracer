@@ -1,0 +1,3239 @@
+{
+  "version": 1,
+  "saved_at": "2026-03-05T09:38:12.813Z",
+  "target": "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra",
+  "graph": {
+    "nodes": {
+      "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ": {
+        "id": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "label": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa": {
+        "id": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "label": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "a5248f5d6c5c2d9b19c1a57689f22c4bf5a8fce829fe013b2dfd694871ed3039": {
+        "id": "a5248f5d6c5c2d9b19c1a57689f22c4bf5a8fce829fe013b2dfd694871ed3039",
+        "label": "a5248f5d6c5c2d9b19c1a57689f22c4bf5a8fce829fe013b2dfd694871ed3039",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1p0mthvaxgh8mnu4tqe2g9najpj7x5ecmtkcwnv06zq4ma32ctqevszlpnhn": {
+        "id": "bc1p0mthvaxgh8mnu4tqe2g9najpj7x5ecmtkcwnv06zq4ma32ctqevszlpnhn",
+        "label": "bc1p0mthvaxgh8mnu4tqe2g9najpj7x5ecmtkcwnv06zq4ma32ctqevszlpnhn",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p3x9w_dnjakl",
+        "cluster_size": 5
+      },
+      "bc1p3x9wzkaj3ve2a6327l3rzu64ptyvku5ghx4glpcwgtwpsqlcxdjsdnjakl": {
+        "id": "bc1p3x9wzkaj3ve2a6327l3rzu64ptyvku5ghx4glpcwgtwpsqlcxdjsdnjakl",
+        "label": "bc1p3x9wzkaj3ve2a6327l3rzu64ptyvku5ghx4glpcwgtwpsqlcxdjsdnjakl",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p3x9w_dnjakl",
+        "cluster_size": 5
+      },
+      "bc1pdm8t9g59she5uq48kfsd3dt9j47nn8fw42xyd0xyfyv2kpnxjqvs0cvc4a": {
+        "id": "bc1pdm8t9g59she5uq48kfsd3dt9j47nn8fw42xyd0xyfyv2kpnxjqvs0cvc4a",
+        "label": "bc1pdm8t9g59she5uq48kfsd3dt9j47nn8fw42xyd0xyfyv2kpnxjqvs0cvc4a",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p3x9w_dnjakl",
+        "cluster_size": 5
+      },
+      "bc1pgpyy86ne2mvdrae0zs2a7rjdq7p95damnl72fw2q4ws5jvgvuukqnrdwpm": {
+        "id": "bc1pgpyy86ne2mvdrae0zs2a7rjdq7p95damnl72fw2q4ws5jvgvuukqnrdwpm",
+        "label": "bc1pgpyy86ne2mvdrae0zs2a7rjdq7p95damnl72fw2q4ws5jvgvuukqnrdwpm",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p3x9w_dnjakl",
+        "cluster_size": 5
+      },
+      "bc1pj2vnz8dsc697w4nw9uak5qphnz45w3k7s8yprpfz58s8ut29xt9q4t48l2": {
+        "id": "bc1pj2vnz8dsc697w4nw9uak5qphnz45w3k7s8yprpfz58s8ut29xt9q4t48l2",
+        "label": "bc1pj2vnz8dsc697w4nw9uak5qphnz45w3k7s8yprpfz58s8ut29xt9q4t48l2",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p3x9w_dnjakl",
+        "cluster_size": 5
+      },
+      "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l": {
+        "id": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "label": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678": {
+        "id": "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+        "label": "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1ql752c58uruh8tyrtuwadrtzgytw83vpkegznx5": {
+        "id": "bc1ql752c58uruh8tyrtuwadrtzgytw83vpkegznx5",
+        "label": "bc1ql752c58uruh8tyrtuwadrtzgytw83vpkegznx5",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qnl2v0n0w5hs78v7qvnjg8xmt0thyahfwdk8k5h": {
+        "id": "bc1qnl2v0n0w5hs78v7qvnjg8xmt0thyahfwdk8k5h",
+        "label": "bc1qnl2v0n0w5hs78v7qvnjg8xmt0thyahfwdk8k5h",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra": {
+        "id": "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra",
+        "label": "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra",
+        "type": "Address",
+        "sources": [
+          "Initial Query",
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1qsecc_42mxra",
+        "cluster_size": 1,
+        "x": -373.57214312801614,
+        "y": -52.78925991870449
+      },
+      "15d4adc1d3fa485cc20f3a92525b620b4a55e6341e2c6563268bf03839168b5d": {
+        "id": "15d4adc1d3fa485cc20f3a92525b620b4a55e6341e2c6563268bf03839168b5d",
+        "label": "15d4adc1d3fa485cc20f3a92525b620b4a55e6341e2c6563268bf03839168b5d",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "17d2b210e991cd8401319e4bc959d94d81dd844acb156ab8d92aa4c2a6386a0d": {
+        "id": "17d2b210e991cd8401319e4bc959d94d81dd844acb156ab8d92aa4c2a6386a0d",
+        "label": "17d2b210e991cd8401319e4bc959d94d81dd844acb156ab8d92aa4c2a6386a0d",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00700000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00700000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "20f0ae5c427a363a3c65fa9328a66ed14fb0171745712b15005bba8ccb8ae064": {
+        "id": "20f0ae5c427a363a3c65fa9328a66ed14fb0171745712b15005bba8ccb8ae064",
+        "label": "20f0ae5c427a363a3c65fa9328a66ed14fb0171745712b15005bba8ccb8ae064",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "22b412bfe3423bf8860c977b412bf9803c95d68b452a8c2a32b657913d8e4c6d": {
+        "id": "22b412bfe3423bf8860c977b412bf9803c95d68b452a8c2a32b657913d8e4c6d",
+        "label": "22b412bfe3423bf8860c977b412bf9803c95d68b452a8c2a32b657913d8e4c6d",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 70,
+          "explanation": "100.0% of outputs share value 0.00690000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.7,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00690000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "2398263210f20f1d21bb083a712653ca01e6d637e4bae7d6238d7b1b4e4f2a84": {
+        "id": "2398263210f20f1d21bb083a712653ca01e6d637e4bae7d6238d7b1b4e4f2a84",
+        "label": "2398263210f20f1d21bb083a712653ca01e6d637e4bae7d6238d7b1b4e4f2a84",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "26cd29a204588155073fbfcbb8ca6347335cf22cd43c2cbdd94dbc316d403e95": {
+        "id": "26cd29a204588155073fbfcbb8ca6347335cf22cd43c2cbdd94dbc316d403e95",
+        "label": "26cd29a204588155073fbfcbb8ca6347335cf22cd43c2cbdd94dbc316d403e95",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00030000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00030000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "3d86c13fa63efef39faa6c76b1f6bd07897f37c245a42bca1556a05ce43e8051": {
+        "id": "3d86c13fa63efef39faa6c76b1f6bd07897f37c245a42bca1556a05ce43e8051",
+        "label": "3d86c13fa63efef39faa6c76b1f6bd07897f37c245a42bca1556a05ce43e8051",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00690000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00690000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab": {
+        "id": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "label": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "49cdef880bc755d2962da31aecc330bc6de1185278747f5b521a1b39b78491e3": {
+        "id": "49cdef880bc755d2962da31aecc330bc6de1185278747f5b521a1b39b78491e3",
+        "label": "49cdef880bc755d2962da31aecc330bc6de1185278747f5b521a1b39b78491e3",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "51fc6244603f19861e8346ec7cc9483b7a469a41b267ab64ddefaaad1d72d929": {
+        "id": "51fc6244603f19861e8346ec7cc9483b7a469a41b267ab64ddefaaad1d72d929",
+        "label": "51fc6244603f19861e8346ec7cc9483b7a469a41b267ab64ddefaaad1d72d929",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "575419df4fc306f5d224091c6c58f4f3d47e8213b595217604861d535309cb47": {
+        "id": "575419df4fc306f5d224091c6c58f4f3d47e8213b595217604861d535309cb47",
+        "label": "575419df4fc306f5d224091c6c58f4f3d47e8213b595217604861d535309cb47",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "5a596ded965b7bd3c5832caa8ae526a8f83771b8e2231a0148f9b3181d4b72d2": {
+        "id": "5a596ded965b7bd3c5832caa8ae526a8f83771b8e2231a0148f9b3181d4b72d2",
+        "label": "5a596ded965b7bd3c5832caa8ae526a8f83771b8e2231a0148f9b3181d4b72d2",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 70,
+          "explanation": "100.0% of outputs share value 0.00680000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.7,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00680000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "5ca1bc3042db013953bb84ffaac5dc0e2148cfe6a95a484e04ffc142ccda1155": {
+        "id": "5ca1bc3042db013953bb84ffaac5dc0e2148cfe6a95a484e04ffc142ccda1155",
+        "label": "5ca1bc3042db013953bb84ffaac5dc0e2148cfe6a95a484e04ffc142ccda1155",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 70,
+          "explanation": "100.0% of outputs share value 0.00530000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.7,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00530000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7": {
+        "id": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "label": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "9a968d2d4c57229c3689ccb2bee0800d99eb9c2a0a8ac93e433cbbbda48d3ed3": {
+        "id": "9a968d2d4c57229c3689ccb2bee0800d99eb9c2a0a8ac93e433cbbbda48d3ed3",
+        "label": "9a968d2d4c57229c3689ccb2bee0800d99eb9c2a0a8ac93e433cbbbda48d3ed3",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "a91d49b684b651cf3c07abba53b954f5e7862220f21d60572fff4c6b9fdb3bd6": {
+        "id": "a91d49b684b651cf3c07abba53b954f5e7862220f21d60572fff4c6b9fdb3bd6",
+        "label": "a91d49b684b651cf3c07abba53b954f5e7862220f21d60572fff4c6b9fdb3bd6",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905": {
+        "id": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "label": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "aff8dde8752309b30582846ac7c974cdfb59c7dc9f7296663c0f5d2627a1566b": {
+        "id": "aff8dde8752309b30582846ac7c974cdfb59c7dc9f7296663c0f5d2627a1566b",
+        "label": "aff8dde8752309b30582846ac7c974cdfb59c7dc9f7296663c0f5d2627a1566b",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 70,
+          "explanation": "100.0% of outputs share value 0.00690000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.7,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00690000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "ba89f738fc69488428f6fab70c2e059eb7db1ca5eaf011be9d342608248ae29b": {
+        "id": "ba89f738fc69488428f6fab70c2e059eb7db1ca5eaf011be9d342608248ae29b",
+        "label": "ba89f738fc69488428f6fab70c2e059eb7db1ca5eaf011be9d342608248ae29b",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00710000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00710000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "bc1p0lhn7kuhgxxrxjeza8uj622xzqgz0vw3krvdvus2skygc6s6nlasnydqkw": {
+        "id": "bc1p0lhn7kuhgxxrxjeza8uj622xzqgz0vw3krvdvus2skygc6s6nlasnydqkw",
+        "label": "bc1p0lhn7kuhgxxrxjeza8uj622xzqgz0vw3krvdvus2skygc6s6nlasnydqkw",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1p49v85fpzy7l9k4p8lntzgyc2ackr3uw2rrw5v2s6nwhs79juzr6sqtjzm8": {
+        "id": "bc1p49v85fpzy7l9k4p8lntzgyc2ackr3uw2rrw5v2s6nwhs79juzr6sqtjzm8",
+        "label": "bc1p49v85fpzy7l9k4p8lntzgyc2ackr3uw2rrw5v2s6nwhs79juzr6sqtjzm8",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p5ptq_tns083",
+        "cluster_size": 4
+      },
+      "bc1p59s06htdvjjqevmme86slr4texuem2yf0z25w8gq4gmy4k70rtyscrqrwc": {
+        "id": "bc1p59s06htdvjjqevmme86slr4texuem2yf0z25w8gq4gmy4k70rtyscrqrwc",
+        "label": "bc1p59s06htdvjjqevmme86slr4texuem2yf0z25w8gq4gmy4k70rtyscrqrwc",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p59s0_crqrwc",
+        "cluster_size": 3
+      },
+      "bc1p5ptqphhe7h97gwy26g7rrqwzhrh38v9walhey0u8cshxj99jxmlstns083": {
+        "id": "bc1p5ptqphhe7h97gwy26g7rrqwzhrh38v9walhey0u8cshxj99jxmlstns083",
+        "label": "bc1p5ptqphhe7h97gwy26g7rrqwzhrh38v9walhey0u8cshxj99jxmlstns083",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p5ptq_tns083",
+        "cluster_size": 4
+      },
+      "bc1p5tzjk8kpz7gwemy7h9awru5pf5zwgaptuhkhn989cdc5n2a2tg7qdn254a": {
+        "id": "bc1p5tzjk8kpz7gwemy7h9awru5pf5zwgaptuhkhn989cdc5n2a2tg7qdn254a",
+        "label": "bc1p5tzjk8kpz7gwemy7h9awru5pf5zwgaptuhkhn989cdc5n2a2tg7qdn254a",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1p6lustv25ykzeasavqd0axnarlghqlwutj7gfv2wyedzf4kr8f0hszd7m0l": {
+        "id": "bc1p6lustv25ykzeasavqd0axnarlghqlwutj7gfv2wyedzf4kr8f0hszd7m0l",
+        "label": "bc1p6lustv25ykzeasavqd0axnarlghqlwutj7gfv2wyedzf4kr8f0hszd7m0l",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p6lus_zd7m0l",
+        "cluster_size": 2
+      },
+      "bc1p79htchjky820y6uk4pnagtga0m9ssxwp8trwt4wuul3y5pl0zplqy2alpj": {
+        "id": "bc1p79htchjky820y6uk4pnagtga0m9ssxwp8trwt4wuul3y5pl0zplqy2alpj",
+        "label": "bc1p79htchjky820y6uk4pnagtga0m9ssxwp8trwt4wuul3y5pl0zplqy2alpj",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1p8287mp3vxm00098yh8kynugree52fst89n8xfhlspwtng3ezmprst7hrxy": {
+        "id": "bc1p8287mp3vxm00098yh8kynugree52fst89n8xfhlspwtng3ezmprst7hrxy",
+        "label": "bc1p8287mp3vxm00098yh8kynugree52fst89n8xfhlspwtng3ezmprst7hrxy",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p8287_t7hrxy",
+        "cluster_size": 1
+      },
+      "bc1p8yaxu778xfpx8hh0nqedxsnghla25ygnhrqscudmnl7jhdsc69ysv3uych": {
+        "id": "bc1p8yaxu778xfpx8hh0nqedxsnghla25ygnhrqscudmnl7jhdsc69ysv3uych",
+        "label": "bc1p8yaxu778xfpx8hh0nqedxsnghla25ygnhrqscudmnl7jhdsc69ysv3uych",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pahf8_zp00ln",
+        "cluster_size": 4
+      },
+      "bc1pahf85vxq2u58pczakh7sxk86c06n8r94mvvdkphdzju8pfl7veyszp00ln": {
+        "id": "bc1pahf85vxq2u58pczakh7sxk86c06n8r94mvvdkphdzju8pfl7veyszp00ln",
+        "label": "bc1pahf85vxq2u58pczakh7sxk86c06n8r94mvvdkphdzju8pfl7veyszp00ln",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pahf8_zp00ln",
+        "cluster_size": 4
+      },
+      "bc1pc833fzy8gsf0mee4x6y7n8hh90geq2v32zmattf3wzmkhrm3ad7sk9d9u2": {
+        "id": "bc1pc833fzy8gsf0mee4x6y7n8hh90geq2v32zmattf3wzmkhrm3ad7sk9d9u2",
+        "label": "bc1pc833fzy8gsf0mee4x6y7n8hh90geq2v32zmattf3wzmkhrm3ad7sk9d9u2",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1pcdsfrldxekake76rc0ffnrqm2f7g0mzr3m8ymry4zmrxmuc63fvs8w4g7a": {
+        "id": "bc1pcdsfrldxekake76rc0ffnrqm2f7g0mzr3m8ymry4zmrxmuc63fvs8w4g7a",
+        "label": "bc1pcdsfrldxekake76rc0ffnrqm2f7g0mzr3m8ymry4zmrxmuc63fvs8w4g7a",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pahf8_zp00ln",
+        "cluster_size": 4
+      },
+      "bc1pcgdsgxvw8kpfdhv46udp6knqy3yy62jlvwkc5egmcwa6mcr8n7zs44nas5": {
+        "id": "bc1pcgdsgxvw8kpfdhv46udp6knqy3yy62jlvwkc5egmcwa6mcr8n7zs44nas5",
+        "label": "bc1pcgdsgxvw8kpfdhv46udp6knqy3yy62jlvwkc5egmcwa6mcr8n7zs44nas5",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p5ptq_tns083",
+        "cluster_size": 4
+      },
+      "bc1pcwgwklh8w0k6k0037z6wqtjsuepaeupx2xydlj5al4zhh4fc8hhscdvafz": {
+        "id": "bc1pcwgwklh8w0k6k0037z6wqtjsuepaeupx2xydlj5al4zhh4fc8hhscdvafz",
+        "label": "bc1pcwgwklh8w0k6k0037z6wqtjsuepaeupx2xydlj5al4zhh4fc8hhscdvafz",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ppzhl_3h624p",
+        "cluster_size": 5
+      },
+      "bc1pdg62a6283qjtv0qv695f05u6hr45k3shatjqrtjv8weevdde0wnq72pyw4": {
+        "id": "bc1pdg62a6283qjtv0qv695f05u6hr45k3shatjqrtjv8weevdde0wnq72pyw4",
+        "label": "bc1pdg62a6283qjtv0qv695f05u6hr45k3shatjqrtjv8weevdde0wnq72pyw4",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ppzhl_3h624p",
+        "cluster_size": 5
+      },
+      "bc1pdpcme6qa22h4z8lr0fr3r2j3p8mn07lck2w2jevn76q2gn7fcqjsv6y2fp": {
+        "id": "bc1pdpcme6qa22h4z8lr0fr3r2j3p8mn07lck2w2jevn76q2gn7fcqjsv6y2fp",
+        "label": "bc1pdpcme6qa22h4z8lr0fr3r2j3p8mn07lck2w2jevn76q2gn7fcqjsv6y2fp",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1pemn5c8c4kvz2lqxyrwsg76t9qen4p9m8njwcuhp2kpjs2fv0pztsfu2s2m": {
+        "id": "bc1pemn5c8c4kvz2lqxyrwsg76t9qen4p9m8njwcuhp2kpjs2fv0pztsfu2s2m",
+        "label": "bc1pemn5c8c4kvz2lqxyrwsg76t9qen4p9m8njwcuhp2kpjs2fv0pztsfu2s2m",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p6lus_zd7m0l",
+        "cluster_size": 2
+      },
+      "bc1pfd65xzqcrljrpg5xz4r40rfjcp7etjkf3kymzn63yclyfflczwhqufh7am": {
+        "id": "bc1pfd65xzqcrljrpg5xz4r40rfjcp7etjkf3kymzn63yclyfflczwhqufh7am",
+        "label": "bc1pfd65xzqcrljrpg5xz4r40rfjcp7etjkf3kymzn63yclyfflczwhqufh7am",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ptjae_5ayuzz",
+        "cluster_size": 2
+      },
+      "bc1pfexd22v6sk0ruvtqmtjq5rwkgmras985xav9jpgw4ax9ezvfqyyqlpgs37": {
+        "id": "bc1pfexd22v6sk0ruvtqmtjq5rwkgmras985xav9jpgw4ax9ezvfqyyqlpgs37",
+        "label": "bc1pfexd22v6sk0ruvtqmtjq5rwkgmras985xav9jpgw4ax9ezvfqyyqlpgs37",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1pgrz7nd79mnns5ggu4lxmmyyqdgyr2h9nklu85lkpwwp7ayl0s47se22nmg": {
+        "id": "bc1pgrz7nd79mnns5ggu4lxmmyyqdgyr2h9nklu85lkpwwp7ayl0s47se22nmg",
+        "label": "bc1pgrz7nd79mnns5ggu4lxmmyyqdgyr2h9nklu85lkpwwp7ayl0s47se22nmg",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p59s0_crqrwc",
+        "cluster_size": 3
+      },
+      "bc1pkwd4h2agvdpcu6pqaz9gq5gejxfmgwnk8x32e6u8fdk38t6mdl2q9s0ens": {
+        "id": "bc1pkwd4h2agvdpcu6pqaz9gq5gejxfmgwnk8x32e6u8fdk38t6mdl2q9s0ens",
+        "label": "bc1pkwd4h2agvdpcu6pqaz9gq5gejxfmgwnk8x32e6u8fdk38t6mdl2q9s0ens",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p59s0_crqrwc",
+        "cluster_size": 3
+      },
+      "bc1pl5l406dn0u54mt0865qpvyk5q9vvvuqxvl6ez5wdgx6kuzdmy3mskel4h7": {
+        "id": "bc1pl5l406dn0u54mt0865qpvyk5q9vvvuqxvl6ez5wdgx6kuzdmy3mskel4h7",
+        "label": "bc1pl5l406dn0u54mt0865qpvyk5q9vvvuqxvl6ez5wdgx6kuzdmy3mskel4h7",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pl5l4_kel4h7",
+        "cluster_size": 1
+      },
+      "bc1pmvqfuwcscsfjt007qn87vfl5fsvk9p5hu8afgn3cg647qx4w22zshsrsc6": {
+        "id": "bc1pmvqfuwcscsfjt007qn87vfl5fsvk9p5hu8afgn3cg647qx4w22zshsrsc6",
+        "label": "bc1pmvqfuwcscsfjt007qn87vfl5fsvk9p5hu8afgn3cg647qx4w22zshsrsc6",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ppzhl_3h624p",
+        "cluster_size": 5
+      },
+      "bc1pn8e6rrppmzhswxg5cwsvlvku4fdg9c0nccdw03vacp0a7xgujkhsut5ttp": {
+        "id": "bc1pn8e6rrppmzhswxg5cwsvlvku4fdg9c0nccdw03vacp0a7xgujkhsut5ttp",
+        "label": "bc1pn8e6rrppmzhswxg5cwsvlvku4fdg9c0nccdw03vacp0a7xgujkhsut5ttp",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pn8e6_ut5ttp",
+        "cluster_size": 1
+      },
+      "bc1ppr4h4h3lujcqvha0h5namm0fnkz8swelqm2e2h4sgczxm87lnc6sadrjph": {
+        "id": "bc1ppr4h4h3lujcqvha0h5namm0fnkz8swelqm2e2h4sgczxm87lnc6sadrjph",
+        "label": "bc1ppr4h4h3lujcqvha0h5namm0fnkz8swelqm2e2h4sgczxm87lnc6sadrjph",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1ppv4zpj3uccxtmgheq00sda5ctz6djj99hf946z2qx6z4mwts06dsz62d5m": {
+        "id": "bc1ppv4zpj3uccxtmgheq00sda5ctz6djj99hf946z2qx6z4mwts06dsz62d5m",
+        "label": "bc1ppv4zpj3uccxtmgheq00sda5ctz6djj99hf946z2qx6z4mwts06dsz62d5m",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pahf8_zp00ln",
+        "cluster_size": 4
+      },
+      "bc1ppzhl4x85g9kucpzeqk7hylett0d9alqxxse4h5sunjh9z0wwm2gs3h624p": {
+        "id": "bc1ppzhl4x85g9kucpzeqk7hylett0d9alqxxse4h5sunjh9z0wwm2gs3h624p",
+        "label": "bc1ppzhl4x85g9kucpzeqk7hylett0d9alqxxse4h5sunjh9z0wwm2gs3h624p",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ppzhl_3h624p",
+        "cluster_size": 5
+      },
+      "bc1pq2fygjckrvz6xu34zp5m98k2fut9vn64ws7tvn82lygrlj55d7jqcgazys": {
+        "id": "bc1pq2fygjckrvz6xu34zp5m98k2fut9vn64ws7tvn82lygrlj55d7jqcgazys",
+        "label": "bc1pq2fygjckrvz6xu34zp5m98k2fut9vn64ws7tvn82lygrlj55d7jqcgazys",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1pqgcrgfmlj3zpzz038wy42e987k4946rwcue365f2jrpwryzy7jdscdwdxx": {
+        "id": "bc1pqgcrgfmlj3zpzz038wy42e987k4946rwcue365f2jrpwryzy7jdscdwdxx",
+        "label": "bc1pqgcrgfmlj3zpzz038wy42e987k4946rwcue365f2jrpwryzy7jdscdwdxx",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1pqylqgjl7hw90za8quxghhcafyjkmsnv2xh40pxnkdvrc80kmgczq9gvw88": {
+        "id": "bc1pqylqgjl7hw90za8quxghhcafyjkmsnv2xh40pxnkdvrc80kmgczq9gvw88",
+        "label": "bc1pqylqgjl7hw90za8quxghhcafyjkmsnv2xh40pxnkdvrc80kmgczq9gvw88",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pqylq_9gvw88",
+        "cluster_size": 1
+      },
+      "bc1psl8qdemwkxg8swdv9hg50hf9dqc5m5p4s7r3892t7pyqg66pr05ql8psdm": {
+        "id": "bc1psl8qdemwkxg8swdv9hg50hf9dqc5m5p4s7r3892t7pyqg66pr05ql8psdm",
+        "label": "bc1psl8qdemwkxg8swdv9hg50hf9dqc5m5p4s7r3892t7pyqg66pr05ql8psdm",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1psl8q_l8psdm",
+        "cluster_size": 2
+      },
+      "bc1ptjaeh70zunkz4vzqfgaecurk2p3yuar7tf0s6ptkqy52nzv238ws5ayuzz": {
+        "id": "bc1ptjaeh70zunkz4vzqfgaecurk2p3yuar7tf0s6ptkqy52nzv238ws5ayuzz",
+        "label": "bc1ptjaeh70zunkz4vzqfgaecurk2p3yuar7tf0s6ptkqy52nzv238ws5ayuzz",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ptjae_5ayuzz",
+        "cluster_size": 2
+      },
+      "bc1px3d984gcddr6l0hr8pxkrp7lklyxt3ppszcdm2n0wva9u8cphd8qeu350z": {
+        "id": "bc1px3d984gcddr6l0hr8pxkrp7lklyxt3ppszcdm2n0wva9u8cphd8qeu350z",
+        "label": "bc1px3d984gcddr6l0hr8pxkrp7lklyxt3ppszcdm2n0wva9u8cphd8qeu350z",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1px3d9_eu350z",
+        "cluster_size": 1
+      },
+      "bc1px8xnagmccng08mvsnz68cau8cyy3c8l0z5fd0ygzvxjyykdlv3xszs6qa3": {
+        "id": "bc1px8xnagmccng08mvsnz68cau8cyy3c8l0z5fd0ygzvxjyykdlv3xszs6qa3",
+        "label": "bc1px8xnagmccng08mvsnz68cau8cyy3c8l0z5fd0ygzvxjyykdlv3xszs6qa3",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1psl8q_l8psdm",
+        "cluster_size": 2
+      },
+      "bc1pxmpqv0k24l697e7a6x3cxpxfqzga6nxgt4zhwzmkkpsqvgzdkkhqgca7qr": {
+        "id": "bc1pxmpqv0k24l697e7a6x3cxpxfqzga6nxgt4zhwzmkkpsqvgzdkkhqgca7qr",
+        "label": "bc1pxmpqv0k24l697e7a6x3cxpxfqzga6nxgt4zhwzmkkpsqvgzdkkhqgca7qr",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ppzhl_3h624p",
+        "cluster_size": 5
+      },
+      "bc1pyn4ge3m8yxg82ey6eahhzyykd6auqf75htem4mn6zj8z05a825fqvx5dja": {
+        "id": "bc1pyn4ge3m8yxg82ey6eahhzyykd6auqf75htem4mn6zj8z05a825fqvx5dja",
+        "label": "bc1pyn4ge3m8yxg82ey6eahhzyykd6auqf75htem4mn6zj8z05a825fqvx5dja",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p5ptq_tns083",
+        "cluster_size": 4
+      },
+      "bc1q4qsefd2xfnlmyag8zjll50hanwe0kk3u467ynw": {
+        "id": "bc1q4qsefd2xfnlmyag8zjll50hanwe0kk3u467ynw",
+        "label": "bc1q4qsefd2xfnlmyag8zjll50hanwe0kk3u467ynw",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn": {
+        "id": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "label": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 50,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "x": 290.1705892790844,
+        "y": -418.76976940814836
+      },
+      "bc1qc4xqtexwyytmttqf64y73093mzq4t0fu4c3s9r": {
+        "id": "bc1qc4xqtexwyytmttqf64y73093mzq4t0fu4c3s9r",
+        "label": "bc1qc4xqtexwyytmttqf64y73093mzq4t0fu4c3s9r",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 50,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qj0n8t3ly3lap39k0zyjfjnrakp3fxqeutq0mam": {
+        "id": "bc1qj0n8t3ly3lap39k0zyjfjnrakp3fxqeutq0mam",
+        "label": "bc1qj0n8t3ly3lap39k0zyjfjnrakp3fxqeutq0mam",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qldpc90thmr7tcmzp7tfx3dzs8d65u59cwr0tkt": {
+        "id": "bc1qldpc90thmr7tcmzp7tfx3dzs8d65u59cwr0tkt",
+        "label": "bc1qldpc90thmr7tcmzp7tfx3dzs8d65u59cwr0tkt",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qxkxnfet6kvkytyj075fmaxxtykera5q8kvrrmz": {
+        "id": "bc1qxkxnfet6kvkytyj075fmaxxtykera5q8kvrrmz",
+        "label": "bc1qxkxnfet6kvkytyj075fmaxxtykera5q8kvrrmz",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "cd1c537a6f8ad351abf33dea9bf465baccba0bf888f87b0d3e224cf37e6da8ed": {
+        "id": "cd1c537a6f8ad351abf33dea9bf465baccba0bf888f87b0d3e224cf37e6da8ed",
+        "label": "cd1c537a6f8ad351abf33dea9bf465baccba0bf888f87b0d3e224cf37e6da8ed",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00710000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00710000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "d8974354cda62770da362e61972f554d34b88691dc247bde5ac88cbda5283903": {
+        "id": "d8974354cda62770da362e61972f554d34b88691dc247bde5ac88cbda5283903",
+        "label": "d8974354cda62770da362e61972f554d34b88691dc247bde5ac88cbda5283903",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "dc314615f6785e7dd41e50f9d0c73933ec13df07730c2682dacea5e0fd66c41d": {
+        "id": "dc314615f6785e7dd41e50f9d0c73933ec13df07730c2682dacea5e0fd66c41d",
+        "label": "dc314615f6785e7dd41e50f9d0c73933ec13df07730c2682dacea5e0fd66c41d",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00530000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00530000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751": {
+        "id": "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751",
+        "label": "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 25,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a": {
+        "id": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "label": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c": {
+        "id": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "label": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1q4ysrrs8jr9dfcxxpq6gat9etjv88dvfa2z05v5": {
+        "id": "bc1q4ysrrs8jr9dfcxxpq6gat9etjv88dvfa2z05v5",
+        "label": "bc1q4ysrrs8jr9dfcxxpq6gat9etjv88dvfa2z05v5",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1q4ysr_2z05v5",
+        "cluster_size": 1
+      },
+      "1f01b626ff838ba152366df27e4df6f49d81716ded1c0a9e8537eb184fea53f8": {
+        "id": "1f01b626ff838ba152366df27e4df6f49d81716ded1c0a9e8537eb184fea53f8",
+        "label": "1f01b626ff838ba152366df27e4df6f49d81716ded1c0a9e8537eb184fea53f8",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "a172e706f80dfb3cbded26934ea4021bdeeede89be839cf8a2f8a3a4e8242300": {
+        "id": "a172e706f80dfb3cbded26934ea4021bdeeede89be839cf8a2f8a3a4e8242300",
+        "label": "a172e706f80dfb3cbded26934ea4021bdeeede89be839cf8a2f8a3a4e8242300",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1pm0xzrxxfsaqz8jufdpxdc03gxft2e9xngkye6tu0xvvjpfpss2lqa5xujh": {
+        "id": "bc1pm0xzrxxfsaqz8jufdpxdc03gxft2e9xngkye6tu0xvvjpfpss2lqa5xujh",
+        "label": "bc1pm0xzrxxfsaqz8jufdpxdc03gxft2e9xngkye6tu0xvvjpfpss2lqa5xujh",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ppd02_580fml",
+        "cluster_size": 2
+      },
+      "bc1ppd02zmjdrmj2feetqedzalsudznr8cgw9kx45z26gt8r7l9xfd9s580fml": {
+        "id": "bc1ppd02zmjdrmj2feetqedzalsudznr8cgw9kx45z26gt8r7l9xfd9s580fml",
+        "label": "bc1ppd02zmjdrmj2feetqedzalsudznr8cgw9kx45z26gt8r7l9xfd9s580fml",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1ppd02_580fml",
+        "cluster_size": 2
+      },
+      "bc1qa6wgrthl2fmklrkfxtphafacsyzqwhc4g8w0um": {
+        "id": "bc1qa6wgrthl2fmklrkfxtphafacsyzqwhc4g8w0um",
+        "label": "bc1qa6wgrthl2fmklrkfxtphafacsyzqwhc4g8w0um",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qash5nxmvfhmtvr9afdpe60ya66gnp7qnapfpfa": {
+        "id": "bc1qash5nxmvfhmtvr9afdpe60ya66gnp7qnapfpfa",
+        "label": "bc1qash5nxmvfhmtvr9afdpe60ya66gnp7qnapfpfa",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qe3wzesfdvtxn8xy9q92tj87nma3a3ht45h3aha": {
+        "id": "bc1qe3wzesfdvtxn8xy9q92tj87nma3a3ht45h3aha",
+        "label": "bc1qe3wzesfdvtxn8xy9q92tj87nma3a3ht45h3aha",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "ea06cc53c0c4b7af0cb84e25d20914567e330ae08cfead6ec4d17a023847db9a": {
+        "id": "ea06cc53c0c4b7af0cb84e25d20914567e330ae08cfead6ec4d17a023847db9a",
+        "label": "ea06cc53c0c4b7af0cb84e25d20914567e330ae08cfead6ec4d17a023847db9a",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "fb3955004f3568021fc0ab42940fc878403a04a4a42d7c662ce74027aeb9417b": {
+        "id": "fb3955004f3568021fc0ab42940fc878403a04a4a42d7c662ce74027aeb9417b",
+        "label": "fb3955004f3568021fc0ab42940fc878403a04a4a42d7c662ce74027aeb9417b",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "1CYDarRdcgwWSPSLE4uQiuMtWVj3bodFGZ": {
+        "id": "1CYDarRdcgwWSPSLE4uQiuMtWVj3bodFGZ",
+        "label": "1CYDarRdcgwWSPSLE4uQiuMtWVj3bodFGZ",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "1GoPGoWPV16e2VzpfT7huupeJb8jp6MGuB": {
+        "id": "1GoPGoWPV16e2VzpfT7huupeJb8jp6MGuB",
+        "label": "1GoPGoWPV16e2VzpfT7huupeJb8jp6MGuB",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "1KM2d54gFSoVosjaWVoygxuRhMakyDmczf": {
+        "id": "1KM2d54gFSoVosjaWVoygxuRhMakyDmczf",
+        "label": "1KM2d54gFSoVosjaWVoygxuRhMakyDmczf",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "25bd8c6a3230f88ebbac3d36b3d53b395b2a112401886e8d4cd443f1207f372d": {
+        "id": "25bd8c6a3230f88ebbac3d36b3d53b395b2a112401886e8d4cd443f1207f372d",
+        "label": "25bd8c6a3230f88ebbac3d36b3d53b395b2a112401886e8d4cd443f1207f372d",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00740000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00740000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "33g3BtVEEtA4Shx1kuEyS6UTJPp1wHRn9a": {
+        "id": "33g3BtVEEtA4Shx1kuEyS6UTJPp1wHRn9a",
+        "label": "33g3BtVEEtA4Shx1kuEyS6UTJPp1wHRn9a",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc": {
+        "id": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "label": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "acc98ef3cbd197c1e82f8cd3cf008597994c4bb4260fd179a6873bb9964182f2": {
+        "id": "acc98ef3cbd197c1e82f8cd3cf008597994c4bb4260fd179a6873bb9964182f2",
+        "label": "acc98ef3cbd197c1e82f8cd3cf008597994c4bb4260fd179a6873bb9964182f2",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 70,
+          "explanation": "100.0% of outputs share value 0.02230000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.7,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1
+            },
+            "notes": [
+              "100.0% of outputs share value 0.02230000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "bc1p02lcpxqfjq8nc9fcy4ux9ldaj87e3axdlzmsks0teupr9h0a2rcqltltk0": {
+        "id": "bc1p02lcpxqfjq8nc9fcy4ux9ldaj87e3axdlzmsks0teupr9h0a2rcqltltk0",
+        "label": "bc1p02lcpxqfjq8nc9fcy4ux9ldaj87e3axdlzmsks0teupr9h0a2rcqltltk0",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1p2mlwrss9tmvtfvu0tcxul2h0w67ej8vyjpj3ksctt67vd9r752ksqx6uqm": {
+        "id": "bc1p2mlwrss9tmvtfvu0tcxul2h0w67ej8vyjpj3ksctt67vd9r752ksqx6uqm",
+        "label": "bc1p2mlwrss9tmvtfvu0tcxul2h0w67ej8vyjpj3ksctt67vd9r752ksqx6uqm",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1p645ctmsj7cg0jlj3t577a033ljklrvl40l05d3tgxph24ptdptvsffn9pr": {
+        "id": "bc1p645ctmsj7cg0jlj3t577a033ljklrvl40l05d3tgxph24ptdptvsffn9pr",
+        "label": "bc1p645ctmsj7cg0jlj3t577a033ljklrvl40l05d3tgxph24ptdptvsffn9pr",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1p645c_ffn9pr",
+        "cluster_size": 1
+      },
+      "bc1pmz6atumsh96tpmmyky378zddfzrswwcrnf90v9zarhu2w9tgjwyq0vv82a": {
+        "id": "bc1pmz6atumsh96tpmmyky378zddfzrswwcrnf90v9zarhu2w9tgjwyq0vv82a",
+        "label": "bc1pmz6atumsh96tpmmyky378zddfzrswwcrnf90v9zarhu2w9tgjwyq0vv82a",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1pmz6a_0vv82a",
+        "cluster_size": 1
+      },
+      "bc1q0hk3x8s0ej7gpjnz2clmctx8uaj32lyz6qxhcs": {
+        "id": "bc1q0hk3x8s0ej7gpjnz2clmctx8uaj32lyz6qxhcs",
+        "label": "bc1q0hk3x8s0ej7gpjnz2clmctx8uaj32lyz6qxhcs",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1q243f4mmp2ulzswv3l828qupdpm5prgh0r7qlfr": {
+        "id": "bc1q243f4mmp2ulzswv3l828qupdpm5prgh0r7qlfr",
+        "label": "bc1q243f4mmp2ulzswv3l828qupdpm5prgh0r7qlfr",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1q3xxuvj5g9la7lqh7gr8c855t6eqc49wvvreavg": {
+        "id": "bc1q3xxuvj5g9la7lqh7gr8c855t6eqc49wvvreavg",
+        "label": "bc1q3xxuvj5g9la7lqh7gr8c855t6eqc49wvvreavg",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1q4wjep6agq5pytf3k580c7hawq70cr85462ypnh": {
+        "id": "bc1q4wjep6agq5pytf3k580c7hawq70cr85462ypnh",
+        "label": "bc1q4wjep6agq5pytf3k580c7hawq70cr85462ypnh",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1q4wje_62ypnh",
+        "cluster_size": 1
+      },
+      "bc1q8m2rc83v3tx89mk2t7e6c9r4vslpm3326q460t": {
+        "id": "bc1q8m2rc83v3tx89mk2t7e6c9r4vslpm3326q460t",
+        "label": "bc1q8m2rc83v3tx89mk2t7e6c9r4vslpm3326q460t",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1q9cduw0wyrtvxfd5n202kcrkw0vvmrntssn7838": {
+        "id": "bc1q9cduw0wyrtvxfd5n202kcrkw0vvmrntssn7838",
+        "label": "bc1q9cduw0wyrtvxfd5n202kcrkw0vvmrntssn7838",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qdplsz4ze5eucu7kx48vldynmp7rl2jc7lpzfyh": {
+        "id": "bc1qdplsz4ze5eucu7kx48vldynmp7rl2jc7lpzfyh",
+        "label": "bc1qdplsz4ze5eucu7kx48vldynmp7rl2jc7lpzfyh",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qgdaqgc2zy468hrh7pauuv2ek3f9h7vl794ccen": {
+        "id": "bc1qgdaqgc2zy468hrh7pauuv2ek3f9h7vl794ccen",
+        "label": "bc1qgdaqgc2zy468hrh7pauuv2ek3f9h7vl794ccen",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qh6jk6p06calzhuct0v0vn5wyv2ckyzgajsql8t": {
+        "id": "bc1qh6jk6p06calzhuct0v0vn5wyv2ckyzgajsql8t",
+        "label": "bc1qh6jk6p06calzhuct0v0vn5wyv2ckyzgajsql8t",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1ql5r220c2q6ganrx2sql3a0yxcdrugu68833n98": {
+        "id": "bc1ql5r220c2q6ganrx2sql3a0yxcdrugu68833n98",
+        "label": "bc1ql5r220c2q6ganrx2sql3a0yxcdrugu68833n98",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h": {
+        "id": "bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h",
+        "label": "bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0,
+        "cluster_id": "cluster_bc1qm34l_j77s3h",
+        "cluster_size": 1
+      },
+      "bc1qmljqazj3w6825h59c7nqcu9ve4q9fdd3cxutru": {
+        "id": "bc1qmljqazj3w6825h59c7nqcu9ve4q9fdd3cxutru",
+        "label": "bc1qmljqazj3w6825h59c7nqcu9ve4q9fdd3cxutru",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qmsfhmkuzsseda93edn3susnytnquafsakqfxej": {
+        "id": "bc1qmsfhmkuzsseda93edn3susnytnquafsakqfxej",
+        "label": "bc1qmsfhmkuzsseda93edn3susnytnquafsakqfxej",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qpzvn929eatjkpkvs9nfenwtwats23vwt66p5za": {
+        "id": "bc1qpzvn929eatjkpkvs9nfenwtwats23vwt66p5za",
+        "label": "bc1qpzvn929eatjkpkvs9nfenwtwats23vwt66p5za",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qs5l0zuh22ch27ku20u2ff9ymwc2gm4xnk2lr9g": {
+        "id": "bc1qs5l0zuh22ch27ku20u2ff9ymwc2gm4xnk2lr9g",
+        "label": "bc1qs5l0zuh22ch27ku20u2ff9ymwc2gm4xnk2lr9g",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qtxr4j94hpfp6sc7k86j3stdpemlmadcgmpcxq7": {
+        "id": "bc1qtxr4j94hpfp6sc7k86j3stdpemlmadcgmpcxq7",
+        "label": "bc1qtxr4j94hpfp6sc7k86j3stdpemlmadcgmpcxq7",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qvrhdzguyde32ldl6gt9nv8g6zw2ucg0pzf2ych": {
+        "id": "bc1qvrhdzguyde32ldl6gt9nv8g6zw2ucg0pzf2ych",
+        "label": "bc1qvrhdzguyde32ldl6gt9nv8g6zw2ucg0pzf2ych",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qwcwt767lf9fadeznp2xg996ky5mrtgmpy9s08x": {
+        "id": "bc1qwcwt767lf9fadeznp2xg996ky5mrtgmpy9s08x",
+        "label": "bc1qwcwt767lf9fadeznp2xg996ky5mrtgmpy9s08x",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qz30theeqnakvq5p4qyta5qgqtg9zu0tem0fds0": {
+        "id": "bc1qz30theeqnakvq5p4qyta5qgqtg9zu0tem0fds0",
+        "label": "bc1qz30theeqnakvq5p4qyta5qgqtg9zu0tem0fds0",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qzcmq3es2pz0ze2ev40qdpgg40g0e3zpm4hedew": {
+        "id": "bc1qzcmq3es2pz0ze2ev40qdpgg40g0e3zpm4hedew",
+        "label": "bc1qzcmq3es2pz0ze2ev40qdpgg40g0e3zpm4hedew",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "d94cbed95d758b86f185194d8aeaff30405225345b9c10a44282a68433ef2215": {
+        "id": "d94cbed95d758b86f185194d8aeaff30405225345b9c10a44282a68433ef2215",
+        "label": "d94cbed95d758b86f185194d8aeaff30405225345b9c10a44282a68433ef2215",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 100,
+        "entity_type": "unknown",
+        "mixer_info": {
+          "is_mixer": true,
+          "confidence": 75,
+          "explanation": "100.0% of outputs share value 0.00720000 BTC; Zero change outputs",
+          "raw": {
+            "score": 0.75,
+            "flagged": true,
+            "mixer_type": "Unknown",
+            "breakdown": {
+              "equal_outputs": 0.45,
+              "io_symmetry": 0.15,
+              "no_change": 0.1,
+              "rbf_disabled": 0.05
+            },
+            "notes": [
+              "100.0% of outputs share value 0.00720000 BTC",
+              "Zero change outputs"
+            ]
+          }
+        },
+        "hop_depth": 0
+      },
+      "a7b4edc4860c0ec55276f960c6662d5e9ed4801fdbced9ab89c28fc877d26a76": {
+        "id": "a7b4edc4860c0ec55276f960c6662d5e9ed4801fdbced9ab89c28fc877d26a76",
+        "label": "a7b4edc4860c0ec55276f960c6662d5e9ed4801fdbced9ab89c28fc877d26a76",
+        "type": "Transaction",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qzsp6z9hwpq7j9w2879dxs97y08m0ghv5nvewur": {
+        "id": "bc1qzsp6z9hwpq7j9w2879dxs97y08m0ghv5nvewur",
+        "label": "bc1qzsp6z9hwpq7j9w2879dxs97y08m0ghv5nvewur",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      },
+      "bc1qzxr2kzjc38w762c54qhk9wtd00mgjfdu0eygvf": {
+        "id": "bc1qzxr2kzjc38w762c54qhk9wtd00mgjfdu0eygvf",
+        "label": "bc1qzxr2kzjc38w762c54qhk9wtd00mgjfdu0eygvf",
+        "type": "Address",
+        "sources": [
+          "Esplora API"
+        ],
+        "risk": 0,
+        "entity_type": "unknown",
+        "hop_depth": 0
+      }
+    },
+    "edges": [
+      {
+        "source": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00717121,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra",
+        "target": "a5248f5d6c5c2d9b19c1a57689f22c4bf5a8fce829fe013b2dfd694871ed3039",
+        "amount": 0.00006853,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772408537
+      },
+      {
+        "source": "a5248f5d6c5c2d9b19c1a57689f22c4bf5a8fce829fe013b2dfd694871ed3039",
+        "target": "bc1ql752c58uruh8tyrtuwadrtzgytw83vpkegznx5",
+        "amount": 0.000015,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772408537
+      },
+      {
+        "source": "a5248f5d6c5c2d9b19c1a57689f22c4bf5a8fce829fe013b2dfd694871ed3039",
+        "target": "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra",
+        "amount": 0.00005184,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772408537
+      },
+      {
+        "source": "bc1p3x9wzkaj3ve2a6327l3rzu64ptyvku5ghx4glpcwgtwpsqlcxdjsdnjakl",
+        "target": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "amount": 0.00149363,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "bc1p0mthvaxgh8mnu4tqe2g9najpj7x5ecmtkcwnv06zq4ma32ctqevszlpnhn",
+        "target": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "amount": 0.00007253,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "bc1pgpyy86ne2mvdrae0zs2a7rjdq7p95damnl72fw2q4ws5jvgvuukqnrdwpm",
+        "target": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "amount": 0.00752027,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "bc1pdm8t9g59she5uq48kfsd3dt9j47nn8fw42xyd0xyfyv2kpnxjqvs0cvc4a",
+        "target": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "amount": 0.00377176,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "bc1pj2vnz8dsc697w4nw9uak5qphnz45w3k7s8yprpfz58s8ut29xt9q4t48l2",
+        "target": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "amount": 0.00717521,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "target": "bc1qnl2v0n0w5hs78v7qvnjg8xmt0thyahfwdk8k5h",
+        "amount": 0.00148963,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "target": "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra",
+        "amount": 0.00006853,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "target": "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+        "amount": 0.00751626,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "507e04ab03df62938d78fbf378d63fc6b6b46baba15526b4064a550ad52b5caa",
+        "target": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "amount": 0.00376776,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "575419df4fc306f5d224091c6c58f4f3d47e8213b595217604861d535309cb47",
+        "amount": 0.00707266,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771425301,
+        "taint": 0.5
+      },
+      {
+        "source": "bc1pcdsfrldxekake76rc0ffnrqm2f7g0mzr3m8ymry4zmrxmuc63fvs8w4g7a",
+        "target": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "amount": 0.00013726,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "3d86c13fa63efef39faa6c76b1f6bd07897f37c245a42bca1556a05ce43e8051",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00694119,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771222169,
+        "taint": 1
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "d8974354cda62770da362e61972f554d34b88691dc247bde5ac88cbda5283903",
+        "amount": 0.00604024,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604826,
+        "taint": 0.5
+      },
+      {
+        "source": "bc1pyn4ge3m8yxg82ey6eahhzyykd6auqf75htem4mn6zj8z05a825fqvx5dja",
+        "target": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "amount": 0.00698146,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "20f0ae5c427a363a3c65fa9328a66ed14fb0171745712b15005bba8ccb8ae064",
+        "amount": 0.00706816,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772423954,
+        "taint": 0.5
+      },
+      {
+        "source": "15d4adc1d3fa485cc20f3a92525b620b4a55e6341e2c6563268bf03839168b5d",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00001026,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416,
+        "taint": 0.25
+      },
+      {
+        "source": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "target": "bc1q4qsefd2xfnlmyag8zjll50hanwe0kk3u467ynw",
+        "amount": 0.00166387,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771472387
+      },
+      {
+        "source": "bc1p6lustv25ykzeasavqd0axnarlghqlwutj7gfv2wyedzf4kr8f0hszd7m0l",
+        "target": "a91d49b684b651cf3c07abba53b954f5e7862220f21d60572fff4c6b9fdb3bd6",
+        "amount": 0.00676314,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771155787
+      },
+      {
+        "source": "a91d49b684b651cf3c07abba53b954f5e7862220f21d60572fff4c6b9fdb3bd6",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00676169,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771155787
+      },
+      {
+        "source": "5ca1bc3042db013953bb84ffaac5dc0e2148cfe6a95a484e04ffc142ccda1155",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00532664,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1770537155,
+        "taint": 1
+      },
+      {
+        "source": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00697735,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "bc1pn8e6rrppmzhswxg5cwsvlvku4fdg9c0nccdw03vacp0a7xgujkhsut5ttp",
+        "target": "17d2b210e991cd8401319e4bc959d94d81dd844acb156ab8d92aa4c2a6386a0d",
+        "amount": 0.00703556,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771637042
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "49cdef880bc755d2962da31aecc330bc6de1185278747f5b521a1b39b78491e3",
+        "amount": 0.00710636,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771555155,
+        "taint": 0.5
+      },
+      {
+        "source": "9a968d2d4c57229c3689ccb2bee0800d99eb9c2a0a8ac93e433cbbbda48d3ed3",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00002572,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771473511,
+        "taint": 0.25
+      },
+      {
+        "source": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "target": "bc1qxkxnfet6kvkytyj075fmaxxtykera5q8kvrrmz",
+        "amount": 0.00016097,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "aff8dde8752309b30582846ac7c974cdfb59c7dc9f7296663c0f5d2627a1566b",
+        "amount": 0.00694119,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771224636,
+        "taint": 0.5
+      },
+      {
+        "source": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "target": "bc1pfexd22v6sk0ruvtqmtjq5rwkgmras985xav9jpgw4ax9ezvfqyyqlpgs37",
+        "amount": 0.00027841,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "bc1psl8qdemwkxg8swdv9hg50hf9dqc5m5p4s7r3892t7pyqg66pr05ql8psdm",
+        "target": "26cd29a204588155073fbfcbb8ca6347335cf22cd43c2cbdd94dbc316d403e95",
+        "amount": 0.00029641,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772293279
+      },
+      {
+        "source": "9a968d2d4c57229c3689ccb2bee0800d99eb9c2a0a8ac93e433cbbbda48d3ed3",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.0071307,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771473511,
+        "taint": 0.25
+      },
+      {
+        "source": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.0069207,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "20f0ae5c427a363a3c65fa9328a66ed14fb0171745712b15005bba8ccb8ae064",
+        "amount": 0.00001026,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772423954,
+        "taint": 0.5
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751",
+        "amount": 0.00703127,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771637559,
+        "taint": 0.5
+      },
+      {
+        "source": "2398263210f20f1d21bb083a712653ca01e6d637e4bae7d6238d7b1b4e4f2a84",
+        "target": "bc1pqgcrgfmlj3zpzz038wy42e987k4946rwcue365f2jrpwryzy7jdscdwdxx",
+        "amount": 0.00024666,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771554745
+      },
+      {
+        "source": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "target": "bc1p5tzjk8kpz7gwemy7h9awru5pf5zwgaptuhkhn989cdc5n2a2tg7qdn254a",
+        "amount": 0.00139492,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771472387
+      },
+      {
+        "source": "d8974354cda62770da362e61972f554d34b88691dc247bde5ac88cbda5283903",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00000651,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604826,
+        "taint": 0.25
+      },
+      {
+        "source": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "target": "bc1qldpc90thmr7tcmzp7tfx3dzs8d65u59cwr0tkt",
+        "amount": 0.0139504,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00715845,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771472387
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "22b412bfe3423bf8860c977b412bf9803c95d68b452a8c2a32b657913d8e4c6d",
+        "amount": 0.0069207,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771298459,
+        "taint": 0.5
+      },
+      {
+        "source": "bc1ppzhl4x85g9kucpzeqk7hylett0d9alqxxse4h5sunjh9z0wwm2gs3h624p",
+        "target": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "amount": 0.00054312,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "target": "bc1pq2fygjckrvz6xu34zp5m98k2fut9vn64ws7tvn82lygrlj55d7jqcgazys",
+        "amount": 0.00053883,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00024748,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "15d4adc1d3fa485cc20f3a92525b620b4a55e6341e2c6563268bf03839168b5d",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00741311,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416,
+        "taint": 0.25
+      },
+      {
+        "source": "bc1px8xnagmccng08mvsnz68cau8cyy3c8l0z5fd0ygzvxjyykdlv3xszs6qa3",
+        "target": "26cd29a204588155073fbfcbb8ca6347335cf22cd43c2cbdd94dbc316d403e95",
+        "amount": 0.00025927,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772293279
+      },
+      {
+        "source": "575419df4fc306f5d224091c6c58f4f3d47e8213b595217604861d535309cb47",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.0000068,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771425301,
+        "taint": 0.25
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "51fc6244603f19861e8346ec7cc9483b7a469a41b267ab64ddefaaad1d72d929",
+        "amount": 0.00697735,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772526379,
+        "taint": 0.5
+      },
+      {
+        "source": "2398263210f20f1d21bb083a712653ca01e6d637e4bae7d6238d7b1b4e4f2a84",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00710636,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771554745
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "9a968d2d4c57229c3689ccb2bee0800d99eb9c2a0a8ac93e433cbbbda48d3ed3",
+        "amount": 0.00715845,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771473511,
+        "taint": 0.5
+      },
+      {
+        "source": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "target": "bc1qj0n8t3ly3lap39k0zyjfjnrakp3fxqeutq0mam",
+        "amount": 0.00013315,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "5a596ded965b7bd3c5832caa8ae526a8f83771b8e2231a0148f9b3181d4b72d2",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.0067594,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771156207,
+        "taint": 1
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751",
+        "amount": 0.00002572,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771637559,
+        "taint": 0.5
+      },
+      {
+        "source": "49cdef880bc755d2962da31aecc330bc6de1185278747f5b521a1b39b78491e3",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00000892,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771555155,
+        "taint": 0.25
+      },
+      {
+        "source": "bc1pgrz7nd79mnns5ggu4lxmmyyqdgyr2h9nklu85lkpwwp7ayl0s47se22nmg",
+        "target": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "amount": 0.00166665,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771472387
+      },
+      {
+        "source": "bc1p8287mp3vxm00098yh8kynugree52fst89n8xfhlspwtng3ezmprst7hrxy",
+        "target": "cd1c537a6f8ad351abf33dea9bf465baccba0bf888f87b0d3e224cf37e6da8ed",
+        "amount": 0.00707409,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771420973
+      },
+      {
+        "source": "bc1pcgdsgxvw8kpfdhv46udp6knqy3yy62jlvwkc5egmcwa6mcr8n7zs44nas5",
+        "target": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "amount": 0.01395454,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "15d4adc1d3fa485cc20f3a92525b620b4a55e6341e2c6563268bf03839168b5d",
+        "amount": 0.00717121,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416,
+        "taint": 0.5
+      },
+      {
+        "source": "17d2b210e991cd8401319e4bc959d94d81dd844acb156ab8d92aa4c2a6386a0d",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00703127,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771637042,
+        "taint": 1
+      },
+      {
+        "source": "bc1ppv4zpj3uccxtmgheq00sda5ctz6djj99hf946z2qx6z4mwts06dsz62d5m",
+        "target": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "amount": 0.00016508,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "dc314615f6785e7dd41e50f9d0c73933ec13df07730c2682dacea5e0fd66c41d",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00533099,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1770535475,
+        "taint": 1
+      },
+      {
+        "source": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "target": "bc1p0lhn7kuhgxxrxjeza8uj622xzqgz0vw3krvdvus2skygc6s6nlasnydqkw",
+        "amount": 0.00434883,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "20f0ae5c427a363a3c65fa9328a66ed14fb0171745712b15005bba8ccb8ae064",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00707097,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772423954,
+        "taint": 0.25
+      },
+      {
+        "source": "aff8dde8752309b30582846ac7c974cdfb59c7dc9f7296663c0f5d2627a1566b",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00693635,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771224636,
+        "taint": 1
+      },
+      {
+        "source": "bc1px3d984gcddr6l0hr8pxkrp7lklyxt3ppszcdm2n0wva9u8cphd8qeu350z",
+        "target": "3d86c13fa63efef39faa6c76b1f6bd07897f37c245a42bca1556a05ce43e8051",
+        "amount": 0.00694262,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771222169
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "5ca1bc3042db013953bb84ffaac5dc0e2148cfe6a95a484e04ffc142ccda1155",
+        "amount": 0.00533099,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1770537155,
+        "taint": 0.5
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751",
+        "amount": 0.00000892,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771637559,
+        "taint": 0.5
+      },
+      {
+        "source": "bc1pahf85vxq2u58pczakh7sxk86c06n8r94mvvdkphdzju8pfl7veyszp00ln",
+        "target": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "amount": 0.00040464,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "bc1p8yaxu778xfpx8hh0nqedxsnghla25ygnhrqscudmnl7jhdsc69ysv3uych",
+        "target": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "amount": 0.00692481,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "5a596ded965b7bd3c5832caa8ae526a8f83771b8e2231a0148f9b3181d4b72d2",
+        "amount": 0.00676169,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771156207,
+        "taint": 0.5
+      },
+      {
+        "source": "a91d49b684b651cf3c07abba53b954f5e7862220f21d60572fff4c6b9fdb3bd6",
+        "target": "bc1pdpcme6qa22h4z8lr0fr3r2j3p8mn07lck2w2jevn76q2gn7fcqjsv6y2fp",
+        "amount": 0.00026249,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771155787
+      },
+      {
+        "source": "bc1pdg62a6283qjtv0qv695f05u6hr45k3shatjqrtjv8weevdde0wnq72pyw4",
+        "target": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "amount": 0.00435312,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00604024,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "ba89f738fc69488428f6fab70c2e059eb7db1ca5eaf011be9d342608248ae29b",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00706816,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772423529,
+        "taint": 1
+      },
+      {
+        "source": "22b412bfe3423bf8860c977b412bf9803c95d68b452a8c2a32b657913d8e4c6d",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00691439,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771298459,
+        "taint": 1
+      },
+      {
+        "source": "f8548abac0b211187a265af38fa56b999bd06d29abf5ec94102b1bf3284bbb2a",
+        "target": "bc1pc833fzy8gsf0mee4x6y7n8hh90geq2v32zmattf3wzmkhrm3ad7sk9d9u2",
+        "amount": 0.00040053,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771296822
+      },
+      {
+        "source": "d8974354cda62770da362e61972f554d34b88691dc247bde5ac88cbda5283903",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00603037,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604826,
+        "taint": 0.25
+      },
+      {
+        "source": "bc1pmvqfuwcscsfjt007qn87vfl5fsvk9p5hu8afgn3cg647qx4w22zshsrsc6",
+        "target": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "amount": 0.00098599,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "target": "bc1p79htchjky820y6uk4pnagtga0m9ssxwp8trwt4wuul3y5pl0zplqy2alpj",
+        "amount": 0.0009817,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "bc1p49v85fpzy7l9k4p8lntzgyc2ackr3uw2rrw5v2s6nwhs79juzr6sqtjzm8",
+        "target": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "amount": 0.00025159,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "15d4adc1d3fa485cc20f3a92525b620b4a55e6341e2c6563268bf03839168b5d",
+        "amount": 0.00025516,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416,
+        "taint": 0.5
+      },
+      {
+        "source": "bc1ptjaeh70zunkz4vzqfgaecurk2p3yuar7tf0s6ptkqy52nzv238ws5ayuzz",
+        "target": "2398263210f20f1d21bb083a712653ca01e6d637e4bae7d6238d7b1b4e4f2a84",
+        "amount": 0.00024809,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771554745
+      },
+      {
+        "source": "bc1pfd65xzqcrljrpg5xz4r40rfjcp7etjkf3kymzn63yclyfflczwhqufh7am",
+        "target": "2398263210f20f1d21bb083a712653ca01e6d637e4bae7d6238d7b1b4e4f2a84",
+        "amount": 0.00710779,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771554745
+      },
+      {
+        "source": "cd1c537a6f8ad351abf33dea9bf465baccba0bf888f87b0d3e224cf37e6da8ed",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00707266,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771420973,
+        "taint": 1
+      },
+      {
+        "source": "49cdef880bc755d2962da31aecc330bc6de1185278747f5b521a1b39b78491e3",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00709541,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771555155,
+        "taint": 0.25
+      },
+      {
+        "source": "26cd29a204588155073fbfcbb8ca6347335cf22cd43c2cbdd94dbc316d403e95",
+        "target": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "amount": 0.00025516,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772293279,
+        "taint": 1
+      },
+      {
+        "source": "bc1pkwd4h2agvdpcu6pqaz9gq5gejxfmgwnk8x32e6u8fdk38t6mdl2q9s0ens",
+        "target": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "amount": 0.00716123,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771472387
+      },
+      {
+        "source": "bc1pemn5c8c4kvz2lqxyrwsg76t9qen4p9m8njwcuhp2kpjs2fv0pztsfu2s2m",
+        "target": "a91d49b684b651cf3c07abba53b954f5e7862220f21d60572fff4c6b9fdb3bd6",
+        "amount": 0.00026394,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771155787
+      },
+      {
+        "source": "bc1pqylqgjl7hw90za8quxghhcafyjkmsnv2xh40pxnkdvrc80kmgczq9gvw88",
+        "target": "dc314615f6785e7dd41e50f9d0c73933ec13df07730c2682dacea5e0fd66c41d",
+        "amount": 0.00533242,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1770535475
+      },
+      {
+        "source": "bc1pcwgwklh8w0k6k0037z6wqtjsuepaeupx2xydlj5al4zhh4fc8hhscdvafz",
+        "target": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "amount": 0.00604453,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "target": "bc1ppr4h4h3lujcqvha0h5namm0fnkz8swelqm2e2h4sgczxm87lnc6sadrjph",
+        "amount": 0.00048123,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "bc1pl5l406dn0u54mt0865qpvyk5q9vvvuqxvl6ez5wdgx6kuzdmy3mskel4h7",
+        "target": "ba89f738fc69488428f6fab70c2e059eb7db1ca5eaf011be9d342608248ae29b",
+        "amount": 0.00706959,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772423529
+      },
+      {
+        "source": "26cd29a204588155073fbfcbb8ca6347335cf22cd43c2cbdd94dbc316d403e95",
+        "target": "bc1qc4xqtexwyytmttqf64y73093mzq4t0fu4c3s9r",
+        "amount": 0.0002923,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772293279,
+        "taint": 1
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751",
+        "amount": 0.0000068,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771637559,
+        "taint": 0.5
+      },
+      {
+        "source": "dd1a5ec68e09bf1bd570dee8674c143ed6ac57a287505e86c575627bd84cb751",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00706515,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771637559,
+        "taint": 0.25
+      },
+      {
+        "source": "bc1p59s06htdvjjqevmme86slr4texuem2yf0z25w8gq4gmy4k70rtyscrqrwc",
+        "target": "ab8473f711b815473db1038064fef3a5125a76922223f73452e7a41e5f8ab905",
+        "amount": 0.0013977,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771472387
+      },
+      {
+        "source": "575419df4fc306f5d224091c6c58f4f3d47e8213b595217604861d535309cb47",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.0070638,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771425301,
+        "taint": 0.25
+      },
+      {
+        "source": "bc1pxmpqv0k24l697e7a6x3cxpxfqzga6nxgt4zhwzmkkpsqvgzdkkhqgca7qr",
+        "target": "4639066ed1a2123341b351d2b2fda6db5b17cd98202746289098722c1ead78ab",
+        "amount": 0.00048552,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772604113
+      },
+      {
+        "source": "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+        "target": "51fc6244603f19861e8346ec7cc9483b7a469a41b267ab64ddefaaad1d72d929",
+        "amount": 0.00024748,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772526379,
+        "taint": 0.5
+      },
+      {
+        "source": "51fc6244603f19861e8346ec7cc9483b7a469a41b267ab64ddefaaad1d72d929",
+        "target": "bc1q8yjn7r0p96ntcmaq65euldzgdm7kh8nzlruzrn",
+        "amount": 0.00721717,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772526379,
+        "taint": 0.25
+      },
+      {
+        "source": "bc1p5ptqphhe7h97gwy26g7rrqwzhrh38v9walhey0u8cshxj99jxmlstns083",
+        "target": "8c753aadb77678e65b3d86cee8cfc3d78dbb9fb5979d30023294523d2b0eb6e7",
+        "amount": 0.00028252,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772524699
+      },
+      {
+        "source": "bc1q4ysrrs8jr9dfcxxpq6gat9etjv88dvfa2z05v5",
+        "target": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "amount": 0.00789995,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "target": "bc1p3x9wzkaj3ve2a6327l3rzu64ptyvku5ghx4glpcwgtwpsqlcxdjsdnjakl",
+        "amount": 0.00149363,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "target": "bc1pgpyy86ne2mvdrae0zs2a7rjdq7p95damnl72fw2q4ws5jvgvuukqnrdwpm",
+        "amount": 0.00752027,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "target": "bc1q4ysrrs8jr9dfcxxpq6gat9etjv88dvfa2z05v5",
+        "amount": 0.00282207,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "target": "bc1p0mthvaxgh8mnu4tqe2g9najpj7x5ecmtkcwnv06zq4ma32ctqevszlpnhn",
+        "amount": 0.00007253,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "target": "bc1pj2vnz8dsc697w4nw9uak5qphnz45w3k7s8yprpfz58s8ut29xt9q4t48l2",
+        "amount": 0.00717521,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "bc1q4ysrrs8jr9dfcxxpq6gat9etjv88dvfa2z05v5",
+        "target": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "amount": 0.01499858,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "6ae46d6b222a38cd711dc14222c63765276f54d7d5b2543cf59568e91bbac89c",
+        "target": "bc1pdm8t9g59she5uq48kfsd3dt9j47nn8fw42xyd0xyfyv2kpnxjqvs0cvc4a",
+        "amount": 0.00377176,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772386581
+      },
+      {
+        "source": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "target": "fb3955004f3568021fc0ab42940fc878403a04a4a42d7c662ce74027aeb9417b",
+        "amount": 0.1059896,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772461923
+      },
+      {
+        "source": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "target": "a172e706f80dfb3cbded26934ea4021bdeeede89be839cf8a2f8a3a4e8242300",
+        "amount": 0.00376776,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772466383
+      },
+      {
+        "source": "a172e706f80dfb3cbded26934ea4021bdeeede89be839cf8a2f8a3a4e8242300",
+        "target": "bc1qash5nxmvfhmtvr9afdpe60ya66gnp7qnapfpfa",
+        "amount": 0.09875276,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772466383
+      },
+      {
+        "source": "1f01b626ff838ba152366df27e4df6f49d81716ded1c0a9e8537eb184fea53f8",
+        "target": "bc1qe3wzesfdvtxn8xy9q92tj87nma3a3ht45h3aha",
+        "amount": 0.01,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772463673
+      },
+      {
+        "source": "fb3955004f3568021fc0ab42940fc878403a04a4a42d7c662ce74027aeb9417b",
+        "target": "bc1qash5nxmvfhmtvr9afdpe60ya66gnp7qnapfpfa",
+        "amount": 0.001,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772461923
+      },
+      {
+        "source": "fb3955004f3568021fc0ab42940fc878403a04a4a42d7c662ce74027aeb9417b",
+        "target": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "amount": 0.10498819,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772461923
+      },
+      {
+        "source": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "target": "a172e706f80dfb3cbded26934ea4021bdeeede89be839cf8a2f8a3a4e8242300",
+        "amount": 0.09498678,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772466383
+      },
+      {
+        "source": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "target": "1f01b626ff838ba152366df27e4df6f49d81716ded1c0a9e8537eb184fea53f8",
+        "amount": 0.10498819,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772463673
+      },
+      {
+        "source": "1f01b626ff838ba152366df27e4df6f49d81716ded1c0a9e8537eb184fea53f8",
+        "target": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "amount": 0.09498678,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772463673
+      },
+      {
+        "source": "bc1ppd02zmjdrmj2feetqedzalsudznr8cgw9kx45z26gt8r7l9xfd9s580fml",
+        "target": "ea06cc53c0c4b7af0cb84e25d20914567e330ae08cfead6ec4d17a023847db9a",
+        "amount": 0.10599233,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416
+      },
+      {
+        "source": "bc1pm0xzrxxfsaqz8jufdpxdc03gxft2e9xngkye6tu0xvvjpfpss2lqa5xujh",
+        "target": "ea06cc53c0c4b7af0cb84e25d20914567e330ae08cfead6ec4d17a023847db9a",
+        "amount": 0.00071987,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416
+      },
+      {
+        "source": "ea06cc53c0c4b7af0cb84e25d20914567e330ae08cfead6ec4d17a023847db9a",
+        "target": "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+        "amount": 0.1059896,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416
+      },
+      {
+        "source": "ea06cc53c0c4b7af0cb84e25d20914567e330ae08cfead6ec4d17a023847db9a",
+        "target": "bc1qa6wgrthl2fmklrkfxtphafacsyzqwhc4g8w0um",
+        "amount": 0.00071714,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772387416
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h",
+        "amount": 8.95950228,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qvrhdzguyde32ldl6gt9nv8g6zw2ucg0pzf2ych",
+        "amount": 0.00011563,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+        "amount": 0.01315182,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qtxr4j94hpfp6sc7k86j3stdpemlmadcgmpcxq7",
+        "amount": 0.00313362,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qmljqazj3w6825h59c7nqcu9ve4q9fdd3cxutru",
+        "amount": 0.109985,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qgdaqgc2zy468hrh7pauuv2ek3f9h7vl794ccen",
+        "amount": 0.00054416,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h",
+        "target": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "amount": 74.72895083,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "1GoPGoWPV16e2VzpfT7huupeJb8jp6MGuB",
+        "amount": 0.00072557,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qwcwt767lf9fadeznp2xg996ky5mrtgmpy9s08x",
+        "amount": 0.00508442,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1ql5r220c2q6ganrx2sql3a0yxcdrugu68833n98",
+        "amount": 0.0011,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qzcmq3es2pz0ze2ev40qdpgg40g0e3zpm4hedew",
+        "amount": 0.0002819,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qdplsz4ze5eucu7kx48vldynmp7rl2jc7lpzfyh",
+        "amount": 0.006835,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "acc98ef3cbd197c1e82f8cd3cf008597994c4bb4260fd179a6873bb9964182f2",
+        "target": "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+        "amount": 0.0223247,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771171103,
+        "taint": 1
+      },
+      {
+        "source": "d94cbed95d758b86f185194d8aeaff30405225345b9c10a44282a68433ef2215",
+        "target": "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+        "amount": 0.00719692,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771171103,
+        "taint": 1
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "1CYDarRdcgwWSPSLE4uQiuMtWVj3bodFGZ",
+        "amount": 0.000485,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1p2mlwrss9tmvtfvu0tcxul2h0w67ej8vyjpj3ksctt67vd9r752ksqx6uqm",
+        "amount": 65.55355544,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "1KM2d54gFSoVosjaWVoygxuRhMakyDmczf",
+        "amount": 0.01410866,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1q9cduw0wyrtvxfd5n202kcrkw0vvmrntssn7838",
+        "amount": 0.0002306,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "bc1pmz6atumsh96tpmmyky378zddfzrswwcrnf90v9zarhu2w9tgjwyq0vv82a",
+        "target": "25bd8c6a3230f88ebbac3d36b3d53b395b2a112401886e8d4cd443f1207f372d",
+        "amount": 0.00737188,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771774071
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1q0hk3x8s0ej7gpjnz2clmctx8uaj32lyz6qxhcs",
+        "amount": 0.04541354,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "25bd8c6a3230f88ebbac3d36b3d53b395b2a112401886e8d4cd443f1207f372d",
+        "target": "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+        "amount": 0.00736762,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771774071,
+        "taint": 1
+      },
+      {
+        "source": "bc1p645ctmsj7cg0jlj3t577a033ljklrvl40l05d3tgxph24ptdptvsffn9pr",
+        "target": "d94cbed95d758b86f185194d8aeaff30405225345b9c10a44282a68433ef2215",
+        "amount": 0.00719976,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771171103
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qh6jk6p06calzhuct0v0vn5wyv2ckyzgajsql8t",
+        "amount": 0.00083031,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1q243f4mmp2ulzswv3l828qupdpm5prgh0r7qlfr",
+        "amount": 0.00210614,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qmsfhmkuzsseda93edn3susnytnquafsakqfxej",
+        "amount": 0.00266827,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "bc1q4wjep6agq5pytf3k580c7hawq70cr85462ypnh",
+        "target": "acc98ef3cbd197c1e82f8cd3cf008597994c4bb4260fd179a6873bb9964182f2",
+        "amount": 0.0223258,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1771171103
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1q8m2rc83v3tx89mk2t7e6c9r4vslpm3326q460t",
+        "amount": 0.00109389,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qs5l0zuh22ch27ku20u2ff9ymwc2gm4xnk2lr9g",
+        "amount": 0.00068825,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "33g3BtVEEtA4Shx1kuEyS6UTJPp1wHRn9a",
+        "amount": 0.00101449,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1q3xxuvj5g9la7lqh7gr8c855t6eqc49wvvreavg",
+        "amount": 0.0021277,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qz30theeqnakvq5p4qyta5qgqtg9zu0tem0fds0",
+        "amount": 0.001505,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1qpzvn929eatjkpkvs9nfenwtwats23vwt66p5za",
+        "amount": 0.002385,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "796425ee59f714ff8e3f17bf4aba326f2b0c20d9fdae41c0e619ba50a6f5affc",
+        "target": "bc1p02lcpxqfjq8nc9fcy4ux9ldaj87e3axdlzmsks0teupr9h0a2rcqltltk0",
+        "amount": 0.00023319,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1766330528
+      },
+      {
+        "source": "a7b4edc4860c0ec55276f960c6662d5e9ed4801fdbced9ab89c28fc877d26a76",
+        "target": "bc1qzsp6z9hwpq7j9w2879dxs97y08m0ghv5nvewur",
+        "amount": 0.00005,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772403580
+      },
+      {
+        "source": "bc1qnl2v0n0w5hs78v7qvnjg8xmt0thyahfwdk8k5h",
+        "target": "a7b4edc4860c0ec55276f960c6662d5e9ed4801fdbced9ab89c28fc877d26a76",
+        "amount": 0.00148963,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772403580
+      },
+      {
+        "source": "a7b4edc4860c0ec55276f960c6662d5e9ed4801fdbced9ab89c28fc877d26a76",
+        "target": "bc1qzxr2kzjc38w762c54qhk9wtd00mgjfdu0eygvf",
+        "amount": 0.00143919,
+        "sources": [
+          "Esplora API"
+        ],
+        "timestamp": 1772403580
+      }
+    ],
+    "summary": {
+      "total_nodes": 13,
+      "total_edges": 13,
+      "max_risk": 0,
+      "mixer_count": 0,
+      "exchange_count": 0,
+      "high_risk_count": 0,
+      "tainted_count": 0,
+      "cluster_count": 1,
+      "gambling_count": 0,
+      "mining_count": 0
+    }
+  },
+  "annotations": {
+    "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra": {
+      "name": "User Wallet",
+      "notes": "",
+      "color": "#f43f5e"
+    },
+    "bc1ql752c58uruh8tyrtuwadrtzgytw83vpkegznx5": {
+      "name": "Wallet 2",
+      "notes": "",
+      "color": "#ec4899"
+    }
+  },
+  "expanded_nodes": [
+    "3HLAvTRZBcxgEskmsfnvvSMRmVE5FU1RxJ",
+    "bc1p0mthvaxgh8mnu4tqe2g9najpj7x5ecmtkcwnv06zq4ma32ctqevszlpnhn",
+    "bc1p3x9wzkaj3ve2a6327l3rzu64ptyvku5ghx4glpcwgtwpsqlcxdjsdnjakl",
+    "bc1pdm8t9g59she5uq48kfsd3dt9j47nn8fw42xyd0xyfyv2kpnxjqvs0cvc4a",
+    "bc1pgpyy86ne2mvdrae0zs2a7rjdq7p95damnl72fw2q4ws5jvgvuukqnrdwpm",
+    "bc1pj2vnz8dsc697w4nw9uak5qphnz45w3k7s8yprpfz58s8ut29xt9q4t48l2",
+    "bc1qfqnym2f824xvp8tzvsf70vpl3hcknpqx2wsd6l",
+    "bc1qhnse6l6sp820le2cqe2p4mf2fggvzxhde2r678",
+    "bc1ql752c58uruh8tyrtuwadrtzgytw83vpkegznx5",
+    "bc1qnl2v0n0w5hs78v7qvnjg8xmt0thyahfwdk8k5h",
+    "bc1qseccp0hj8s63mlh9qlxzruh37mger73842mxra"
+  ]
+}

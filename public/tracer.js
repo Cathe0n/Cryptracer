@@ -36,15 +36,27 @@ function confBadge(conf) {
     return '<span style="background:' + s.bg + ';color:' + s.color + ';border:1px solid ' + s.border + '" class="px-1.5 py-0.5 rounded text-[8px] font-mono">' + s.label + '</span>';
 }
 
+// Mixer type labels aligned with aggregator.go MixerType constants
+// Sources: Schnoering & Vazirgiannis (2023), Shojaeinasab et al. (2023)
+const MIXER_LABELS = {
+    'Wasabi Wallet 1.x (CoinJoin)': { icon: '\u{1F300}', color: '#7c3aed', desc: 'Wasabi 1.x \u2014 ZeroLink/Chaumian CoinJoin, ~0.1 BTC denomination' },
+    'Wasabi Wallet 2.0 (WabiSabi)': { icon: '\u{1F300}', color: '#6d28d9', desc: 'Wasabi 2.0 \u2014 WabiSabi protocol, variable denominations, 50+ inputs' },
+    'JoinMarket':                    { icon: '\u{1F500}', color: '#0891b2', desc: 'JoinMarket \u2014 peer-coordinated CoinJoin, equal denominations, n>=3' },
+    'Whirlpool (Samourai)':          { icon: '\u{1F300}', color: '#0e7490', desc: 'Whirlpool \u2014 exactly 5 inputs/outputs, fixed pool denomination' },
+    'Centralized Mixer':             { icon: '\u{1F9D9}', color: '#b45309', desc: 'Centralized mixer \u2014 1-in 2-out, P2SH, >5x ratio (Shojaeinasab et al., 2023)' },
+    'Generic CoinJoin':              { icon: '\u{1F500}', color: '#4f46e5', desc: 'Generic CoinJoin \u2014 equal denominations, multiple participants' },
+};
+
 const STOP_LABELS = {
-    utxo:           { icon: '\uD83C\uDFC1', text: 'Unspent output \u2014 likely final destination', color: '#059669' },
-    high_risk:      { icon: '\uD83D\uDEA8', text: 'Stopped at flagged high-risk address',           color: '#dc2626' },
-    known_service:  { icon: '\uD83C\uDFE6', text: 'Reached identified exchange / service',           color: '#0284c7' },
-    cycle:          { icon: '\uD83D\uDD04', text: 'Cycle detected \u2014 address loops back',        color: '#7c3aed' },
-    max_hops:       { icon: '\uD83D\uDD22', text: 'Maximum tracing depth reached',                   color: '#d97706' },
-    no_outgoing_tx: { icon: '\u26D3',       text: 'No outgoing transactions found',                  color: '#059669' },
-    no_destination: { icon: '\u2753',       text: 'Could not determine destination output',           color: '#64748b' },
-    timeout:        { icon: '\u23F1',       text: 'Request timed out',                               color: '#64748b' },
+    utxo:           { icon: '\uD83C\uDFC1', text: 'Unspent output \u2014 likely final destination',                   color: '#059669' },
+    high_risk:      { icon: '\uD83D\uDEA8', text: 'Stopped at flagged high-risk address',                             color: '#dc2626' },
+    known_service:  { icon: '\uD83C\uDFE6', text: 'Reached identified exchange / service',                            color: '#0284c7' },
+    cycle:          { icon: '\uD83D\uDD04', text: 'Cycle detected \u2014 address loops back',                        color: '#7c3aed' },
+    max_hops:       { icon: '\uD83D\uDD22', text: 'Maximum tracing depth reached',                                    color: '#d97706' },
+    no_outgoing_tx: { icon: '\u26D3',       text: 'No outgoing transactions found',                                    color: '#059669' },
+    no_destination: { icon: '\u2753',       text: 'Could not determine destination output',                            color: '#64748b' },
+    timeout:        { icon: '\u23F1',       text: 'Request timed out',                                                 color: '#64748b' },
+    mixer_detected: { icon: '\uD83C\uDF00', text: 'Coin mixer detected \u2014 fund trail obfuscated, tracing halted', color: '#7c3aed' },
 };
 
 // ─── Panel rendering ──────────────────────────────────────────────────────────
@@ -82,6 +94,15 @@ function renderTracePanel(path) {
         var labelSpan   = hop.label
             ? '<span class="px-1.5 py-0.5 rounded text-[8px] font-bold" style="background:#1e1b4b;color:#a5b4fc;border:1px solid #4338ca">\uD83C\uDFF7 ' + hop.label + '</span>'
             : '';
+        // Mixer badge: shown when the tracer stopped at a mixing transaction
+        // Uses MIXER_LABELS from Schnoering & Vazirgiannis (2023) / Shojaeinasab et al. (2023)
+        var mixerSpan = '';
+        if (hop.mixer_type && hop.mixer_type !== 'Unknown' && hop.mixer_type !== '') {
+            var ml = MIXER_LABELS[hop.mixer_type] || { icon: '\uD83C\uDF00', color: '#7c3aed', desc: hop.mixer_type };
+            var mixerScore = hop.mixer_score ? Math.round(hop.mixer_score * 100) + '%' : '';
+            mixerSpan = '<span title="' + ml.desc + '" style="background:#2d1b69;color:#c4b5fd;border:1px solid #7c3aed" class="px-1.5 py-0.5 rounded text-[8px] font-bold">'
+                + ml.icon + ' ' + hop.mixer_type + (mixerScore ? ' \u00b7 ' + mixerScore : '') + '</span>';
+        }
 
         html += '<div class="flex flex-col items-center py-0.5">'
             + '<div style="width:1px;height:8px;background:#334155"></div>'
@@ -104,6 +125,7 @@ function renderTracePanel(path) {
             + confBadge(hop.dest_confidence)
             + riskBadge(hop.risk)
             + labelSpan
+            + mixerSpan
             + '</div>'
             + '<div class="flex items-center justify-between text-[8px]" style="color:#64748b">'
             + '<span>' + fmtDate(hop.timestamp) + '</span>'

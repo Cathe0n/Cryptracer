@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <title>Cryptracker | Setup</title>
+    <title>Cryptracer | Setup</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -15,7 +15,7 @@
             <!-- Header -->
             <div class="flex items-center gap-3 mb-8">
                 <div class="w-3 h-3 bg-cyan-500 rounded-full shadow-[0_0_12px_#06b6d4]"></div>
-                <h1 class="font-bold text-slate-900 text-xl tracking-[0.3em] uppercase">Cryptracker</h1>
+                <h1 class="font-bold text-slate-900 text-xl tracking-[0.3em] uppercase">Cryptracer</h1>
             </div>
             
             <h2 class="text-lg font-bold text-slate-700 mb-2">Configuration Setup</h2>
@@ -263,7 +263,7 @@
             reader.onload = (e) => {
                 try {
                     const session = JSON.parse(e.target.result);
-                    if (!session.version || !session.graph) throw new Error('Not a valid Cryptracker session file.');
+                    if (!session.version || !session.graph) throw new Error('Not a valid Cryptracer session file.');
 
                     _pendingSession = session;
 
@@ -286,7 +286,7 @@
         function launchSession() {
             if (!_pendingSession) return;
             // Store in sessionStorage so main app picks it up on load
-            sessionStorage.setItem('cryptracker_pending_session', JSON.stringify(_pendingSession));
+            sessionStorage.setItem('cryptracer_pending_session', JSON.stringify(_pendingSession));
             window.location.href = '/ui/index.html';
         }
     </script>
