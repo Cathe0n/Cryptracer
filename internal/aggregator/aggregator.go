@@ -7,7 +7,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"money-tracer/db"
@@ -32,9 +31,16 @@ type ProvenanceNode struct {
 	ExchInfo   *ExchangeResult           `json:"exchange_info,omitempty"`
 	HopDepth   int                       `json:"hop_depth"`
 
-	ClusterID   string `json:"cluster_id,omitempty"`
-	ClusterSize int    `json:"cluster_size,omitempty"`
+	// ── Clustering (co-spend heuristic) ──────────────────────
+	// ClusterID is a stable identifier for the wallet cluster this address
+	// belongs to. Addresses sharing a ClusterID are co-controlled.
+	// Empty for singleton addresses and for Transaction nodes.
+	ClusterID string `json:"cluster_id,omitempty"`
+	// ClusterSize is the number of on-chain addresses in this cluster.
+	// 1 = singleton (no co-spend evidence). >1 = shared wallet.
+	ClusterSize int `json:"cluster_size,omitempty"`
 
+	// ── Extended entity intelligence ──────────────────────────
 	GamblingInfo *GamblingResult `json:"gambling_info,omitempty"`
 	MiningInfo   *MiningResult   `json:"mining_info,omitempty"`
 }
@@ -45,7 +51,7 @@ type ProvenanceEdge struct {
 	Amount    float64  `json:"amount"`
 	Sources   []string `json:"sources"`
 	Timestamp int64    `json:"timestamp,omitempty"`
-	Taint     float64  `json:"taint,omitempty"`
+	Taint     float64  `json:"taint,omitempty"` // inherited risk 0–1
 }
 
 type UnifiedGraph struct {
@@ -62,7 +68,7 @@ type GraphSummary struct {
 	ExchangeCount int `json:"exchange_count"`
 	HighRiskCount int `json:"high_risk_count"`
 	TaintedCount  int `json:"tainted_count"`
-	ClusterCount  int `json:"cluster_count"`
+	ClusterCount  int `json:"cluster_count"` // multi-address wallet clusters
 	GamblingCount int `json:"gambling_count"`
 	MiningCount   int `json:"mining_count"`
 }
@@ -92,37 +98,41 @@ type MixerType string
 
 const (
 	MixerUnknown     MixerType = "Unknown"
-	MixerWasabi      MixerType = "Wasabi Wallet 1.x (CoinJoin)"
-	MixerWasabi2     MixerType = "Wasabi Wallet 2.0 (WabiSabi)"
-	MixerJoinMarket  MixerType = "JoinMarket"
-	MixerWhirlpool   MixerType = "Whirlpool (Samourai)"
-	MixerCentralized MixerType = "Centralized Mixer"
+	MixerWasabi      MixerType = "Wasabi Wallet 1.x (CoinJoin)" // Wasabi 1.0/1.1 — ZeroLink/Chaumian CoinJoin, ~0.1 BTC denomination
+	MixerWasabi2     MixerType = "Wasabi Wallet 2.0 (WabiSabi)" // Wasabi 2.0 — WabiSabi protocol, variable denominations, 50+ inputs
+	MixerJoinMarket  MixerType = "JoinMarket"                   // Peer-coordinated CoinJoin, equal denominations, n>=3
+	MixerWhirlpool   MixerType = "Whirlpool (Samourai)"         // Exactly 5 inputs / 5 outputs, fixed pool denomination
+	MixerCentralized MixerType = "Centralized Mixer"            // 1-in 2-out, P2SH, >5x output ratio, >1 BTC (Shojaeinasab et al.)
 	MixerCoinjoin    MixerType = "Generic CoinJoin"
 )
 
+// TransactionIO is a full representation of a transaction used for heuristics.
 type TransactionIO struct {
-	Txid        string
-	Inputs      []TxInput
-	Outputs     []TxOutput
-	FeeRate     float64
-	Timestamp   int64
-	Version     int
-	LockTime    uint32
+	Txid      string
+	Inputs    []TxInput
+	Outputs   []TxOutput
+	FeeRate   float64 // sat/vByte, 0 if unknown
+	Timestamp int64
+	Version   int
+	LockTime  uint32
+	// HasCoinbase is true if any input is a coinbase (no prevout).
+	// Required for mining pool detection.
 	HasCoinbase bool
 }
 
 type TxInput struct {
 	Address  string
-	Value    float64
+	Value    float64 // BTC
 	Sequence uint32
 }
 
 type TxOutput struct {
 	Address    string
-	Value      float64
-	ScriptType string
+	Value      float64 // BTC
+	ScriptType string  // p2pkh, p2wpkh, p2sh, p2wsh, p2tr, op_return
 }
 
+// MixerResult holds the full analysis result for a transaction.
 type MixerResult struct {
 	Score     float64            `json:"score"`
 	Flagged   bool               `json:"flagged"`
@@ -131,17 +141,31 @@ type MixerResult struct {
 	Notes     []string           `json:"notes"`
 }
 
+// DetectionResult is a small wrapper that exposes mixer detection
+// with a human-friendly confidence score and explanation.
 type DetectionResult struct {
 	IsMixer     bool        `json:"is_mixer"`
-	Confidence  int         `json:"confidence"`
+	Confidence  int         `json:"confidence"` // 0-100
 	Explanation string      `json:"explanation"`
 	Raw         MixerResult `json:"raw,omitempty"`
 }
 
 const defaultMixerThreshold = 0.70
 
-// IsCoinMixer performs multi-rule heuristic analysis to detect mixing
-// transactions. See aggregator.go inline comments for per-rule citations.
+// IsCoinMixer performs multi-rule heuristic analysis to detect mixing transactions.
+//
+// Detection is structured in two phases:
+//
+// Phase 1 — Protocol-specific exact pattern matching (standalone detectors):
+//   - Whirlpool (Samourai): Schnoering & Vazirgiannis (2023) — exactly 5 inputs,
+//     5 outputs, all distinct scripts, denomination from known pool set.
+//   - Modern Centralized Mixer: Shojaeinasab et al. (2023) — 1 input, 2 outputs,
+//     P2SH input, one output >=5x the other, input value >1 BTC.
+//
+// Phase 2 — Weighted heuristic scoring for CoinJoin variants (JoinMarket, Wasabi 1.x,
+//
+//	Wasabi 2.0, Generic CoinJoin). A transaction is flagged if the cumulative
+//	score meets or exceeds the threshold (default 0.70).
 func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	if threshold <= 0 {
 		threshold = defaultMixerThreshold
@@ -162,6 +186,8 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		return result
 	}
 
+	// Pre-compute clean outputs (exclude dust and OP_RETURN)
+	// Wasabi 2.0 minimum output value is 5000 sat = 0.00005 BTC (Schnoering §2.4)
 	const dustThreshold = 0.00005
 	var cleanValues []float64
 	for _, o := range outputs {
@@ -174,11 +200,13 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		return result
 	}
 
+	// Round to satoshi precision for denomination matching
 	rounded := make([]float64, len(cleanValues))
 	for i, a := range cleanValues {
 		rounded[i] = math.Round(a*1e8) / 1e8
 	}
 
+	// Find most-common output denomination
 	counts := make(map[float64]int)
 	for _, r := range rounded {
 		counts[r]++
@@ -193,6 +221,8 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	}
 	equalRatio := float64(maxCount) / float64(len(rounded))
 
+	// Check distinct output scripts
+	// All CoinJoin protocols require distinct output scripts (Schnoering eq. 10, 15, 33, 43)
 	outputScripts := make(map[string]int)
 	for _, o := range outputs {
 		if o.Address != "" {
@@ -201,6 +231,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	}
 	distinctOutputScripts := len(outputScripts) == outputCount
 
+	// Input address map for address-reuse check
 	inputAddrs := make(map[string]struct{})
 	for _, inp := range inputs {
 		if inp.Address != "" {
@@ -208,9 +239,15 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// ── Phase 1: Protocol-specific exact pattern matching ─────────────────
+	// =========================================================================
+	// PHASE 1: Protocol-specific exact pattern matching
+	// =========================================================================
 
-	// WHIRLPOOL (Schnoering & Vazirgiannis 2023, §2.5)
+	// WHIRLPOOL DETECTION (Schnoering & Vazirgiannis, 2023, Section 2.5)
+	// A Whirlpool CoinJoin has EXACTLY 5 inputs from distinct scripts and
+	// EXACTLY 5 outputs with the pool denomination. Four pools exist:
+	//   0.001 BTC, 0.01 BTC, 0.05 BTC, 0.5 BTC
+	// Condition: |inputs| = n_scripts,in = n_scripts,out = |outputs| = 5
 	whirlpoolPools := map[float64]bool{0.001: true, 0.01: true, 0.05: true, 0.5: true}
 	if inputCount == 5 && outputCount == 5 && distinctOutputScripts {
 		poolDenomCount := 0
@@ -230,7 +267,17 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// MODERN CENTRALIZED MIXER (Shojaeinasab et al. 2023, §3.3)
+	// MODERN CENTRALIZED MIXER (Shojaeinasab et al., 2023, Section 3.3)
+	// Withdrawal transactions from MixTum, Blender, and CryptoMixer follow a
+	// strict 1-input 2-output (1:2) structure:
+	//   - Exactly 1 real input
+	//   - Exactly 2 spendable outputs
+	//   - Input address is P2SH
+	//   - At least one output is P2SH
+	//   - P2SH output >= 5x the non-P2SH output (97% of observed cases)
+	//   - Input value > 1 BTC
+	// The large P2SH output is the mixer's internal change address;
+	// the small non-P2SH output is the recipient's cleaned funds.
 	spendableOutputCount := 0
 	for _, o := range outputs {
 		if o.ScriptType != "op_return" {
@@ -255,7 +302,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 				nonP2shVals = append(nonP2shVals, o.Value)
 			}
 		}
-		// Case 1: one P2SH (mixer change), one non-P2SH (recipient)
+		// Case 1: One P2SH (mixer change), one non-P2SH (recipient)
 		if len(p2shVals) >= 1 && len(nonP2shVals) >= 1 {
 			largeVal := p2shVals[0]
 			smallVal := nonP2shVals[0]
@@ -270,7 +317,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 				return result
 			}
 		}
-		// Case 2: both P2SH (Shojaeinasab §3.5 rule 2)
+		// Case 2: Both P2SH — use amount as criterion (Shojaeinasab Section 3.3.2)
 		if len(p2shVals) == 2 {
 			large := math.Max(p2shVals[0], p2shVals[1])
 			small := math.Min(p2shVals[0], p2shVals[1])
@@ -287,16 +334,23 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// ── Phase 2: Weighted heuristic scoring ───────────────────────────────
+	// =========================================================================
+	// PHASE 2: Weighted heuristic scoring for CoinJoin variants
+	// =========================================================================
 
-	// RULE 1: Equal output amounts (0.38)
+	// RULE 1: Equal Output Amounts (weight 0.38)
+	// The defining characteristic of CoinJoin: all participants receive equal
+	// denominations making it impossible to link inputs to outputs by value.
+	// n = max_{v'} sum(1_{v=v'}) for JoinMarket/Wasabi (Schnoering eq. 7, 16).
 	if equalRatio > 0.5 {
 		result.Breakdown["equal_outputs"] = 0.38 * equalRatio
 		result.Notes = append(result.Notes, fmt.Sprintf(
 			"%.1f%% of outputs share denomination %.8f BTC", equalRatio*100, mostCommon))
 	}
 
-	// RULE 2: Participant scale (0.15)
+	// RULE 2: Participant Scale (weight 0.15)
+	// All CoinJoin protocols require multiple independent participants.
+	// Minimum: JoinMarket n>=3 (eq. 9), Wasabi typically n>=10.
 	if inputCount >= 5 && outputCount >= 5 {
 		ps := math.Min(float64(inputCount+outputCount)/50.0, 1.0)
 		result.Breakdown["participant_count"] = 0.15 * ps
@@ -304,7 +358,9 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 			"%d inputs / %d outputs (CoinJoin scale)", inputCount, outputCount))
 	}
 
-	// RULE 3: I/O count symmetry (0.10)
+	// RULE 3: Input/Output Count Symmetry (weight 0.10)
+	// CoinJoin gives each participant one input and one post-mix output,
+	// producing roughly balanced input/output counts (Schnoering eq. 6, 12, 14).
 	if inputCount > 0 && outputCount > 0 {
 		sym := math.Min(float64(inputCount), float64(outputCount)) /
 			math.Max(float64(inputCount), float64(outputCount))
@@ -313,7 +369,10 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// RULE 4: Wasabi 1.x denomination (0.15)
+	// RULE 4: Wasabi 1.x Denomination (weight 0.15)
+	// Wasabi 1.0/1.1 use denomination d close to 0.1 BTC (Schnoering §2.2, eq. 11):
+	//   0.1 - epsilon <= d <= 0.1 + epsilon, epsilon << 1
+	// Wasabi 1.1 adds mixing levels at 2^i * d (eq. 18).
 	const wasabi1Epsilon = 0.005
 	nearWasabi1Base := math.Abs(mostCommon-0.1) <= wasabi1Epsilon
 	nearWasabi1Multi := false
@@ -335,7 +394,13 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 			"Wasabi 1.1 multi-level denomination: %.6f BTC (2^i x 0.1 BTC level)", mostCommon))
 	}
 
-	// RULE 5: Wasabi 2.0 (WabiSabi) pattern (0.15)
+	// RULE 5: Wasabi 2.0 (WabiSabi) Pattern (weight 0.15)
+	// Wasabi 2.0 characteristics (Schnoering §2.4):
+	//   - Target input count p=50, so |inputs| >= 50 (eq. 29)
+	//   - Fixed denomination set D; majority of outputs match D (eq. 28):
+	//     sum(1_{v in D}) >= (|outputs| - 1) / 2
+	//   - Minimum input value v_min = 5000 sat = 0.00005 BTC (eq. 32)
+	//   - All output scripts distinct (eq. 33)
 	wasabi2Denoms := map[float64]bool{
 		0.00005: true, 0.0001: true, 0.0002: true, 0.0005: true,
 		0.001: true, 0.002: true, 0.005: true, 0.01: true,
@@ -365,7 +430,9 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// RULE 6: No/minimal change output (0.10)
+	// RULE 6: No / Minimal Change Output (weight 0.10)
+	// CoinJoin eliminates change outputs entirely. Wasabi ensures at least one
+	// participant has no change (Schnoering footnote 9).
 	oddCount := 0
 	for _, a := range rounded {
 		if a != mostCommon {
@@ -381,7 +448,8 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		result.Breakdown["no_change"] = 0.05
 	}
 
-	// RULE 7: Uniform script types (0.08)
+	// RULE 7: Uniform Script Types (weight 0.08)
+	// Wasabi enforces uniform P2WPKH output scripts to prevent fingerprinting.
 	scriptCounts := make(map[string]int)
 	for _, o := range outputs {
 		if o.ScriptType != "" && o.ScriptType != "op_return" {
@@ -395,14 +463,16 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// RULE 8: Distinct output scripts (0.07)
+	// RULE 8: Distinct Output Scripts (weight 0.07)
+	// All CoinJoin protocols require every output protected by a unique script
+	// (Schnoering eq. 10 JoinMarket, eq. 15 Wasabi 1.x, eq. 33 Wasabi 2.0, eq. 43 Whirlpool).
 	if distinctOutputScripts && outputCount > 3 {
 		result.Breakdown["distinct_output_scripts"] = 0.07
 		result.Notes = append(result.Notes, fmt.Sprintf(
 			"All %d output scripts are distinct (CoinJoin requirement)", outputCount))
 	}
 
-	// RULE 9: Address reuse absence (0.06)
+	// RULE 9: Address Reuse Absence (weight 0.06)
 	reused := 0
 	for _, o := range outputs {
 		if _, ok := inputAddrs[o.Address]; ok {
@@ -413,7 +483,9 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		result.Breakdown["no_addr_reuse"] = 0.06
 	}
 
-	// RULE 10: Distinct input amounts (0.05)
+	// RULE 10: Distinct Input Amounts (weight 0.05)
+	// Each CoinJoin participant contributes funds from their own UTXO history,
+	// resulting in highly varied input amounts.
 	if inputCount >= 5 {
 		uniqueInputVals := make(map[float64]struct{})
 		for _, inp := range inputs {
@@ -425,7 +497,9 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 	}
 
-	// RULE 11: RBF disabled (0.05) — Wasabi fingerprint
+	// RULE 11: RBF Disabled (weight 0.05)
+	// Wasabi sets nSequence=0xFFFFFFFE on all inputs — a Wasabi-specific fingerprint.
+	// Allowing any participant to RBF would invalidate the entire CoinJoin round.
 	rbfDisabled := 0
 	for _, inp := range inputs {
 		if inp.Sequence == 0xFFFFFFFE || inp.Sequence == 0xFFFFFFFF {
@@ -437,7 +511,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		result.Notes = append(result.Notes, "RBF disabled on all inputs (Wasabi fingerprint)")
 	}
 
-	// RULE 12: Output value entropy bonus (0.04)
+	// RULE 12: Output Value Entropy Bonus (weight 0.04)
 	entropy := shannonEntropy(rounded)
 	if entropy > 3.0 && equalRatio > 0.6 {
 		result.Breakdown["high_entropy"] = 0.04
@@ -449,29 +523,39 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	}
 	result.Score = math.Min(total, 1.0)
 	result.Flagged = result.Score >= threshold
+
 	result.MixerType = classifyMixer(mostCommon, inputCount, outputCount, distinctOutputScripts, result.Breakdown)
 	return result
 }
 
+// classifyMixer identifies the specific mixing protocol based on structural
+// fingerprints from Schnoering & Vazirgiannis (2023) and Shojaeinasab et al. (2023).
 func classifyMixer(denom float64, inputCount, outputCount int, distinctScripts bool, breakdown map[string]float64) MixerType {
+	// Whirlpool: 5x5 exact structure + pool denomination
 	whirlpoolPools := map[float64]bool{0.001: true, 0.01: true, 0.05: true, 0.5: true}
 	if inputCount == 5 && outputCount == 5 && whirlpoolPools[denom] && distinctScripts {
 		return MixerWhirlpool
 	}
+	// Centralized mixer: Shojaeinasab 1:2 P2SH pattern
 	if breakdown["centralized_mixer"] > 0 {
 		return MixerCentralized
 	}
+	// Wasabi 2.0: large input count + WabiSabi fixed denomination set
 	if breakdown["wasabi2_pattern"] > 0 && inputCount >= 50 {
 		return MixerWasabi2
 	}
+	// Wasabi 1.x: denomination near 0.1 BTC (ZeroLink / Chaumian CoinJoin)
 	if breakdown["wasabi1_denom"] > 0 {
 		return MixerWasabi
 	}
+	// JoinMarket: equal denominations, n>=3 participants, all outputs distinct
+	// Distinguished from Wasabi by denomination not near 0.1 BTC (Schnoering §2.1)
 	if breakdown["equal_outputs"] > 0 && breakdown["participant_count"] > 0 && distinctScripts {
 		if float64(inputCount) >= 3 {
 			return MixerJoinMarket
 		}
 	}
+	// Generic CoinJoin fallback
 	if breakdown["equal_outputs"] > 0 && breakdown["participant_count"] > 0 {
 		return MixerCoinjoin
 	}
@@ -508,19 +592,22 @@ type ExchangeResult struct {
 
 const defaultExchangeThreshold = 0.60
 
+// IsExchangeAddress applies heuristics to detect exchange/custodial hot-wallet behaviour.
 func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 	if threshold <= 0 {
 		threshold = defaultExchangeThreshold
 	}
+
 	result := ExchangeResult{
 		Breakdown: make(map[string]float64),
 		Notes:     []string{},
 	}
+
 	if len(txs) == 0 {
 		return result
 	}
 
-	// RULE 1: UTXO consolidation sweeps (0.30)
+	// RULE 1: UTXO Consolidation Sweeps (0.30)
 	sweepCount := 0
 	for _, tx := range txs {
 		if len(tx.Inputs) >= 10 && len(tx.Outputs) <= 3 {
@@ -534,9 +621,9 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 			"%d/%d transactions look like UTXO sweeps", sweepCount, len(txs)))
 	}
 
-	// RULE 2: High transaction frequency (0.20)
+	// RULE 2: High Transaction Frequency (0.20)
 	if len(txs) > 1 {
-		var timestamps []int64
+		timestamps := make([]int64, 0, len(txs))
 		for _, tx := range txs {
 			if tx.Timestamp > 0 {
 				timestamps = append(timestamps, tx.Timestamp)
@@ -549,16 +636,21 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 			if txPerDay > 50 {
 				score := math.Min(txPerDay/500, 1.0)
 				result.Breakdown["high_frequency"] = 0.20 * score
-				result.Notes = append(result.Notes, fmt.Sprintf("%.1f transactions/day", txPerDay))
+				result.Notes = append(result.Notes, fmt.Sprintf(
+					"%.1f transactions/day", txPerDay))
 			}
 		}
 	}
 
-	// RULE 3: Fan-out pattern (0.20)
+	// RULE 3: Fan-Out Pattern (0.20)
 	fanOutCount := 0
+	allOutputAddrs := make(map[string]struct{})
 	for _, tx := range txs {
 		if len(tx.Outputs) >= 5 {
 			fanOutCount++
+		}
+		for _, o := range tx.Outputs {
+			allOutputAddrs[o.Address] = struct{}{}
 		}
 	}
 	fanOutRatio := float64(fanOutCount) / float64(len(txs))
@@ -568,7 +660,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 			"%d/%d transactions are fan-outs", fanOutCount, len(txs)))
 	}
 
-	// RULE 4: Mixed script types (0.15)
+	// RULE 4: Mixed Script Types (0.15)
 	scriptTypes := make(map[string]int)
 	for _, tx := range txs {
 		for _, o := range tx.Outputs {
@@ -583,7 +675,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 			"%d distinct output script types", len(scriptTypes)))
 	}
 
-	// RULE 5: Round-number withdrawals (0.15)
+	// RULE 5: Round-Number Withdrawals (0.15)
 	roundCount := 0
 	totalOuts := 0
 	for _, tx := range txs {
@@ -610,6 +702,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 	}
 	result.Score = math.Min(total, 1.0)
 	result.Flagged = result.Score >= threshold
+
 	return result
 }
 
@@ -624,11 +717,14 @@ type PeelingChainResult struct {
 	Notes      string  `json:"notes"`
 }
 
+// DetectPeelingChain looks for a sequence of transactions where one output
+// is markedly smaller than the input (the "peel") and one output is change.
 func DetectPeelingChain(txs []TransactionIO) PeelingChainResult {
 	result := PeelingChainResult{}
 	if len(txs) < 3 {
 		return result
 	}
+
 	peelCount := 0
 	for _, tx := range txs {
 		if len(tx.Inputs) != 1 || len(tx.Outputs) != 2 {
@@ -641,6 +737,7 @@ func DetectPeelingChain(txs []TransactionIO) PeelingChainResult {
 			peelCount++
 		}
 	}
+
 	ratio := float64(peelCount) / float64(len(txs))
 	if ratio > 0.5 {
 		result.IsPeeling = true
@@ -657,9 +754,6 @@ func DetectPeelingChain(txs []TransactionIO) PeelingChainResult {
 // TAINT PROPAGATION
 // ─────────────────────────────────────────────────────────────
 
-// PropagateTaint runs a BFS from all high-risk nodes (risk >= 70), decaying
-// the taint score by decayPerHop at each hop. A visited set prevents infinite
-// cycling through graph loops — bug fix over the original implementation.
 func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 	if decayPerHop <= 0 || decayPerHop >= 1 {
 		decayPerHop = 0.5
@@ -677,23 +771,14 @@ func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 		}
 	}
 
-	queue := make([]string, 0, len(taint))
+	queue := make([]string, 0)
 	for id := range taint {
 		queue = append(queue, id)
 	}
 
-	// FIX: visited set prevents cycling in graphs with loops.
-	visited := make(map[string]bool, len(graph.Nodes))
-
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
-
-		if visited[cur] {
-			continue
-		}
-		visited[cur] = true
-
 		curTaint := taint[cur] * (1 - decayPerHop)
 		if curTaint < 0.01 {
 			continue
@@ -708,7 +793,8 @@ func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 
 	for i := range graph.Edges {
 		e := &graph.Edges[i]
-		if srcTaint := taint[e.Source]; srcTaint > e.Taint {
+		srcTaint := taint[e.Source]
+		if srcTaint > e.Taint {
 			e.Taint = srcTaint
 		}
 	}
@@ -731,22 +817,35 @@ var knownLabels = []struct {
 	needle string
 	entity EntityType
 }{
-	{"binance", EntityExchange}, {"coinbase", EntityExchange},
-	{"kraken", EntityExchange}, {"bitfinex", EntityExchange},
-	{"huobi", EntityExchange}, {"okx", EntityExchange},
-	{"bybit", EntityExchange}, {"kucoin", EntityExchange},
-	{"wasabi", EntityMixer}, {"whirlpool", EntityMixer},
-	{"joinmarket", EntityMixer}, {"coinjoin", EntityMixer},
+	{"binance", EntityExchange},
+	{"coinbase", EntityExchange},
+	{"kraken", EntityExchange},
+	{"bitfinex", EntityExchange},
+	{"huobi", EntityExchange},
+	{"okx", EntityExchange},
+	{"bybit", EntityExchange},
+	{"kucoin", EntityExchange},
+	{"wasabi", EntityMixer},
+	{"whirlpool", EntityMixer},
+	{"joinmarket", EntityMixer},
+	{"coinjoin", EntityMixer},
 	{"chipmixer", EntityMixer},
-	{"alphabay", EntityDarknet}, {"silkroad", EntityDarknet},
+	{"alphabay", EntityDarknet},
+	{"silkroad", EntityDarknet},
 	{"hydra", EntityDarknet},
-	{"gambling", EntityGambling}, {"stake.com", EntityGambling},
-	{"1xbet", EntityGambling}, {"bitsler", EntityGambling},
+	{"gambling", EntityGambling},
+	{"stake.com", EntityGambling},
+	{"1xbet", EntityGambling},
+	{"bitsler", EntityGambling},
 	{"primedice", EntityGambling},
-	{"mining", EntityMining}, {"f2pool", EntityMining},
-	{"antpool", EntityMining}, {"slushpool", EntityMining},
-	{"viabtc", EntityMining}, {"luxor", EntityMining},
-	{"uniswap", EntityDefi}, {"aave", EntityDefi},
+	{"mining", EntityMining},
+	{"f2pool", EntityMining},
+	{"antpool", EntityMining},
+	{"slushpool", EntityMining},
+	{"viabtc", EntityMining},
+	{"luxor", EntityMining},
+	{"uniswap", EntityDefi},
+	{"aave", EntityDefi},
 	{"compound", EntityDefi},
 }
 
@@ -764,16 +863,6 @@ func ResolveEntityType(label string) EntityType {
 // GRAPH BUILDER
 // ─────────────────────────────────────────────────────────────
 
-// BuildVerifiedFTM constructs the full provenance graph for a target address.
-//
-// Bug fixes over the previous version:
-//   - Neo4j type assertions are now guarded with ok-checks (no more panics).
-//   - Edge deduplication key includes the transaction hash so distinct
-//     transactions between the same address pair are not collapsed.
-//   - Intel enrichment (ChainAbuse, WalletExplorer, Bitquery) runs in
-//     parallel goroutines, cutting latency by ~60% on typical queries.
-//   - Sweeper detection (Shojaeinasab et al. 2023) added per transaction.
-//   - Address-level mixer detection (Wu et al. 2022) added after tx loop.
 func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string) UnifiedGraph {
 	graph := UnifiedGraph{
 		Nodes: make(map[string]ProvenanceNode),
@@ -813,25 +902,18 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 
 	edgeMap := make(map[string]ProvenanceEdge)
 
-	// FIX: edge key now includes txHash so distinct transactions between the
-	// same address pair are not silently collapsed into one edge.
-	addEdge := func(src, tgt string, amt float64, source string, timestamp int64, txHash string) {
-		key := txHash
-		if key == "" {
-			key = fmt.Sprintf("%.8f|%d", amt, timestamp)
-		}
-		edgeKey := fmt.Sprintf("%s|%s|%s", src, tgt, key)
-
-		if e, ok := edgeMap[edgeKey]; ok {
+	addEdge := func(src, tgt string, amt float64, source string, timestamp int64) {
+		key := fmt.Sprintf("%s|%s|%.8f", src, tgt, amt)
+		if e, ok := edgeMap[key]; ok {
 			for _, s := range e.Sources {
 				if s == source {
 					return
 				}
 			}
 			e.Sources = append(e.Sources, source)
-			edgeMap[edgeKey] = e
+			edgeMap[key] = e
 		} else {
-			edgeMap[edgeKey] = ProvenanceEdge{
+			edgeMap[key] = ProvenanceEdge{
 				Source:    src,
 				Target:    tgt,
 				Amount:    amt,
@@ -844,55 +926,26 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// 1. Initial target node
 	addNode(id, id, "Address", "Initial Query", 0)
 
-	// 2. Local Neo4j — guarded type assertions prevent panics on unexpected data
+	// 2. Local Neo4j
+	neoToReal := make(map[string]string)
 	if history, err := db.GetMoneyFlow(ctx, id); err == nil && history != nil {
-		neoToReal := make(map[string]string)
-
-		nodes, nodesOK := history["nodes"].(map[string]interface{})
-		edges, edgesOK := history["edges"].([]interface{})
-
-		if nodesOK {
-			for eid, node := range nodes {
-				n, ok := node.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				realID, idOK := n["label"].(string)
-				nType, typeOK := n["type"].(string)
-				if !idOK || !typeOK {
-					continue
-				}
-				neoToReal[eid] = realID
-				addNode(realID, realID, nType, "Local DB", 0)
-			}
-		} else {
-			log.Printf("⚠️  [NEO4J] unexpected nodes type for %s", id)
+		for eid, node := range history["nodes"].(map[string]interface{}) {
+			n := node.(map[string]interface{})
+			realID := n["label"].(string)
+			neoToReal[eid] = realID
+			addNode(realID, realID, n["type"].(string), "Local DB", 0)
 		}
-
-		if edgesOK {
-			for _, edge := range edges {
-				e, ok := edge.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				srcRaw, srcOK := e["source"].(string)
-				tgtRaw, tgtOK := e["target"].(string)
-				amt, amtOK := e["amount"].(float64)
-				if !srcOK || !tgtOK || !amtOK {
-					continue
-				}
-				src := neoToReal[srcRaw]
-				tgt := neoToReal[tgtRaw]
-				if src != "" && tgt != "" {
-					addEdge(src, tgt, amt, "Local DB", 0, "")
-				}
+		for _, edge := range history["edges"].([]interface{}) {
+			e := edge.(map[string]interface{})
+			src := neoToReal[e["source"].(string)]
+			tgt := neoToReal[e["target"].(string)]
+			if src != "" && tgt != "" {
+				addEdge(src, tgt, e["amount"].(float64), "Local DB", 0)
 			}
-		} else {
-			log.Printf("⚠️  [NEO4J] unexpected edges type for %s", id)
 		}
 	}
 
-	// 3. Live Esplora (Blockstream)
+	// 3. Live Esplora (Blockstream) — build TransactionIO list for heuristics
 	liveTxs, _ := blockstream.GetAddressTxs(id)
 	txIOs := make([]TransactionIO, 0, len(liveTxs))
 
@@ -910,6 +963,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 
 		for _, vin := range tx.Vin {
+			// Detect coinbase inputs (no prevout)
 			if vin.Prevout == nil {
 				tio.HasCoinbase = true
 				continue
@@ -918,7 +972,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				addr := vin.Prevout.ScriptPubKeyAddress
 				val := float64(vin.Prevout.Value) / 1e8
 				addNode(addr, addr, "Address", "Esplora API", 0)
-				addEdge(addr, tx.Txid, val, "Esplora API", timestamp, tx.Txid)
+				addEdge(addr, tx.Txid, val, "Esplora API", timestamp)
 				tio.Inputs = append(tio.Inputs, TxInput{
 					Address:  addr,
 					Value:    val,
@@ -931,7 +985,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				addr := vout.ScriptPubKeyAddress
 				val := float64(vout.Value) / 1e8
 				addNode(addr, addr, "Address", "Esplora API", 0)
-				addEdge(tx.Txid, addr, val, "Esplora API", timestamp, tx.Txid)
+				addEdge(tx.Txid, addr, val, "Esplora API", timestamp)
 				tio.Outputs = append(tio.Outputs, TxOutput{
 					Address:    addr,
 					Value:      val,
@@ -941,7 +995,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 		txIOs = append(txIOs, tio)
 
-		// Per-transaction mixer detection (Layer 1: IsCoinMixer)
+		// Per-transaction mixer detection
 		mr := IsCoinMixer(tio, defaultMixerThreshold)
 		det := DetectionResult{
 			IsMixer:    mr.Flagged,
@@ -955,59 +1009,85 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		} else {
 			det.Explanation = "No clear mixer signals"
 		}
+
 		if mr.Flagged {
 			if n, ok := graph.Nodes[tx.Txid]; ok {
 				n.MixerInfo = &det
-				if risk := det.Confidence; risk > n.Risk {
+				risk := det.Confidence
+				if risk > n.Risk {
 					n.Risk = risk
 				}
 				graph.Nodes[tx.Txid] = n
-				log.Printf("🔀 [MIXER-TX] %s — score=%.2f type=%s", tx.Txid, mr.Score, mr.MixerType)
-			}
-		}
-
-		// Sweeper detection (Layer 3: Shojaeinasab et al. 2023, §3.4.2)
-		sr := IsSweeperTransaction(tio)
-		if sr.IsSweeper {
-			if n, ok := graph.Nodes[tx.Txid]; ok {
-				sweeperDet := &DetectionResult{
-					IsMixer:     true,
-					Confidence:  int(sr.Confidence * 100),
-					Explanation: sr.Notes,
-				}
-				// Only override MixerInfo if not already set by a higher-confidence signal
-				if n.MixerInfo == nil || sweeperDet.Confidence > n.MixerInfo.Confidence {
-					n.MixerInfo = sweeperDet
-				}
-				if risk := sweeperDet.Confidence; risk > n.Risk {
-					n.Risk = risk
-				}
-				n.EntityType = EntityMixer
-				graph.Nodes[tx.Txid] = n
-				log.Printf("🧹 [SWEEPER] %s — confidence=%.0f%% inputs=%d",
-					tx.Txid, sr.Confidence*100, sr.InputCount)
+				log.Printf("🔀 [MIXER] %s — score=%.2f type=%s conf=%d",
+					tx.Txid, mr.Score, mr.MixerType, det.Confidence)
 			}
 		}
 	}
 
-	// ── Address-level mixer detection (Layer 2: Wu et al. 2022) ──────────
-	addrMix := IsMixingAddress(id, txIOs, defaultMixerThreshold)
-	if addrMix.Flagged {
-		if n, ok := graph.Nodes[id]; ok {
-			n.EntityType = EntityMixer
-			det := addrMix.ToDetectionResult()
-			if n.MixerInfo == nil || det.Confidence > n.MixerInfo.Confidence {
-				n.MixerInfo = det
+	// 4. Bitquery inflows + outflows
+	// Uses GetAddressTransactions (v2 API) which returns both FlowEdges for
+	// graph construction AND fully-hydrated TxIO records that are merged into
+	// the behavioral detection pipeline alongside Blockstream data.
+	if bqKey != "" {
+		bqResult, err := bitquery.GetAddressTransactions(id, bqKey, 200)
+		if err != nil {
+			log.Printf("⚠️  [BITQUERY] %v", err)
+		} else {
+			// 4a. Add flow edges and nodes to the graph
+			for _, flow := range bqResult.Flows {
+				addNode(flow.FromAddr, flow.FromAddr, "Address", "Bitquery", 0)
+				addNode(flow.ToAddr, flow.ToAddr, "Address", "Bitquery", 0)
+				if flow.TxHash != "" {
+					addNode(flow.TxHash, flow.TxHash, "Transaction", "Bitquery", 0)
+					addEdge(flow.FromAddr, flow.TxHash, flow.ValueBTC, "Bitquery", flow.Timestamp)
+					addEdge(flow.TxHash, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
+				} else {
+					addEdge(flow.FromAddr, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
+				}
 			}
-			if det.Confidence > n.Risk {
-				n.Risk = det.Confidence
+
+			// 4b. Convert Bitquery TxIOs into aggregator.TransactionIO so
+			// behavioral detectors see the full history, not just Blockstream's
+			// most-recent 50 transactions.
+			for _, btio := range bqResult.TxIOs {
+				// Skip txids already seen from Blockstream to avoid duplicates
+				alreadySeen := false
+				for _, existing := range txIOs {
+					if existing.Txid == btio.Txid {
+						alreadySeen = true
+						break
+					}
+				}
+				if alreadySeen {
+					continue
+				}
+				tio := TransactionIO{Txid: btio.Txid, Timestamp: btio.Timestamp}
+				for _, inp := range btio.Inputs {
+					tio.Inputs = append(tio.Inputs, TxInput{
+						Address: inp.Address,
+						Value:   inp.Value,
+					})
+				}
+				for _, out := range btio.Outputs {
+					tio.Outputs = append(tio.Outputs, TxOutput{
+						Address:    out.Address,
+						Value:      out.Value,
+						ScriptType: "", // Bitquery v2 bitcoin endpoint does not expose script type
+					})
+				}
+				txIOs = append(txIOs, tio)
+				addNode(btio.Txid, btio.Txid, "Transaction", "Bitquery", 0)
 			}
-			graph.Nodes[id] = n
-			log.Printf("🔀 [MIXER-ADDR] %s — score=%.2f (Wu et al. 2022)", id, addrMix.Score)
+			log.Printf("📡 [BITQUERY] merged %d new txs into behavioral pipeline (total: %d)",
+				bqResult.TotalTxs, len(txIOs))
 		}
 	}
 
-	// ── Exchange detection ────────────────────────────────────────────────
+	// ── Behavioral detection (runs on FULL txIOs: Blockstream + Bitquery) ──────
+	// Exchange, gambling, mining, peeling and clustering all run here so they
+	// see the combined dataset from both sources, not just Blockstream's 50 TXs.
+
+	// ── Exchange detection ─────────────────────────────────────
 	er := IsExchangeAddress(txIOs, defaultExchangeThreshold)
 	if er.Flagged {
 		if n, ok := graph.Nodes[id]; ok {
@@ -1018,7 +1098,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 	}
 
-	// ── Gambling detection ────────────────────────────────────────────────
+	// ── Gambling detection ────────────────────────────────────
 	gr := IsGamblingAddress(txIOs, defaultGamblingThreshold)
 	if gr.Flagged {
 		if n, ok := graph.Nodes[id]; ok {
@@ -1029,18 +1109,18 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 	}
 
-	// ── Mining pool detection ─────────────────────────────────────────────
-	miningR := IsMiningPoolAddress(txIOs, defaultMiningThreshold)
-	if miningR.Flagged {
+	// ── Mining pool detection ─────────────────────────────────
+	mr := IsMiningPoolAddress(txIOs, defaultMiningThreshold)
+	if mr.Flagged {
 		if n, ok := graph.Nodes[id]; ok {
 			n.EntityType = EntityMining
-			n.MiningInfo = &miningR
-			log.Printf("⛏️  [MINING] %s — score=%.2f", id, miningR.Score)
+			n.MiningInfo = &mr
+			log.Printf("⛏️  [MINING] %s — score=%.2f", id, mr.Score)
 			graph.Nodes[id] = n
 		}
 	}
 
-	// ── Peeling chain detection ───────────────────────────────────────────
+	// ── Peeling chain detection ───────────────────────────────
 	pc := DetectPeelingChain(txIOs)
 	if pc.IsPeeling {
 		if n, ok := graph.Nodes[id]; ok {
@@ -1050,7 +1130,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		log.Printf("🔗 [PEEL CHAIN] %s — confidence=%.2f len=%d", id, pc.Confidence, pc.ChainLen)
 	}
 
-	// ── Co-spend clustering ───────────────────────────────────────────────
+	// ── Co-spend clustering ───────────────────────────────────
 	clusters := BuildClusters(txIOs)
 	for addr, cid := range clusters.AddrToCluster {
 		members := clusters.Clusters[cid]
@@ -1078,105 +1158,41 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 	}
 
-	// ── Parallel external enrichment: Bitquery + ChainAbuse + WalletExplorer
-	// All three are independent of each other and of the Blockstream data
-	// already collected, so we fire them concurrently.
-	type enrichResult struct {
-		label    string
-		riskData *intel.ChainAbuseRiskData
-		flows    []bitquery.FlowEdge
-		flowsErr error
-	}
-	enrichCh := make(chan enrichResult, 1)
-
-	go func() {
-		var r enrichResult
-		var wg sync.WaitGroup
-		var mu sync.Mutex
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			lbl := intel.GetLabel(id)
-			mu.Lock()
-			r.label = lbl
-			mu.Unlock()
-		}()
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if caKey != "" {
-				rd := intel.GetChainAbuseRisk(id, caKey)
-				mu.Lock()
-				r.riskData = rd
-				mu.Unlock()
-			}
-		}()
-
-		if bqKey != "" {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				flows, err := bitquery.GetWalletFlows(id, bqKey)
-				mu.Lock()
-				r.flows = flows
-				r.flowsErr = err
-				mu.Unlock()
-			}()
-		}
-
-		wg.Wait()
-		enrichCh <- r
-	}()
-
-	enrich := <-enrichCh
-
-	// Apply Bitquery flows
-	if enrich.flowsErr != nil {
-		log.Printf("⚠️  [BITQUERY] %v", enrich.flowsErr)
-	} else if len(enrich.flows) > 0 {
-		log.Printf("📡 [BITQUERY] %d flow edges for %s", len(enrich.flows), id)
-		for _, flow := range enrich.flows {
-			addNode(flow.FromAddr, flow.FromAddr, "Address", "Bitquery", 0)
-			addNode(flow.ToAddr, flow.ToAddr, "Address", "Bitquery", 0)
-			if flow.TxHash != "" {
-				addNode(flow.TxHash, flow.TxHash, "Transaction", "Bitquery", 0)
-				addEdge(flow.FromAddr, flow.TxHash, flow.ValueBTC, "Bitquery", flow.Timestamp, flow.TxHash)
-				addEdge(flow.TxHash, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp, flow.TxHash)
-			} else {
-				addEdge(flow.FromAddr, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp, "")
-			}
-		}
-	}
-
 	// Flush edge map
 	for _, e := range edgeMap {
 		graph.Edges = append(graph.Edges, e)
 	}
 
-	// Apply ChainAbuse + WalletExplorer intel
-	if enrich.riskData != nil {
-		riskScore := intel.CalculateRiskScore(enrich.riskData)
-		if n, ok := graph.Nodes[id]; ok {
+	// 5. Intel enrichment (ChainAbuse + WalletExplorer)
+	// Both sources are ALWAYS recorded in node.Sources regardless of whether
+	// they returned data, so the frontend intelligence panel always shows them
+	// with their Verify and Open buttons, and the cross-validation engine can
+	// correctly report "queried but found nothing" rather than silently omitting.
+	label := intel.GetLabel(id)
+	riskData := intel.GetChainAbuseRisk(id, caKey)
+
+	if n, ok := graph.Nodes[id]; ok {
+		// Always add WalletExplorer — it is a public service with no key required.
+		n.Sources = appendIfMissing(n.Sources, "WalletExplorer")
+
+		// Always add ChainAbuse when a key is configured, even if no reports found.
+		if caKey != "" {
+			n.Sources = appendIfMissing(n.Sources, "ChainAbuse")
+		}
+
+		if riskData != nil {
+			riskScore := intel.CalculateRiskScore(riskData)
 			n.Risk = riskScore
-			n.RiskData = enrich.riskData
-			if enrich.label != "" {
-				n.Label = enrich.label
-				n.EntityType = ResolveEntityType(enrich.label)
-				n.Sources = append(n.Sources, "WalletExplorer")
-			}
-			n.Sources = append(n.Sources, "ChainAbuse")
-			graph.Nodes[id] = n
+			n.RiskData = riskData
 			nodeImportance[id] += riskScore * 100
 		}
-	} else if enrich.label != "" {
-		if n, ok := graph.Nodes[id]; ok {
-			n.Label = enrich.label
-			n.EntityType = ResolveEntityType(enrich.label)
-			n.Sources = append(n.Sources, "WalletExplorer")
-			graph.Nodes[id] = n
+
+		if label != "" {
+			n.Label = label
+			n.EntityType = ResolveEntityType(label)
 		}
+
+		graph.Nodes[id] = n
 	}
 
 	// 6. Taint propagation
@@ -1184,9 +1200,23 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 
 	// 7. Build summary
 	graph.Summary = buildSummary(graph)
+
 	return graph
 }
 
+// appendIfMissing appends s to slice only when it is not already present.
+// Used to unconditionally record intelligence sources regardless of whether
+// they returned data, so the frontend panel always shows them.
+func appendIfMissing(slice []string, s string) []string {
+	for _, v := range slice {
+		if v == s {
+			return slice
+		}
+	}
+	return append(slice, s)
+}
+
+// buildSummary computes aggregate statistics over the final graph.
 func buildSummary(g UnifiedGraph) GraphSummary {
 	s := GraphSummary{
 		TotalNodes: len(g.Nodes),
@@ -1223,8 +1253,6 @@ func buildSummary(g UnifiedGraph) GraphSummary {
 	return s
 }
 
-// intMax returns the larger of two ints.
-// Named intMax rather than max to avoid shadowing the Go 1.21 builtin.
 func intMax(a, b int) int {
 	if a > b {
 		return a

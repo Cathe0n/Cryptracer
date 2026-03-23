@@ -32,6 +32,8 @@ let calendarTxDates = {};
 let calendarViewDate = new Date();
 let expandedNodes   = new Set(); // tracks which address nodes have been expanded
 window._expandedNodes = expandedNodes;  // expose for ui.js button state
+// Tracks nodes enriched via /api/enrich-node so we never double-call
+const enrichedNodes = new Set();
 let selectedNodeId  = null;   // currently-selected node (used by toolbar button)
 
 // ── Wallet View (co-spend cluster collapse) ──────────────────────────────────
@@ -237,6 +239,101 @@ function addToHistory(id, graphData) {
 // =============================================================================
 // MAIN SEARCH
 // =============================================================================
+
+// =============================================================================
+// AUTO-ENRICHMENT: silently patch newly discovered nodes with full intel
+// =============================================================================
+//
+// When a node is first clicked it may only have "Esplora API" as its source
+// because it was discovered as a neighbor during another address expansion.
+// enrichNodeIfNeeded() calls /api/enrich-node to fetch WalletExplorer label,
+// ChainAbuse risk, and Blockstream stats — then patches fullGraphData in place
+// so the entity panel shows all sources, risk score, and entity type.
+// The panel is not shown until enrichment completes (or times out at 8 s).
+
+async function enrichNodeIfNeeded(nodeId) {
+    if (!fullGraphData || enrichedNodes.has(nodeId)) return;
+
+    const node = fullGraphData.nodes?.[nodeId];
+    if (!node) return;
+
+    // Already enriched by the main trace — has more than just Esplora API
+    const srcs = node.sources || [];
+    const alreadyRich = srcs.some(s => s !== 'Esplora API' && s !== 'Initial Query' && s !== 'Local DB');
+    if (alreadyRich) {
+        enrichedNodes.add(nodeId);
+        return;
+    }
+
+    enrichedNodes.add(nodeId); // mark early to prevent double-calls
+    const isAddress = node.type !== 'Transaction';
+
+    try {
+        const url  = `/api/enrich-node/${encodeURIComponent(nodeId)}?is_address=${isAddress}`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const res  = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const n = fullGraphData.nodes[nodeId];
+        if (!n) return;
+
+        // Merge sources — add any new ones that aren't already listed
+        const existingSrcs = new Set(n.sources || []);
+        (data.sources || []).forEach(s => existingSrcs.add(s));
+        n.sources = [...existingSrcs];
+
+        // Patch label / entity type if WalletExplorer found something
+        if (data.label)       n.label       = data.label;
+        if (data.entity_type && data.entity_type !== 'unknown') n.entity_type = data.entity_type;
+
+        // Patch risk if ChainAbuse returned reports
+        if (data.risk > 0 && data.risk > (n.risk || 0)) {
+            n.risk      = data.risk;
+            n.risk_data = data.risk_data;
+        }
+
+        // Patch tx_count / balance into a lightweight stats field the panel can use
+        if (data.tx_count > 0) n._tx_count_enriched = data.tx_count;
+        if (data.balance_sat !== undefined) n._balance_sat_enriched = data.balance_sat;
+
+        fullGraphData.nodes[nodeId] = n;
+
+        // If the entity panel is still open for this node, refresh it
+        if (window.showEntityView && window.selectedNodeId === nodeId) {
+            window.showEntityView(nodeId);
+        }
+
+        // Update node colour in D3 if risk changed
+        if (data.risk > 0 && window.updateGraphNodeColor) {
+            // re-colour is handled by D3 getNodeColor reading fullGraphData
+            if (state.node) {
+                state.node.attr('fill', d => {
+                    // local import of getNodeColor is module-scoped — trigger re-render
+                    try { return getNodeColor(d); } catch(e) { return '#0ea5e9'; }
+                });
+            }
+        }
+
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            console.warn('[enrich-node] failed for', nodeId, err.message);
+        }
+        // Don't remove from enrichedNodes — a timeout shouldn't cause retries on every click
+    }
+}
+
+// enrichThenShow: drop-in replacement for showEntityView on click events.
+// Shows the panel immediately with whatever data we have, then enriches
+// in the background and refreshes the panel when done.
+function enrichThenShow(nodeId) {
+    // Show panel immediately so the user isn't waiting
+    if (window.showEntityView) window.showEntityView(nodeId);
+    // Fire enrichment in background — panel refreshes automatically when done
+    enrichNodeIfNeeded(nodeId);
+}
 
 // investigateNode: called from entity panel "Investigate" button and history re-run.
 // Sets the input field and kicks off a full search.
@@ -446,7 +543,7 @@ function _renderGraphImpl(graphData, targetId) {
             return 7;
         })
             .attr("fill", getNodeColor)
-            .on("click", (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
+            .on("click", (ev, d) => { ev.stopPropagation(); enrichThenShow(d.id); highlightNode(d.id); })
             .on("mouseover", (ev, d) => highlightNeighbors(d, true))
             .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
             .call(drag());
@@ -671,7 +768,7 @@ function rebindGraphSelections() {
                 .attr("class", "node")
                 .attr("r",    d => d.isTarget ? 18 : (d.type === 'Transaction' ? 4 : (d.risk ? 12 : 7)))
                 .attr("fill", d => d.isTarget ? '#fbbf24' : (d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9')))
-                .on("click",     (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
+                .on("click",     (ev, d) => { ev.stopPropagation(); enrichThenShow(d.id); highlightNode(d.id); })
                 .on("mouseover", (ev, d) => highlightNeighbors(d, true))
                 .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
                 .call(drag()),

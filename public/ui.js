@@ -513,14 +513,244 @@ export function showEntityView(nodeId) {
         </div>
     </div>`;
 
-    if (nodeData.sources?.length > 0) {
-        html += `<div class="ep-divider">
-            <div class="ep-heading" style="margin-bottom:8px">Intelligence Sources</div>
-            <div style="display:flex;flex-direction:column;gap:4px">
-                ${nodeData.sources.map(s => `<div class="ep-body" style="font-family:monospace;background:#f1f5f9;padding:4px 8px;border-radius:4px">${s}</div>`).join('')}
-            </div></div>`;
-    }
+    // ── Intelligence Sources + Cross-Validation ─────────────────────────────
+    // Source definitions — what each provider contributes and its limitations.
+    const SRC_DEF = {
+        'ChainAbuse':    {
+            icon:'🚨', label:'ChainAbuse',
+            url:(id,isA)=>`https://www.chainabuse.com/address/${id}`,
+            provides:'Community abuse reports: scams, ransomware, phishing, darknet.',
+            caveat:'Crowdsourced — absence of a report ≠ clean address.',
+            keyNeeded: true,   // needs caKey
+            forTx: false,
+        },
+        'WalletExplorer': {
+            icon:'🏷️', label:'WalletExplorer',
+            url:(id,isA)=>`https://www.walletexplorer.com/address/${id}`,
+            provides:'Deterministic attribution labels for known exchanges, pools & mixers.',
+            caveat:'Label database frozen since 2016 — post-2016 services are unlisted.',
+            keyNeeded: false,
+            forTx: false,
+        },
+        'Esplora API':   {
+            icon:'🔗', label:'Blockstream',
+            url:(id,isA)=>isA?`https://blockstream.info/address/${id}`:`https://blockstream.info/tx/${id}`,
+            provides:'Ground-truth on-chain data: confirmed TXs, UTXOs, balance, script types.',
+            caveat:'Only 50 most-recent TXs returned. Cannot identify the entity behind an address.',
+            keyNeeded: false,
+            forTx: true,
+        },
+        'Bitquery':      {
+            icon:'📡', label:'Bitquery',
+            url:(id,isA)=>isA?`https://explorer.bitquery.io/bitcoin/address/${id}`:`https://explorer.bitquery.io/bitcoin/tx/${id}`,
+            provides:'Extended historical flow graph: inflows & outflows beyond Blockstream\'s 50-TX window.',
+            caveat:'Requires a paid API key. May lag a few blocks on high-traffic periods.',
+            keyNeeded: true,   // needs bqKey
+            forTx: true,
+        },
+        'mempool.space': {
+            icon:'⛓️', label:'Mempool.space',
+            url:(id,isA)=>isA?`https://mempool.space/address/${id}`:`https://mempool.space/tx/${id}`,
+            provides:'Real-time mempool state: pending TXs, UTXO set, live balance & fee rates.',
+            caveat:'Public rate limits apply. Unconfirmed TX data may change before confirmation.',
+            keyNeeded: false,
+            forTx: true,
+        },
+        'Local DB':      {
+            icon:'🗄️', label:'Local Neo4j DB', url:null,
+            provides:'Cached graph data from previous investigations stored locally.',
+            caveat:'Data may be stale. Re-investigate to refresh against live sources.',
+            keyNeeded: false, forTx: true,
+        },
+        'Initial Query': {
+            icon:'🎯', label:'Initial Query', url:null,
+            provides:'The seed address entered by the investigator to start this investigation.',
+            caveat:'No external data — this is the investigation starting point.',
+            keyNeeded: false, forTx: false,
+        },
+    };
 
+    const VERIFIABLE = new Set(['ChainAbuse','WalletExplorer','Esplora API','Bitquery']);
+
+    // ── Always-show source list ───────────────────────────────────────────────
+    // Build the list of sources that should ALWAYS appear for this node,
+    // regardless of what the backend returned in node.sources.
+    // This ensures newly-discovered nodes always show all applicable source cards
+    // even before enrichment completes.
+    //
+    // hasCaKey / hasBqKey are read from the DOM config status indicators.
+    const hasCaKey = document.querySelector('[data-ca-key]')?.dataset?.caKey === 'true'
+        || (nodeData.risk_data != null)                // key was used — has risk data
+        || (nodeData.sources || []).includes('ChainAbuse'); // backend confirmed it
+    const hasBqKey = (nodeData.sources || []).includes('Bitquery');
+
+    // All sources that are relevant for this node type
+    const alwaysShowSources = [];
+    if ((nodeData.sources||[]).includes('Initial Query')) alwaysShowSources.push('Initial Query');
+    alwaysShowSources.push('Esplora API');         // always — every node has on-chain data
+    if (isAddress) alwaysShowSources.push('WalletExplorer'); // always for addresses
+    if (isAddress && hasCaKey) alwaysShowSources.push('ChainAbuse');
+    if (hasBqKey) alwaysShowSources.push('Bitquery');
+    if ((nodeData.sources||[]).includes('mempool.space')) alwaysShowSources.push('mempool.space');
+    if ((nodeData.sources||[]).includes('Local DB')) alwaysShowSources.push('Local DB');
+
+    // Merge: union of what backend reported AND what we always want to show
+    const mergedSources = [...new Set([
+        ...(nodeData.sources || []),
+        ...alwaysShowSources,
+    ])];
+
+    // Status of each source: 'queried' | 'not_queried' | 'no_key'
+    const activeSrcSet = new Set(nodeData.sources || []);
+    const srcStatus = (s) => {
+        if (activeSrcSet.has(s)) return 'queried';
+        const d = SRC_DEF[s];
+        if (d?.keyNeeded) return 'no_key';
+        return 'not_queried';
+    };
+
+    {
+        // ── 1. Source cards ───────────────────────────────────────────────────
+        const sourceCards = mergedSources.map(s => {
+            const d = SRC_DEF[s] || {icon:'📄',label:s,url:null,provides:'Unknown source.',caveat:'',keyNeeded:false,forTx:true};
+            const rawUrl  = d.url ? d.url(nodeId, isAddress) : null;
+            const safeUrl = rawUrl ? rawUrl.replace(/'/g,'%27') : null;
+            const canVerify = VERIFIABLE.has(s);
+            const status    = srcStatus(s);
+            const cardId    = `src-card-${s.replace(/[^a-z0-9]/gi,'-')}`;
+            const resultId  = `src-result-${s.replace(/[^a-z0-9]/gi,'-')}`;
+
+            // Status badge
+            let statusBadge = '';
+            if (status === 'queried') {
+                statusBadge = `<span style="font-size:7px;font-weight:700;color:#065f46;background:#dcfce7;border:1px solid #86efac;border-radius:3px;padding:1px 5px">✓ Queried</span>`;
+            } else if (status === 'no_key') {
+                statusBadge = `<span style="font-size:7px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:3px;padding:1px 5px">Key needed</span>`;
+            } else {
+                statusBadge = `<span style="font-size:7px;font-weight:700;color:#1d4ed8;background:#dbeafe;border:1px solid #bfdbfe;border-radius:3px;padding:1px 5px">Not yet checked</span>`;
+            }
+
+            const openBtn = safeUrl
+                ? `<button onclick="window.open('${safeUrl}','_blank','noopener,noreferrer')"
+                      title="Open ${nodeId} on ${d.label}"
+                      style="padding:3px 8px;border-radius:4px;border:1px solid #bae6fd;
+                             background:#f0f9ff;color:#0e7490;font-size:8px;font-weight:700;
+                             cursor:pointer;white-space:nowrap">Open ↗</button>`
+                : '';
+
+            const verifyBtn = (canVerify && status !== 'no_key')
+                ? `<button id="vbtn-${cardId}"
+                      onclick="window.verifySource('${nodeId}','${s}',${isAddress})"
+                      title="Live-query this source right now"
+                      style="padding:3px 8px;border-radius:4px;border:1px solid #d1fae5;
+                             background:#f0fdf4;color:#065f46;font-size:8px;font-weight:700;
+                             cursor:pointer;white-space:nowrap">Verify ↻</button>`
+                : '';
+
+            const dimmed = status !== 'queried' ? 'opacity:0.75' : '';
+
+            return `<div id="${cardId}"
+                style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:9px 10px;${dimmed}">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+                    <span style="font-size:13px;flex-shrink:0">${d.icon}</span>
+                    <span class="ep-body" style="font-weight:700!important;color:#0f172a!important;flex:1">${d.label}</span>
+                    ${statusBadge}
+                    <div style="display:flex;gap:4px;flex-shrink:0;margin-left:auto">${verifyBtn}${openBtn}</div>
+                </div>
+                <div class="ep-body-sm" style="color:#334155!important;padding-left:21px;margin-bottom:2px">${d.provides}</div>
+                <div class="ep-body-sm" style="color:#94a3b8!important;padding-left:21px;font-style:italic">⚠ ${d.caveat}</div>
+                <div id="${resultId}" style="margin-top:0"></div>
+            </div>`;
+        }).join('');
+
+        // ── 2. Cross-validation engine ────────────────────────────────────────
+        const findings = [];
+        const hasCA    = activeSrcSet.has('ChainAbuse');
+        const hasWE    = activeSrcSet.has('WalletExplorer');
+        const hasBS    = activeSrcSet.has('Esplora API');
+        const hasBQ    = activeSrcSet.has('Bitquery');
+        const risk      = nodeData.risk || 0;
+        const rd        = nodeData.risk_data;
+        const hasReports = rd && rd.report_count > 0;
+        const label      = nodeData.label && nodeData.label !== nodeId ? nodeData.label : '';
+        const eType      = nodeData.entity_type || 'unknown';
+        const mixerFlagged  = nodeData.mixer_info?.is_mixer;
+        const exchFlagged   = nodeData.exchange_info?.flagged || eType === 'exchange';
+        const gambleFlagged = nodeData.gambling_info?.flagged || eType === 'gambling';
+        const mineFlagged   = nodeData.mining_info?.flagged   || eType === 'mining';
+        const clusterSize   = nodeData.cluster_size || 1;
+
+        if (mixerFlagged && hasCA && rd?.categories?.['mixer'] > 0)
+            findings.push({type:'agree',icon:'✅',weight:3,text:`<strong>Mixing confirmed by 2 independent sources.</strong> On-chain heuristics (${nodeData.mixer_info.raw?.mixer_type||'CoinJoin'}) and ChainAbuse community reports both flag mixer activity.`});
+        else if (mixerFlagged && hasCA && !hasReports)
+            findings.push({type:'info',icon:'🔍',weight:1,text:`Behavioral analysis flags mixing patterns but ChainAbuse has no reports. Heuristic detection only.`});
+        if (label && exchFlagged && hasWE)
+            findings.push({type:'agree',icon:'✅',weight:3,text:`<strong>Exchange identity corroborated.</strong> WalletExplorer label "<em>${label}</em>" and behavioral analysis both classify this as a custodial service.`});
+        else if (label && !exchFlagged && hasWE && hasBS)
+            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>WalletExplorer and on-chain data agree:</strong> Label "<em>${label}</em>" assigned with no conflicting behavioral flags.`});
+        if (mineFlagged && hasBS)
+            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>Mining pool corroborated.</strong> Blockstream coinbase inputs and behavioral heuristics both confirm mining pool activity.`});
+        if (gambleFlagged && hasCA && hasReports)
+            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>Gambling confirmed by 2 sources.</strong> Behavioral heuristics and ChainAbuse reports align on gambling classification.`});
+        if (hasReports && risk >= 70 && (mixerFlagged || exchFlagged || gambleFlagged))
+            findings.push({type:'agree',icon:'✅',weight:3,text:`<strong>High-risk classification corroborated.</strong> ChainAbuse (score ${risk}/100) aligns with behavioral pattern detection — multiple signals converge.`});
+        if (!hasReports && !mixerFlagged && !exchFlagged && !gambleFlagged && !mineFlagged && risk === 0 && activeSrcSet.size >= 2)
+            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>${activeSrcSet.size} sources cross-checked — no risk signals found.</strong> No abuse reports, no behavioral flags, no known-entity label.`});
+        if (clusterSize > 1 && hasBS)
+            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>Co-spend cluster corroborated.</strong> Blockstream inputs link this address to <strong>${clusterSize}</strong> addresses in the same wallet cluster.`});
+        if (hasBQ && hasBS)
+            findings.push({type:'agree',icon:'✅',weight:1,text:`Bitquery historical flows and Blockstream on-chain data both active. Cross-referencing improves tracing confidence.`});
+        if (label && hasWE && hasReports && risk >= 40)
+            findings.push({type:'conflict',icon:'⚠️',weight:4,text:`<strong>Attribution conflict.</strong> WalletExplorer labels this "<em>${label}</em>" (known service), yet ChainAbuse holds <strong>${rd.report_count} report(s)</strong> for: ${Object.keys(rd?.categories||{}).join(', ')||'unknown'}. May indicate a compromised account or mislabeled address.`});
+        if (mixerFlagged && exchFlagged)
+            findings.push({type:'conflict',icon:'⚠️',weight:3,text:`<strong>Behavioural conflict.</strong> TX patterns match both a <em>coin mixer</em> and an <em>exchange</em>. Could indicate a mixer operating through exchange infrastructure.`});
+        if (hasReports && risk >= 50 && label && hasWE && !exchFlagged)
+            findings.push({type:'conflict',icon:'⚠️',weight:3,text:`<strong>Source disagreement on risk.</strong> WalletExplorer identifies "<em>${label}</em>" as a known entity, but ChainAbuse risk score is <strong>${risk}/100</strong>. Investigate whether the label is outdated.`});
+        if (risk > 0 && !hasReports && !label && activeSrcSet.size >= 2)
+            findings.push({type:'conflict',icon:'⚠️',weight:2,text:`<strong>Taint risk not independently confirmed.</strong> Risk score <strong>${risk}</strong> is inherited via graph proximity — no direct abuse reports or attribution exist for this address.`});
+        if (hasCA && !hasReports && risk === 0)
+            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`ChainAbuse queried — zero reports found. Coverage depends on community submissions; may miss recent or obscure schemes.`});
+        if (hasWE && !label)
+            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`WalletExplorer returned no label. The address may be an individual wallet, an unlisted service, or active after the 2016 label freeze.`});
+        if (!hasBQ)
+            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`Bitquery not configured — only Blockstream's 50 most-recent TXs are available. Add a Bitquery API key in Settings for full historical flow coverage.`});
+        if (!hasCA && isAddress)
+            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`ChainAbuse key not set — automated risk scoring disabled. Use the <strong>Open ↗</strong> button on the ChainAbuse card above to manually check this address, or add your key in Settings.`});
+
+        findings.sort((a,b)=>b.weight-a.weight);
+        const FSTYLE = {
+            agree:   {bg:'#f0fdf4',border:'#86efac',ic:'#15803d',tx:'#14532d'},
+            conflict:{bg:'#fff7ed',border:'#fdba74',ic:'#c2410c',tx:'#7c2d12'},
+            gap:     {bg:'#f8fafc',border:'#e2e8f0',ic:'#64748b',tx:'#475569'},
+            info:    {bg:'#eff6ff',border:'#bfdbfe',ic:'#1d4ed8',tx:'#1e3a8a'},
+        };
+        const findingRows = findings.map(f=>{
+            const st=FSTYLE[f.type]||FSTYLE.info;
+            return `<div style="display:flex;gap:8px;align-items:flex-start;background:${st.bg};border:1px solid ${st.border};border-radius:6px;padding:8px 10px">
+                <span style="font-size:11px;flex-shrink:0;margin-top:1px;color:${st.ic}">${f.icon}</span>
+                <div class="ep-body-sm" style="color:${st.tx}!important;line-height:1.5!important">${f.text}</div>
+            </div>`;
+        }).join('');
+        const agreeCount   = findings.filter(f=>f.type==='agree').length;
+        const conflictCount= findings.filter(f=>f.type==='conflict').length;
+        const summaryColor = conflictCount>0?'#c2410c':agreeCount>0?'#15803d':'#475569';
+        const summaryBg    = conflictCount>0?'#fff7ed':agreeCount>0?'#f0fdf4':'#f8fafc';
+        const summaryBorder= conflictCount>0?'#fdba74':agreeCount>0?'#86efac':'#e2e8f0';
+        const summaryText  = conflictCount>0
+            ? `${conflictCount} conflict${conflictCount>1?'s':''} detected — review carefully`
+            : agreeCount>0 ? `${agreeCount} agreement${agreeCount>1?'s':''} — findings corroborated`
+            : 'Insufficient data for cross-validation';
+
+        html += `<div class="ep-divider">
+            <div class="ep-heading" style="margin-bottom:8px">🔍 Intelligence Sources</div>
+            <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">${sourceCards}</div>
+            <div style="display:flex;align-items:center;gap:6px;background:${summaryBg};border:1px solid ${summaryBorder};border-radius:6px;padding:7px 10px;margin-bottom:8px">
+                <span style="font-size:11px;color:${summaryColor}">${conflictCount>0?'⚠️':agreeCount>0?'✅':'ℹ️'}</span>
+                <span class="ep-body" style="font-weight:700!important;color:${summaryColor}!important">Cross-validation: ${summaryText}</span>
+            </div>
+            ${findingRows?`<div style="display:flex;flex-direction:column;gap:5px">${findingRows}</div>`:''}
+        </div>`;
+    }
     html += `</div>`; // close ep-wrap
     document.getElementById('entityContent').innerHTML = html;
     document.getElementById('liveView').classList.add('hidden');
@@ -531,6 +761,108 @@ export function closeEntityView() {
     document.getElementById('entityView').classList.add('hidden');
     document.getElementById('liveView').classList.remove('hidden');
 }
+
+// =============================================================================
+// LIVE SOURCE VERIFICATION
+// =============================================================================
+// Called when the user clicks "Verify ↻" on a source card.
+// Hits GET /api/verify/:address?source=X and renders the result inline.
+window.verifySource = async function(nodeId, sourceName, isAddress) {
+    const cardId   = `src-card-${sourceName.replace(/[^a-z0-9]/gi,'-')}`;
+    const resultId = `src-result-${sourceName.replace(/[^a-z0-9]/gi,'-')}`;
+    const btnId    = `vbtn-${cardId}`;
+
+    const resultEl = document.getElementById(resultId);
+    const btnEl    = document.getElementById(btnId);
+    if (!resultEl) return;
+
+    // Map source names to backend keys
+    const SOURCE_KEY = {
+        'ChainAbuse':  'chainabuse',
+        'WalletExplorer': 'walletexplorer',
+        'Esplora API': 'blockstream',
+        'Bitquery':    'bitquery',
+    };
+    const key = SOURCE_KEY[sourceName];
+    if (!key) return;
+
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⟳…'; }
+    resultEl.style.marginTop = '8px';
+    resultEl.innerHTML = `<div style="font-size:8px;color:#475569;font-style:italic;padding:4px 0 0 21px">Querying ${sourceName}…</div>`;
+
+    try {
+        const url = `/api/verify/${encodeURIComponent(nodeId)}?source=${key}&is_address=${isAddress}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const data = await res.json();
+
+        let bg, border, icon, textColor, body;
+
+        if (!data.ok) {
+            // API key missing or request failed
+            bg='#fff7ed'; border='#fdba74'; icon='⚠️'; textColor='#7c2d12';
+            body = `<strong>${data.error || 'Verification failed'}</strong>`;
+        } else if (!data.found) {
+            // Source responded but found nothing
+            bg='#f0fdf4'; border='#86efac'; icon='✅'; textColor='#14532d';
+            body = data.summary || 'No data found — address appears clean on this source.';
+        } else {
+            // Source returned positive data
+            bg='#eff6ff'; border='#bfdbfe'; icon='🔍'; textColor='#1e3a8a';
+            body = data.summary || 'Data found.';
+
+            // Source-specific detail rows
+            const rows = [];
+            if (key === 'chainabuse') {
+                rows.push(`Reports: <strong>${data.report_count}</strong>`);
+                rows.push(`Risk score: <strong>${data.risk_score}/100</strong>`);
+                if (data.highest_risk) rows.push(`Highest category: <strong>${data.highest_risk}</strong>`);
+                if (data.verified)     rows.push(`✓ Verified reports`);
+                if (data.risk_score >= 70) { bg='#fef2f2'; border='#fca5a5'; icon='🚨'; textColor='#7f1d1d'; }
+                else if (data.risk_score >= 40) { bg='#fff7ed'; border='#fdba74'; icon='⚠️'; textColor='#7c2d12'; }
+            }
+            if (key === 'walletexplorer' && data.label) {
+                rows.push(`Label: <strong>${data.label}</strong>`);
+            }
+            if (key === 'blockstream') {
+                if (data.tx_count !== undefined) rows.push(`Confirmed TXs: <strong>${data.tx_count}</strong>`);
+                if (data.balance  !== undefined) rows.push(`Balance: <strong>${(data.balance/1e8).toFixed(8)} BTC</strong>`);
+            }
+            if (key === 'bitquery') {
+                rows.push(`Total flow edges: <strong>${data.total}</strong>`);
+                rows.push(`Inflows: <strong>${data.inflows}</strong> · Outflows: <strong>${data.outflows}</strong>`);
+                rows.push(`Total in: <strong>${(data.total_in||0).toFixed(6)} BTC</strong> · out: <strong>${(data.total_out||0).toFixed(6)} BTC</strong>`);
+            }
+            if (rows.length > 0) {
+                body += `<div style="margin-top:4px;display:flex;flex-direction:column;gap:2px">
+                    ${rows.map(r=>`<div class="ep-body-sm" style="color:${textColor}!important">${r}</div>`).join('')}
+                </div>`;
+            }
+
+            // Update node source list in live graph data so cross-validation picks it up
+            if (window.state?.fullGraphData?.nodes?.[nodeId]) {
+                const n = window.state.fullGraphData.nodes[nodeId];
+                if (!n.sources) n.sources = [];
+                if (!n.sources.includes(sourceName)) n.sources.push(sourceName);
+            }
+        }
+
+        resultEl.innerHTML = `
+            <div style="display:flex;gap:6px;align-items:flex-start;background:${bg};
+                        border:1px solid ${border};border-radius:5px;
+                        padding:7px 8px;margin-top:6px;margin-left:0">
+                <span style="font-size:10px;flex-shrink:0;margin-top:1px">${icon}</span>
+                <div class="ep-body-sm" style="color:${textColor}!important;line-height:1.5!important">${body}</div>
+            </div>`;
+
+    } catch (err) {
+        resultEl.innerHTML = `
+            <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:5px;padding:6px 8px;margin-top:6px">
+                <div class="ep-body-sm" style="color:#7f1d1d!important">⚠ ${err.name === 'TimeoutError' ? 'Request timed out' : err.message}</div>
+            </div>`;
+    } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Verify ↻'; }
+    }
+};
 
 export async function enrichFromMempool(nodeId, address) {
     const el  = document.getElementById('mempoolEnrichContent');
