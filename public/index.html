@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <title>Cryptracer</title>
+    <title>Cryptracer | D3 Edition</title>
     <!-- Using D3.js modules instead of the old Sigma.js renderer -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <!-- Tailwind CSS v2 pre-built — no build step, no console warning -->
@@ -132,6 +132,8 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        /* ── Focus / Cinema mode ──────────────────────────────────────── */
+        #focusModeBtn { position:fixed; bottom:18px; right:18px; z-index:9999; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
@@ -152,7 +154,7 @@
         <div class="flex items-center gap-3">
             <div class="w-2.5 h-2.5 bg-cyan-500 rounded-full shadow-[0_0_12px_#06b6d4]"></div>
             <span class="font-bold text-white text-sm tracking-[0.3em] uppercase">Cryptracer</span>
-            <span class="text-[9px] text-cyan-400 bg-cyan-950 px-2 py-1 rounded">CIED</span>
+            <span class="text-[9px] text-cyan-400 bg-cyan-950 px-2 py-1 rounded">D3 EDITION</span>
         </div>
         <!-- Live network stats ticker -->
         <div id="networkStats" class="flex items-center px-4 max-w-lg overflow-hidden">
@@ -437,5 +439,98 @@
 
     <!-- Application entry point; module imports load graph, UI, and utilities -->
     <script type="module" src="main.js"></script>
+
+    <!-- ── Focus / Cinema mode ──────────────────────────────────────── -->
+    <button id="focusModeBtn"
+        onclick="toggleFocusMode()"
+        title="Hide UI — focus on the graph (press F or Esc to toggle)"
+        style="display:flex;align-items:center;gap:6px;
+               padding:8px 14px;border-radius:8px;border:1px solid #334155;
+               background:rgba(15,23,42,0.85);color:#94a3b8;
+               font-size:11px;font-weight:700;letter-spacing:0.06em;
+               backdrop-filter:blur(6px);cursor:pointer;
+               text-transform:uppercase;transition:all .2s">
+        ⛶ <span id="focusModeLabel">Focus</span>
+    </button>
+
+    <script>
+    let _focusActive = false;
+
+    function toggleFocusMode(force) {
+        _focusActive = force !== undefined ? force : !_focusActive;
+
+        const header = document.querySelector('header');
+        const aside  = document.querySelector('aside');
+        const btn    = document.getElementById('focusModeBtn');
+        const label  = document.getElementById('focusModeLabel');
+
+        if (_focusActive) {
+            // Collapse header — animate height to 0 then hide
+            if (header) {
+                header.style.transition = 'height .25s ease, padding .25s ease, opacity .25s ease';
+                header.style.overflow = 'hidden';
+                header.style.height   = '0';
+                header.style.padding  = '0';
+                header.style.opacity  = '0';
+            }
+            // Collapse sidebar — animate width to 0 then hide
+            if (aside) {
+                aside.style.transition = 'width .25s ease, opacity .25s ease';
+                aside.style.overflow = 'hidden';
+                aside.style.width    = '0';
+                aside.style.opacity  = '0';
+            }
+            // Style the button as active
+            if (btn) {
+                btn.style.background    = 'rgba(6,182,212,0.15)';
+                btn.style.borderColor   = '#06b6d4';
+                btn.style.color         = '#06b6d4';
+            }
+            if (label) label.textContent = 'Exit Focus';
+
+            // Close entity panel so it doesn't linger
+            const ev = document.getElementById('entityView');
+            const lv = document.getElementById('liveView');
+            if (ev && !ev.classList.contains('hidden')) {
+                ev.classList.add('hidden');
+                lv && lv.classList.remove('hidden');
+            }
+        } else {
+            // Restore header
+            if (header) {
+                header.style.height  = '';
+                header.style.padding = '';
+                header.style.opacity = '1';
+                // Remove overflow hidden after transition so dropdowns work
+                setTimeout(() => { if (header) header.style.overflow = ''; }, 300);
+            }
+            // Restore sidebar
+            if (aside) {
+                aside.style.width   = '';
+                aside.style.opacity = '1';
+                setTimeout(() => { if (aside) aside.style.overflow = ''; }, 300);
+            }
+            // Reset button
+            if (btn) {
+                btn.style.background  = '';
+                btn.style.borderColor = '';
+                btn.style.color       = '';
+            }
+            if (label) label.textContent = 'Focus';
+        }
+    }
+
+    // Keyboard shortcuts: F to enter, Escape to exit
+    document.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if ((e.key === 'F' || e.key === 'f') && !_focusActive) { toggleFocusMode(true);  return; }
+        if (e.key === 'Escape' && _focusActive)                 { toggleFocusMode(false); return; }
+    });
+
+    // Double-click empty canvas to toggle
+    document.getElementById('graph-container')?.addEventListener('dblclick', () => {
+        toggleFocusMode(!_focusActive);
+    });
+    </script>
 </body>
 </html>
