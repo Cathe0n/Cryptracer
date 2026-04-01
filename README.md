@@ -76,7 +76,7 @@ This tool is intended for **academic research**, **compliance investigations**, 
 
 ### API Keys Required
 
-| Service | Purpose | Free Tier | Getting Started |
+| Service | Purpose | Free Tier | API Status|
 |---------|---------|-----------|-----------------|
 | **ChainAbuse** | Risk/abuse data |  Yes | [chainabuse.com](https://www.chainabuse.com) |
 | **Bitquery** | Extended transaction flows |  Limited | [bitquery.io](https://bitquery.io) |
