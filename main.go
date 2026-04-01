@@ -1,7 +1,9 @@
 package main
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"money-tracer/db"
 	"money-tracer/internal/aggregator"
@@ -10,6 +12,7 @@ import (
 	"money-tracer/internal/intel"
 	"money-tracer/internal/tracer"
 	"money-tracer/parser"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +22,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
+
+//go:embed public/*
+var publicFS embed.FS
 
 // ─── Runtime config ───────────────────────────────────────────────────────────
 
@@ -166,7 +172,8 @@ func main() {
 		logAPI(c.Request.Method, c.Request.URL.Path, c.Writer.Status(), time.Since(start), c.ClientIP())
 	})
 
-	r.Static("/ui", "./public")
+	publicSub, _ := fs.Sub(publicFS, "public")
+	r.StaticFS("/ui", http.FS(publicSub))
 
 	// ── Config endpoints ──────────────────────────────────────────────────────
 

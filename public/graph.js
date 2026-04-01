@@ -32,8 +32,6 @@ let calendarTxDates = {};
 let calendarViewDate = new Date();
 let expandedNodes   = new Set(); // tracks which address nodes have been expanded
 window._expandedNodes = expandedNodes;  // expose for ui.js button state
-// Tracks nodes enriched via /api/enrich-node so we never double-call
-const enrichedNodes = new Set();
 let selectedNodeId  = null;   // currently-selected node (used by toolbar button)
 
 // ── Wallet View (co-spend cluster collapse) ──────────────────────────────────
@@ -240,101 +238,6 @@ function addToHistory(id, graphData) {
 // MAIN SEARCH
 // =============================================================================
 
-// =============================================================================
-// AUTO-ENRICHMENT: silently patch newly discovered nodes with full intel
-// =============================================================================
-//
-// When a node is first clicked it may only have "Esplora API" as its source
-// because it was discovered as a neighbor during another address expansion.
-// enrichNodeIfNeeded() calls /api/enrich-node to fetch WalletExplorer label,
-// ChainAbuse risk, and Blockstream stats — then patches fullGraphData in place
-// so the entity panel shows all sources, risk score, and entity type.
-// The panel is not shown until enrichment completes (or times out at 8 s).
-
-async function enrichNodeIfNeeded(nodeId) {
-    if (!fullGraphData || enrichedNodes.has(nodeId)) return;
-
-    const node = fullGraphData.nodes?.[nodeId];
-    if (!node) return;
-
-    // Already enriched by the main trace — has more than just Esplora API
-    const srcs = node.sources || [];
-    const alreadyRich = srcs.some(s => s !== 'Esplora API' && s !== 'Initial Query' && s !== 'Local DB');
-    if (alreadyRich) {
-        enrichedNodes.add(nodeId);
-        return;
-    }
-
-    enrichedNodes.add(nodeId); // mark early to prevent double-calls
-    const isAddress = node.type !== 'Transaction';
-
-    try {
-        const url  = `/api/enrich-node/${encodeURIComponent(nodeId)}?is_address=${isAddress}`;
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 8000);
-        const res  = await fetch(url, { signal: ctrl.signal });
-        clearTimeout(timer);
-        if (!res.ok) return;
-
-        const data = await res.json();
-        const n = fullGraphData.nodes[nodeId];
-        if (!n) return;
-
-        // Merge sources — add any new ones that aren't already listed
-        const existingSrcs = new Set(n.sources || []);
-        (data.sources || []).forEach(s => existingSrcs.add(s));
-        n.sources = [...existingSrcs];
-
-        // Patch label / entity type if WalletExplorer found something
-        if (data.label)       n.label       = data.label;
-        if (data.entity_type && data.entity_type !== 'unknown') n.entity_type = data.entity_type;
-
-        // Patch risk if ChainAbuse returned reports
-        if (data.risk > 0 && data.risk > (n.risk || 0)) {
-            n.risk      = data.risk;
-            n.risk_data = data.risk_data;
-        }
-
-        // Patch tx_count / balance into a lightweight stats field the panel can use
-        if (data.tx_count > 0) n._tx_count_enriched = data.tx_count;
-        if (data.balance_sat !== undefined) n._balance_sat_enriched = data.balance_sat;
-
-        fullGraphData.nodes[nodeId] = n;
-
-        // If the entity panel is still open for this node, refresh it
-        if (window.showEntityView && window.selectedNodeId === nodeId) {
-            window.showEntityView(nodeId);
-        }
-
-        // Update node colour in D3 if risk changed
-        if (data.risk > 0 && window.updateGraphNodeColor) {
-            // re-colour is handled by D3 getNodeColor reading fullGraphData
-            if (state.node) {
-                state.node.attr('fill', d => {
-                    // local import of getNodeColor is module-scoped — trigger re-render
-                    try { return getNodeColor(d); } catch(e) { return '#0ea5e9'; }
-                });
-            }
-        }
-
-    } catch (err) {
-        if (err.name !== 'AbortError') {
-            console.warn('[enrich-node] failed for', nodeId, err.message);
-        }
-        // Don't remove from enrichedNodes — a timeout shouldn't cause retries on every click
-    }
-}
-
-// enrichThenShow: drop-in replacement for showEntityView on click events.
-// Shows the panel immediately with whatever data we have, then enriches
-// in the background and refreshes the panel when done.
-function enrichThenShow(nodeId) {
-    // Show panel immediately so the user isn't waiting
-    if (window.showEntityView) window.showEntityView(nodeId);
-    // Fire enrichment in background — panel refreshes automatically when done
-    enrichNodeIfNeeded(nodeId);
-}
-
 // investigateNode: called from entity panel "Investigate" button and history re-run.
 // Sets the input field and kicks off a full search.
 window.investigateNode = function(address) {
@@ -449,8 +352,8 @@ function _renderGraphImpl(graphData, targetId) {
         const defs = svg.append("defs");
         const mkArrow = (id, color) => defs.append("marker")
             .attr("id", id).attr("viewBox", "0 -5 10 10")
-            .attr("refX", 20).attr("refY", 0)
-            .attr("markerWidth", 7).attr("markerHeight", 7)
+            .attr("refX", 10).attr("refY", 0)
+            .attr("markerWidth", 6).attr("markerHeight", 6)
             .attr("orient", "auto")
             .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
 
@@ -543,7 +446,7 @@ function _renderGraphImpl(graphData, targetId) {
             return 7;
         })
             .attr("fill", getNodeColor)
-            .on("click", (ev, d) => { ev.stopPropagation(); enrichThenShow(d.id); highlightNode(d.id); })
+            .on("click", (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
             .on("mouseover", (ev, d) => highlightNeighbors(d, true))
             .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
             .call(drag());
@@ -601,9 +504,34 @@ function _renderGraphImpl(graphData, targetId) {
     }
 }
 
+// Returns the visual radius of a node data object (mirrors the .attr("r") logic)
+function nodeRadius(d) {
+    if (!d) return 7;
+    if (d.isTarget) return 18;
+    if (d.member_count > 1) return Math.min(11 + d.member_count * 0.9, 26);
+    if (d.type === 'Transaction') return 4;
+    if (d.risk) return 12;
+    return 7;
+}
+
 function ticked() {
-    link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    // Draw each link from the source node's boundary to the target node's boundary.
+    // This ensures the arrowhead (marker-end) appears just outside the target circle
+    // and that the line visually exits from the source circle, not its centre.
+    link.each(function(d) {
+        const sx = d.source.x || 0, sy = d.source.y || 0;
+        const tx = d.target.x || 0, ty = d.target.y || 0;
+        const dx = tx - sx, dy = ty - sy;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ux = dx / dist, uy = dy / dist;
+        const sr = nodeRadius(d.source) + 2;   // source boundary + tiny gap
+        const tr = nodeRadius(d.target) + 2;   // target boundary (arrow tip lands here)
+        d3.select(this)
+            .attr("x1", sx + ux * sr)
+            .attr("y1", sy + uy * sr)
+            .attr("x2", tx - ux * tr)
+            .attr("y2", ty - uy * tr);
+    });
     node.attr("cx", d => d.x).attr("cy", d => d.y);
     label.attr("x", d => d.x).attr("y", d => d.y);
     // Expand-rings share the same data objects as rawNodes, so d.x/d.y are always current
@@ -768,7 +696,7 @@ function rebindGraphSelections() {
                 .attr("class", "node")
                 .attr("r",    d => d.isTarget ? 18 : (d.type === 'Transaction' ? 4 : (d.risk ? 12 : 7)))
                 .attr("fill", d => d.isTarget ? '#fbbf24' : (d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9')))
-                .on("click",     (ev, d) => { ev.stopPropagation(); enrichThenShow(d.id); highlightNode(d.id); })
+                .on("click",     (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
                 .on("mouseover", (ev, d) => highlightNeighbors(d, true))
                 .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
                 .call(drag()),
@@ -791,31 +719,13 @@ function rebindGraphSelections() {
             exit   => exit.remove()
         );
     label = g.select(".labels").selectAll("text");
-    // Rebind edge labels so they follow rawLinks and update on expansions
-    const _edgeKey = l => {
-        const s = l.source?.id || l.source;
-        const t = l.target?.id || l.target;
-        return `${s}|${t}`;
-    };
-    g.select('.edge-labels').remove();
-    edgeLabel = g.insert('g', '.nodes').attr('class', 'edge-labels')
-        .selectAll('text').data(rawLinks, _edgeKey)
-        .join(
-            enter => enter.append('text')
-                .attr('class', 'edge-label')
-                .attr('text-anchor', 'middle')
-                .attr('fill', '#0f172a').attr('font-size', '10px').attr('font-weight', '500')
-                .style('display', 'none'),
-            update => update,
-            exit => exit.remove()
-        );
-    // Rebind edge labels so they follow rawLinks and update on expansions
+    // Rebuild edge labels keyed by source|target so they align correctly after expand/rebind
     const edgeKey = l => {
         const s = l.source?.id || l.source;
         const t = l.target?.id || l.target;
         return `${s}|${t}`;
     };
-    // Remove any stale edge-labels group and recreate keyed join so labels align with edges
+    // Remove any stale group and recreate with a single authoritative keyed join
     g.select('.edge-labels').remove();
     edgeLabel = g.insert('g', '.nodes').attr('class', 'edge-labels')
         .selectAll('text').data(rawLinks, edgeKey)
@@ -1994,8 +1904,8 @@ export async function mergePathIntoGraph(path) {
 
         const defs = svg.append('defs');
         const mkArrow = (id, color) => defs.append('marker').attr('id', id)
-            .attr('viewBox', '0 -5 10 10').attr('refX', 20).attr('refY', 0)
-            .attr('markerWidth', 7).attr('markerHeight', 7).attr('orient', 'auto')
+            .attr('viewBox', '0 -5 10 10').attr('refX', 10).attr('refY', 0)
+            .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
             .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', color);
         mkArrow('arrowhead-default',   '#64748b');
         mkArrow('arrowhead-highlight', '#0ea5e9');
@@ -2203,6 +2113,107 @@ export function clearPathHighlight() {
 
 // Graph module: exports D3 rendering and interaction functions
 // runSleuth is defined in main.js as the primary orchestrator
+// =============================================================================
+// GRAPH NODE SEARCH
+// =============================================================================
+// Finds nodes whose id or label contains the query string (case-insensitive).
+// Highlights matches, zooms/pans to the first result, opens the entity panel.
+
+window.graphSearch = function(query) {
+    query = (query || '').trim().toLowerCase();
+    const resultEl = document.getElementById('graphSearchResults');
+
+    if (!query || !fullGraphData) {
+        if (resultEl) resultEl.innerHTML = '';
+        // Clear any existing highlight
+        if (state.node) state.node.attr('opacity', 1);
+        return;
+    }
+
+    const matches = Object.entries(fullGraphData.nodes).filter(([id, n]) => {
+        return id.toLowerCase().includes(query) ||
+               (n.label || '').toLowerCase().includes(query) ||
+               (n.entity_type || '').toLowerCase().includes(query);
+    });
+
+    // Highlight matches vs non-matches in the graph
+    if (state.node) {
+        state.node.attr('opacity', d => {
+            const match = d.id.toLowerCase().includes(query) ||
+                          (d.label || '').toLowerCase().includes(query);
+            return match ? 1 : 0.15;
+        });
+    }
+
+    if (resultEl) {
+        if (matches.length === 0) {
+            resultEl.innerHTML = `<div style="font-size:9px;color:#ef4444;padding:4px 0;font-style:italic">No nodes found for "${query}"</div>`;
+            return;
+        }
+
+        resultEl.innerHTML = matches.slice(0, 8).map(([id, n]) => {
+            const short = id.length > 20 ? id.slice(0, 10) + '…' + id.slice(-8) : id;
+            const label = n.label && n.label !== id ? ` · ${n.label}` : '';
+            const risk  = n.risk > 0 ? `<span style="color:#ef4444;font-weight:700;margin-left:4px">${n.risk}</span>` : '';
+            return `<button onclick="window.graphSearchSelect('${id}')"
+                style="display:block;width:100%;text-align:left;padding:5px 8px;margin-bottom:3px;
+                       border-radius:5px;border:1px solid #334155;background:#0f172a;cursor:pointer;
+                       font-size:9px;font-family:monospace;color:#94a3b8;
+                       transition:background .15s"
+                onmouseover="this.style.background='#1e293b'"
+                onmouseout="this.style.background='#0f172a'">
+                <span style="color:#67e8f9">${short}</span>${label}${risk}
+            </button>`;
+        }).join('');
+
+        if (matches.length > 8) {
+            resultEl.innerHTML += `<div style="font-size:8px;color:#475569;padding:2px 4px">${matches.length - 8} more — refine your query</div>`;
+        }
+    }
+
+    // Pan/zoom to the first match
+    if (matches.length > 0) {
+        window.graphSearchSelect(matches[0][0], false);
+    }
+};
+
+// Jump to a node and optionally open its panel
+window.graphSearchSelect = function(nodeId, openPanel = true) {
+    const n = rawNodes.find(n => n.id === nodeId);
+    if (!n || !state.svg || !zoom) return;
+
+    // SVG viewBox is centred at (0,0) — same convention as recenterGraph().
+    // d3.zoomIdentity.scale(k).translate(-nx, -ny) centres node at the viewport origin.
+    const k = 2.2;
+    state.svg.transition().duration(600)
+        .call(zoom.transform, d3.zoomIdentity.scale(k).translate(-(n.x || 0), -(n.y || 0)));
+
+    // Flash the node with a yellow ring
+    if (state.node) {
+        state.node.filter(d => d.id === nodeId)
+            .attr('stroke', '#fbbf24')
+            .attr('stroke-width', 4)
+            .transition().duration(1200).delay(400)
+            .attr('stroke', null)
+            .attr('stroke-width', null);
+    }
+
+    if (openPanel && window.showEntityView) {
+        window.showEntityView(nodeId);
+        if (typeof enrichNodeIfNeeded === 'function') enrichNodeIfNeeded(nodeId);
+    }
+};
+
+// Clear search highlights
+window.graphSearchClear = function() {
+    if (state.node) state.node.attr('opacity', 1);
+    const q = document.getElementById('graphSearchInput');
+    const r = document.getElementById('graphSearchResults');
+    if (q) q.value = '';
+    if (r) r.innerHTML = '';
+};
+
+
 export { expandNode, expandSelected, expandAll, updateExpandRings, updateExpandBtn };
 export { saveSession, restoreSession, checkPendingSession };
 
@@ -2429,7 +2440,7 @@ function saveSession() {
     // Pull annotations from localStorage
     let annotations = {};
     try {
-        const raw = localStorage.getItem('cryptracker_node_annotations');
+        const raw = localStorage.getItem('cryptracer_node_annotations'); // matches annotations.js STORAGE_KEY
         if (raw) annotations = JSON.parse(raw);
     } catch (_) {}
 
@@ -2464,7 +2475,7 @@ async function restoreSession(session) {
 
     // 1. Restore annotations
     if (session.annotations && Object.keys(session.annotations).length > 0) {
-        localStorage.setItem('cryptrace_node_annotations', JSON.stringify(session.annotations));
+        localStorage.setItem('cryptracer_node_annotations', JSON.stringify(session.annotations)); // matches annotations.js STORAGE_KEY
     }
 
     // 2. Render the graph

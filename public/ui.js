@@ -97,45 +97,45 @@ export function showEntityView(nodeId) {
     // if the parent also uses !important on lower-specificity selectors.
     let html = `
     <style id="ep-theme">
-      #entityContent { color: #1e293b !important; background: transparent !important; }
+      #entityContent { color: #e2e8f0 !important; background: transparent !important; }
       #entityContent .ep-wrap { display:flex; flex-direction:column; gap:12px; }
       #entityContent .ep-card {
-        background: #f8fafc !important;
-        border: 1px solid #e2e8f0 !important;
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
         border-radius: 8px !important;
         padding: 12px !important;
-        color: #1e293b !important;
+        color: #e2e8f0 !important;
       }
-      #entityContent .ep-card-accent-amber { border-left: 4px solid #b45309 !important; }
-      #entityContent .ep-card-accent-orange { border-left: 4px solid #c2410c !important; }
-      #entityContent .ep-card-accent-red    { border-left: 4px solid #b91c1c !important; }
-      #entityContent .ep-card-accent-green  { border-left: 4px solid #065f46 !important; }
-      #entityContent .ep-card-accent-slate  { border-left: 4px solid #475569 !important; }
-      #entityContent .ep-card-accent-indigo { border-left: 4px solid #6366f1 !important; }
-      #entityContent .ep-card-accent-sky    { border-left: 4px solid #0ea5e9 !important; }
-      #entityContent .ep-card-accent-violet { border-left: 4px solid #8b5cf6 !important; }
-      #entityContent .ep-card-accent-amber2 { border-left: 4px solid #f59e0b !important; }
+      #entityContent .ep-card-accent-amber { border-left: 4px solid #f59e0b !important; }
+      #entityContent .ep-card-accent-orange { border-left: 4px solid #f97316 !important; }
+      #entityContent .ep-card-accent-red    { border-left: 4px solid #ef4444 !important; }
+      #entityContent .ep-card-accent-green  { border-left: 4px solid #22c55e !important; }
+      #entityContent .ep-card-accent-slate  { border-left: 4px solid #64748b !important; }
+      #entityContent .ep-card-accent-indigo { border-left: 4px solid #818cf8 !important; }
+      #entityContent .ep-card-accent-sky    { border-left: 4px solid #38bdf8 !important; }
+      #entityContent .ep-card-accent-violet { border-left: 4px solid #a78bfa !important; }
+      #entityContent .ep-card-accent-amber2 { border-left: 4px solid #fbbf24 !important; }
       #entityContent .ep-label {
-        font-size: 8px !important; color: #475569 !important;
+        font-size: 8px !important; color: #94a3b8 !important;
         font-weight: 600 !important; text-transform: uppercase !important;
-        letter-spacing: 0.05em !important; margin-bottom: 2px !important;
+        letter-spacing: 0.08em !important; margin-bottom: 2px !important;
         display: block !important;
       }
       #entityContent .ep-value {
-        font-size: 10px !important; color: #0f172a !important;
+        font-size: 10px !important; color: #f1f5f9 !important;
         font-weight: 700 !important;
       }
       #entityContent .ep-value-lg {
-        font-size: 22px !important; font-weight: 800 !important; line-height: 1 !important;
+        font-size: 22px !important; font-weight: 800 !important; line-height: 1 !important; color: #ffffff !important;
       }
       #entityContent .ep-body {
-        font-size: 9px !important; color: #334155 !important; line-height: 1.5 !important;
+        font-size: 9px !important; color: #cbd5e1 !important; line-height: 1.5 !important;
       }
       #entityContent .ep-body-sm {
-        font-size: 8px !important; color: #475569 !important; line-height: 1.4 !important;
+        font-size: 8px !important; color: #94a3b8 !important; line-height: 1.4 !important;
       }
       #entityContent .ep-heading {
-        font-size: 10px !important; color: #334155 !important;
+        font-size: 10px !important; color: #f1f5f9 !important;
         font-weight: 700 !important; text-transform: uppercase !important;
         letter-spacing: 0.06em !important;
       }
@@ -145,7 +145,7 @@ export function showEntityView(nodeId) {
       }
       #entityContent .ep-grid2-span { grid-column: span 2 !important; }
       #entityContent .ep-bar-track {
-        background: #e2e8f0 !important; border-radius: 9999px !important;
+        background: #334155 !important; border-radius: 9999px !important;
         height: 6px !important; margin: 8px 0 !important;
       }
       #entityContent .ep-bar-fill {
@@ -153,7 +153,7 @@ export function showEntityView(nodeId) {
         transition: width 0.4s !important;
       }
       #entityContent .ep-divider {
-        border-top: 1px solid #e2e8f0 !important; padding-top: 14px !important;
+        border-top: 1px solid #334155 !important; padding-top: 14px !important;
       }
       #entityContent .ep-row {
         display: flex !important; align-items: center !important;
@@ -174,25 +174,28 @@ export function showEntityView(nodeId) {
         justify-content: space-between !important;
         font-size: 8px !important; margin-top: 5px !important;
       }
-      #entityContent .ep-breakdown-label { color: #334155 !important; font-weight: 500 !important; }
-      #entityContent .ep-breakdown-pct   { font-family: monospace !important; font-weight: 700 !important; color: #1e293b !important; }
+      #entityContent .ep-breakdown-label { color: #cbd5e1 !important; font-weight: 500 !important; }
+      #entityContent .ep-breakdown-pct   { font-family: monospace !important; font-weight: 700 !important; color: #f1f5f9 !important; }
       #entityContent .ep-minibar-track {
         width: 60px !important; height: 4px !important;
-        background: #e2e8f0 !important; border-radius: 9999px !important;
+        background: #334155 !important; border-radius: 9999px !important;
         margin-right: 4px !important; display: inline-block !important; vertical-align: middle !important;
       }
       #entityContent .ep-minibar-fill {
         height: 4px !important; border-radius: 9999px !important; display: block !important;
       }
       #entityContent a.ep-link {
-        color: #0e7490 !important; text-decoration: none !important; font-size: 9px !important;
+        color: #38bdf8 !important; text-decoration: none !important; font-size: 9px !important;
       }
       #entityContent input.ep-input, #entityContent textarea.ep-input {
-        background: #ffffff !important; color: #0f172a !important;
-        border: 1px solid #cbd5e1 !important; border-radius: 6px !important;
+        background: #0f172a !important; color: #e2e8f0 !important;
+        border: 1px solid #475569 !important; border-radius: 6px !important;
         font-size: 9px !important; font-family: monospace !important;
         padding: 7px 8px !important; width: 100% !important;
         box-sizing: border-box !important; outline: none !important;
+      }
+      #entityContent input.ep-input::placeholder, #entityContent textarea.ep-input::placeholder {
+        color: #475569 !important;
       }
       #entityContent textarea.ep-input { height: 72px !important; resize: none !important; }
       #entityContent button.ep-btn-primary {
@@ -211,18 +214,18 @@ export function showEntityView(nodeId) {
         text-transform: uppercase !important; cursor: pointer !important;
       }
       #entityContent button.ep-btn-disabled {
-        background: #f1f5f9 !important; color: #94a3b8 !important;
-        border: 1px solid #e2e8f0 !important; cursor: not-allowed !important;
+        background: #1e293b !important; color: #475569 !important;
+        border: 1px solid #334155 !important; cursor: not-allowed !important;
       }
       #entityContent .ep-tx-row {
         display: flex !important; align-items: flex-start !important;
         gap: 8px !important; padding: 8px !important;
-        border-radius: 6px !important; background: #f8fafc !important;
-        border: 1px solid #e2e8f0 !important; margin-bottom: 5px !important;
+        border-radius: 6px !important; background: #1e293b !important;
+        border: 1px solid #334155 !important; margin-bottom: 5px !important;
       }
-      #entityContent .ep-green { color: #14532d !important; }
-      #entityContent .ep-red   { color: #7c2d12 !important; }
-      #entityContent .ep-mono  { font-family: monospace !important; color: #334155 !important; font-size: 11px !important; word-break: break-all !important; }
+      #entityContent .ep-green { color: #4ade80 !important; }
+      #entityContent .ep-red   { color: #f87171 !important; }
+      #entityContent .ep-mono  { font-family: monospace !important; color: #cbd5e1 !important; font-size: 11px !important; word-break: break-all !important; }
     </style>
     <div class="ep-wrap">`;
 
@@ -331,9 +334,23 @@ export function showEntityView(nodeId) {
             <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}" target="_blank" rel="noopener"
                class="ep-badge ep-link" style="background:#ecfeff;border:1px solid #a5f3fc">🔍 mempool.space ↗</a>
         </div>
-        <div>
+        <div style="margin-top:6px">
             <span class="ep-label">Entity ID</span>
-            <div class="ep-mono">${nodeData.label}</div>
+            <div style="display:flex;align-items:flex-start;gap:6px;margin-top:4px;
+                        background:#0f172a;border:1px solid #334155;border-radius:7px;
+                        padding:9px 10px">
+                <span style="font-family:monospace;font-size:10px;font-weight:600;
+                             color:#e2e8f0;word-break:break-all;flex:1;line-height:1.5;
+                             letter-spacing:0.01em;user-select:all"
+                      title="${nodeData.label}">${nodeData.label}</span>
+                <button onclick="navigator.clipboard.writeText('${nodeData.label}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='⎘',1200)})"
+                        title="Copy to clipboard"
+                        style="flex-shrink:0;background:#1e293b;border:1px solid #475569;
+                               border-radius:5px;color:#94a3b8;font-size:11px;padding:3px 7px;
+                               cursor:pointer;transition:all .15s;margin-top:1px"
+                        onmouseover="this.style.background='#334155';this.style.color='#e2e8f0'"
+                        onmouseout="this.style.background='#1e293b';this.style.color='#94a3b8'">⎘</button>
+            </div>
         </div>
     </div>
 
@@ -342,20 +359,20 @@ export function showEntityView(nodeId) {
         <div class="ep-grid2">
             <div class="ep-card"><span class="ep-label">Connections</span><span class="ep-value" style="font-size:18px!important">${degree}</span></div>
             <div class="ep-card"><span class="ep-label">Neighbors</span><span class="ep-value" style="font-size:18px!important">${neighbors.size}</span></div>
-            <div class="ep-card" style="background:#dcfce7!important;border-color:#bbf7d0!important">
-                <span class="ep-label" style="color:#14532d!important">Received</span>
-                <span class="ep-value" style="color:#14532d!important;font-size:13px!important">${totalReceived.toFixed(4)} BTC</span>
-                <span class="ep-body-sm" style="color:#166534!important;display:block">${incomingTx} tx</span>
+            <div class="ep-card" style="background:#14532d22!important;border-color:#22c55e55!important">
+                <span class="ep-label" style="color:#86efac!important">Received</span>
+                <span class="ep-value" style="color:#4ade80!important;font-size:13px!important">${totalReceived.toFixed(4)} BTC</span>
+                <span class="ep-body-sm" style="color:#86efac!important;display:block">${incomingTx} tx</span>
             </div>
-            <div class="ep-card" style="background:#ffedd5!important;border-color:#fed7aa!important">
-                <span class="ep-label" style="color:#7c2d12!important">Sent</span>
-                <span class="ep-value" style="color:#7c2d12!important;font-size:13px!important">${totalSent.toFixed(4)} BTC</span>
-                <span class="ep-body-sm" style="color:#9a3412!important;display:block">${outgoingTx} tx</span>
+            <div class="ep-card" style="background:#7c2d1222!important;border-color:#f9731655!important">
+                <span class="ep-label" style="color:#fdba74!important">Sent</span>
+                <span class="ep-value" style="color:#fb923c!important;font-size:13px!important">${totalSent.toFixed(4)} BTC</span>
+                <span class="ep-body-sm" style="color:#fdba74!important;display:block">${outgoingTx} tx</span>
             </div>
         </div>
-        <div class="ep-card" style="margin-top:8px;background:${balance >= 0 ? '#cffafe' : '#f1f5f9'}!important;border-color:${balance >= 0 ? '#a5f3fc' : '#e2e8f0'}!important">
+        <div class="ep-card" style="margin-top:8px;background:${balance >= 0 ? '#0e749022' : '#33415522'}!important;border-color:${balance >= 0 ? '#06b6d455' : '#47556955'}!important">
             <span class="ep-label">Graph Balance</span>
-            <span class="ep-value" style="font-size:18px!important;color:${balance >= 0 ? '#0e7490' : '#334155'}!important">${balance.toFixed(4)} BTC</span>
+            <span class="ep-value" style="font-size:18px!important;color:${balance >= 0 ? '#22d3ee' : '#94a3b8'}!important">${balance.toFixed(4)} BTC</span>
         </div>
     </div>`;
 
@@ -402,40 +419,40 @@ export function showEntityView(nodeId) {
         const ec=Math.round((ei.score||0)*100);
         const en2=(ei.notes||[]).join('; ')||'Exchange / custodial service pattern detected.';
         const ename=nodeData.label&&nodeData.label!==nodeId?nodeData.label:null;
-        const rows=mkBreakdown(ei.breakdown||{},'#0ea5e9');
+        const rows=mkBreakdown(ei.breakdown||{},'#38bdf8');
         html+=`<div class="ep-card ep-card-accent-sky">
-            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#075985!important">🏦 Exchange / Custodial Service</span><span class="ep-body-sm">Conf: <strong style="color:#075985">${ec}%</strong></span></div>
-            ${ename?`<div class="ep-body" style="font-weight:700!important;color:#0c4a6e!important;margin-bottom:4px">${ename}</div>`:''}
-            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${ec}%;background:#0ea5e9"></div></div>
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#38bdf8!important">🏦 Exchange / Custodial Service</span><span class="ep-body-sm">Conf: <strong style="color:#38bdf8">${ec}%</strong></span></div>
+            ${ename?`<div class="ep-body" style="font-weight:700!important;color:#7dd3fc!important;margin-bottom:4px">${ename}</div>`:''}
+            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${ec}%;background:#38bdf8"></div></div>
             <div class="ep-body" style="margin-bottom:6px">${en2}</div>
-            ${rows?`<div style="border-top:1px solid #e2e8f0;padding-top:6px">${rows}</div>`:''}
-            <div class="ep-footer" style="background:#e0f2fe;color:#075985">ℹ️ Funds entering an exchange may be harder to trace. Exchanges apply KYC and may respond to legal requests.</div>
+            ${rows?`<div style="border-top:1px solid #334155;padding-top:6px">${rows}</div>`:''}
+            <div class="ep-footer" style="background:#0c4a6e44;color:#7dd3fc;border:1px solid #0ea5e955">ℹ️ Funds entering an exchange may be harder to trace. Exchanges apply KYC and may respond to legal requests.</div>
         </div>`;
     }
     if (nodeData.gambling_info?.flagged||nodeData.entity_type==='gambling') {
         const gi=nodeData.gambling_info||{};
         const gc=Math.round((gi.score||0)*100);
         const gn=(gi.notes||[]).join('; ')||'Gambling / gaming service pattern detected.';
-        const rows=mkBreakdown(gi.breakdown||{},'#8b5cf6');
+        const rows=mkBreakdown(gi.breakdown||{},'#a78bfa');
         html+=`<div class="ep-card ep-card-accent-violet">
-            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#5b21b6!important">🎰 Gambling / Gaming Service</span><span class="ep-body-sm">Conf: <strong style="color:#5b21b6">${gc}%</strong></span></div>
-            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${gc}%;background:#8b5cf6"></div></div>
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#a78bfa!important">🎰 Gambling / Gaming Service</span><span class="ep-body-sm">Conf: <strong style="color:#a78bfa">${gc}%</strong></span></div>
+            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${gc}%;background:#a78bfa"></div></div>
             <div class="ep-body" style="margin-bottom:6px">${gn}</div>
-            ${rows?`<div style="border-top:1px solid #e2e8f0;padding-top:6px">${rows}</div>`:''}
-            <div class="ep-footer" style="background:#ede9fe;color:#5b21b6">ℹ️ Gambling services are often unlicensed. Funds may be commingled and hard to attribute.</div>
+            ${rows?`<div style="border-top:1px solid #334155;padding-top:6px">${rows}</div>`:''}
+            <div class="ep-footer" style="background:#4c1d9544;color:#c4b5fd;border:1px solid #8b5cf655">ℹ️ Gambling services are often unlicensed. Funds may be commingled and hard to attribute.</div>
         </div>`;
     }
     if (nodeData.mining_info?.flagged||nodeData.entity_type==='mining') {
         const mi=nodeData.mining_info||{};
         const mc=Math.round((mi.score||0)*100);
         const mn=(mi.notes||[]).join('; ')||'Mining pool pattern detected.';
-        const rows=mkBreakdown(mi.breakdown||{},'#f59e0b');
+        const rows=mkBreakdown(mi.breakdown||{},'#fbbf24');
         html+=`<div class="ep-card ep-card-accent-amber2">
-            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#92400e!important">⛏️ Mining Pool</span><span class="ep-body-sm">Conf: <strong style="color:#92400e">${mc}%</strong></span></div>
-            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${mc}%;background:#f59e0b"></div></div>
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#fbbf24!important">⛏️ Mining Pool</span><span class="ep-body-sm">Conf: <strong style="color:#fbbf24">${mc}%</strong></span></div>
+            <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${mc}%;background:#fbbf24"></div></div>
             <div class="ep-body" style="margin-bottom:6px">${mn}</div>
-            ${rows?`<div style="border-top:1px solid #e2e8f0;padding-top:6px">${rows}</div>`:''}
-            <div class="ep-footer" style="background:#fef3c7;color:#92400e">ℹ️ Coinbase flows through mining pools — generally benign unless co-mingled with flagged funds.</div>
+            ${rows?`<div style="border-top:1px solid #334155;padding-top:6px">${rows}</div>`:''}
+            <div class="ep-footer" style="background:#78350f44;color:#fcd34d;border:1px solid #f59e0b55">ℹ️ Coinbase flows through mining pools — generally benign unless co-mingled with flagged funds.</div>
         </div>`;
     }
 
@@ -455,11 +472,11 @@ export function showEntityView(nodeId) {
                 <span class="${isIn ? 'ep-green' : 'ep-red'}" style="font-size:11px;font-weight:700;margin-top:1px">${isIn ? '▼' : '▲'}</span>
                 <div style="flex:1;min-width:0">
                     <div class="ep-row">
-                        <span class="ep-body" style="font-weight:700!important;color:${isIn?'#14532d':'#7c2d12'}!important">${isIn?'+':'-'}${tx.amount.toFixed(4)} BTC</span>
+                        <span class="ep-body" style="font-weight:700!important;color:${isIn?'#4ade80':'#f87171'}!important">${isIn?'+':'-'}${tx.amount.toFixed(4)} BTC</span>
                         <span class="ep-body-sm" style="font-family:monospace;white-space:nowrap">${t8}</span>
                     </div>
                     <div class="ep-body-sm" style="font-family:monospace;margin-top:2px">${d8}</div>
-                    <div class="ep-body-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isIn?'from':'to'}: <span style="font-family:monospace;color:#334155">${dp}</span></div>
+                    <div class="ep-body-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isIn?'from':'to'}: <span style="font-family:monospace;color:#94a3b8">${dp}</span></div>
                 </div></div>`;
         });
         html += `</div>`;

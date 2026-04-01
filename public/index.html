@@ -327,6 +327,32 @@
         <!-- Graph canvas — white background -->
         <div class="flex-grow relative overflow-hidden bg-white">
             <div id="graph-container"></div>
+
+            <!-- ── Node Search Overlay ──────────────────────────────── -->
+            <div id="graphSearchBox"
+                 style="position:absolute;top:12px;left:12px;z-index:50;
+                        width:240px;pointer-events:auto">
+                <div style="display:flex;gap:4px">
+                    <input id="graphSearchInput"
+                        type="text"
+                        placeholder="Search node address…"
+                        oninput="window.graphSearch(this.value)"
+                        onkeydown="if(event.key==='Escape'){window.graphSearchClear();this.blur()}"
+                        style="flex:1;background:rgba(15,23,42,0.92);border:1px solid #334155;
+                               border-radius:7px;padding:7px 10px;font-size:10px;font-family:monospace;
+                               color:#67e8f9;outline:none;backdrop-filter:blur(6px);
+                               transition:border-color .15s"
+                        onfocus="this.style.borderColor='#06b6d4'"
+                        onblur="this.style.borderColor='#334155'">
+                    <button onclick="window.graphSearchClear()"
+                        title="Clear search"
+                        style="padding:6px 9px;border-radius:7px;border:1px solid #334155;
+                               background:rgba(15,23,42,0.92);color:#64748b;font-size:12px;
+                               cursor:pointer;backdrop-filter:blur(6px)">✕</button>
+                </div>
+                <div id="graphSearchResults"
+                     style="margin-top:4px;max-height:220px;overflow-y:auto"></div>
+            </div>
             
             <!-- Timeline Floating UI -->
             <div id="timelineUI" class="absolute bottom-10 left-10 right-10 bg-slate-900/90 border border-slate-800 p-6 rounded-xl backdrop-blur-xl z-50 hidden shadow-2xl">
@@ -431,6 +457,14 @@
                                bg-amber-900/60 text-amber-300 border border-amber-700 hover:bg-amber-800 hover:text-amber-200 transition">
                         💾 Save Session
                     </button>
+                    <button onclick="document.getElementById('loadSessionInput').click()"
+                        title="Load a previously saved .ctk session file"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold
+                               bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
+                        📂 Load Session
+                    </button>
+                    <input id="loadSessionInput" type="file" accept=".ctk,.json" style="display:none"
+                           onchange="window._handleSessionLoad(this)">
                 </div>
 
             </div>
@@ -519,6 +553,38 @@
             if (label) label.textContent = 'Focus';
         }
     }
+
+    // ── Session load handler ────────────────────────────────────────────────
+    window._handleSessionLoad = function(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const session = JSON.parse(e.target.result);
+                if (window.restoreSession) {
+                    window.restoreSession(session);
+                } else {
+                    // restoreSession loads lazily — store in sessionStorage and reload
+                    sessionStorage.setItem('cryptrace_pending_session', e.target.result);
+                    location.reload();
+                }
+            } catch (err) {
+                alert('Failed to load session: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+        input.value = ''; // reset so same file can be reloaded
+    };
+
+    // ── Keyboard shortcut: Ctrl+F / Cmd+F focuses the node search ───────────
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            const inp = document.getElementById('graphSearchInput');
+            if (inp) { inp.focus(); inp.select(); }
+        }
+    });
 
     // Keyboard shortcuts: F to enter, Escape to exit
     document.addEventListener('keydown', e => {
