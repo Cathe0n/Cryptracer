@@ -5,7 +5,8 @@
 ![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go) ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?logo=javascript) ![Neo4j](https://img.shields.io/badge/Neo4j-Graph%20Database-008CC1?logo=neo4j) ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
-<img width="1600" height="771" alt="image" src="https://github.com/user-attachments/assets/e392b00f-9b63-4e90-8c61-1c5fe252909f" />
+<img width="1920" height="951" alt="image" src="https://github.com/user-attachments/assets/25a19833-8b82-4adb-b860-c6f30eb882d1" />
+
 
 
 ## Overview
@@ -81,7 +82,7 @@ This tool is intended for **academic research**, **compliance investigations**, 
 | **Bitquery** | Extended transaction flows |  Limited | [bitquery.io](https://bitquery.io) |
 | **Blockstream** | Real-time blockchain data |  Unlimited | Free public API |
 | **Mempool.space** | Live fees & network stats |  Unlimited | Free public API |
-
+| **WalletExplorer.com** | Entity Attribution and cross valifation |  Unlimited | Free public API |
 ### Database
 
 - **Neo4j Community Edition** or higher
