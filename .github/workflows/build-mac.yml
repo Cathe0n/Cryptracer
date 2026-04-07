@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -25,23 +26,24 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
+      - name: Initialize Wails Project
+        run: |
+          if [ ! -f "wails.json" ]; then
+            $(go env GOPATH)/bin/wails init -n Cryptracer -t vanilla
+          fi
+
       - name: Install Frontend Dependencies
         run: |
-          # Wails standard structure usually has a 'frontend' folder. 
-          # If your JS/HTML is just in 'public', Wails will handle it via wails.json.
           if [ -d "frontend" ]; then
             cd frontend && npm install
           fi
 
       - name: Build Application Bundle
-        run: |
-          # -platform darwin/universal builds for both Intel and Apple Silicon
-          # -package creates the .app bundle structure required for a DMG
-          wails build -platform darwin/universal -package
+        run: $(go env GOPATH)/bin/wails build -platform darwin/universal
 
       - name: Create DMG
         run: |
-          hdiutil create -volname "Cryptracer" -srcfolder build/bin -ov -format UDZO build/bin/Cryptracer-Installer.dmg
+          hdiutil create -volname "Cryptracer" -srcfolder build/bin/Cryptracer.app -ov -format UDZO build/bin/Cryptracer-Installer.dmg
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
