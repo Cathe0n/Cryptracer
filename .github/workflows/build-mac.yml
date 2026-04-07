@@ -29,24 +29,27 @@ jobs:
       - name: Initialize Wails Project
         run: |
           if [ ! -f "wails.json" ]; then
+            cd Cryptracer
             $(go env GOPATH)/bin/wails init -n Cryptracer-MacOS -t vanilla
+            cd ..
           fi
 
       - name: Install Frontend Dependencies
         run: |
-          if [ -d "frontend" ]; then
-            cd frontend && npm install
+          if [ -d "Cryptracer/frontend" ]; then
+            cd Cryptracer/frontend && npm install
           fi
 
       - name: Build Application Bundle
+        working-directory: ./Cryptracer
         run: $(go env GOPATH)/bin/wails build -platform darwin/universal
 
       - name: Create DMG
         run: |
-          hdiutil create -volname "Cryptracer" -srcfolder build/bin/Cryptracer.app -ov -format UDZO build/bin/Cryptracer-Installer.dmg
+          hdiutil create -volname "Cryptracer" -srcfolder Cryptracer/build/bin/Cryptracer.app -ov -format UDZO Cryptracer/build/bin/Cryptracer-Installer.dmg
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-installer
-          path: build/bin/*.dmg
+          path: Cryptracer/build/bin/*.dmg
