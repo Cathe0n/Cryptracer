@@ -1,1 +1,0 @@
-{"chunk":81,"numChunks":112,"fileHash":"sZrqqvwhZ62anO373OuftYnrwcJDn5iCT1MGcv2hbg0=","filePath":"public/ui.js","content":"import { state } from './state.js';\nwindow.verifySource = async function(nodeId, sourceName, isAddress) {\n    try {\n        if (!data.ok) {\n        } else if (!data.found) {"}

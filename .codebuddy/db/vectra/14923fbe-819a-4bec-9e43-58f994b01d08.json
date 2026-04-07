@@ -1,1 +1,0 @@
-{"chunk":43,"numChunks":50,"fileHash":"xRcLMdSUQ5JwQLhmLnZAc9oLZNNpqtrddJpeFXs9sGI=","filePath":"main.go","content":"package main\nfunc main() {\n\t// Called automatically when any non-enriched node is first clicked."}

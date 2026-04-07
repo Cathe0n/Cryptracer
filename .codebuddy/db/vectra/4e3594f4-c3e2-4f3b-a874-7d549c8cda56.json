@@ -1,1 +1,0 @@
-{"chunk":7,"numChunks":9,"fileHash":"Nbf+PnTYG8yRlrwzgcIFQkKrDnh7tqo/MN6Xwt/fOro=","filePath":"internal/intel/intel.go","content":"package intel\nfunc CalculateRiskScore(riskData *ChainAbuseRiskData) int {"}

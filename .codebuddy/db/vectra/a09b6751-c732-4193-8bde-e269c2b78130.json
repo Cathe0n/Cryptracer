@@ -1,1 +1,0 @@
-{"chunk":49,"numChunks":50,"fileHash":"NADHuyXHjh1yJpB2gWL57uylU/zreNnsnsTl7AXuK5E=","filePath":"internal/aggregator/aggregator.go","content":"package aggregator\n// appendIfMissing appends s to slice only when it is not already present.\n// Used to unconditionally record intelligence sources regardless of whether\n// they returned data, so the frontend panel always shows them."}

@@ -1,1 +1,0 @@
-{"chunk":5,"numChunks":110,"fileHash":"7wNDjkOqo5xcEE0RTrtFd8kUcfFt7BWSQhaTiClT1+o=","filePath":"public/ui.js","content":"import { state } from './state.js';\nexport function showEntityView(nodeId) {\n    if (hasError) {\n        accentColor='#c2410c'; accentBg='#fff7ed'; accentLabel='API LIMIT REACHED'; accentIcon='⏳'; accentGlow='';\n    } else if (hasTaintOnly) {"}

@@ -1,1 +1,0 @@
-{"chunk":11,"numChunks":15,"fileHash":"zbLkw/TTuEY/Az0O4FFvBu14AKyopGef9U2LjDxu/gE=","filePath":"internal/tracer/tracer.go","content":"package tracer\nfunc TraceForward(ctx context.Context, startAddr string, caKey string, maxHops int) TracePath {\n\tfor i := 0; i < maxHops; i++ {"}

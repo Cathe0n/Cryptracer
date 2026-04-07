@@ -1,1 +1,0 @@
-{"chunk":44,"numChunks":112,"fileHash":"sZrqqvwhZ62anO373OuftYnrwcJDn5iCT1MGcv2hbg0=","filePath":"public/ui.js","content":"import { state } from './state.js';\nexport function showEntityView(nodeId) {\n    if (txEvents.length > 0) {\n        html += `<div style=\"display:flex;flex-direction:column;gap:5px;max-height:210px;overflow-y:auto\">`;"}

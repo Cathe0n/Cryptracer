@@ -1,1 +1,0 @@
-{"chunk":8,"numChunks":18,"fileHash":"BkPCm2pBPkjZVY0NoWwrdsKyIi3RPDr9ZUX80h1uoto=","filePath":"public/tracer.js","content":"// tracer.js — Forward path tracer for Cryptracker\nfunction renderTracePanel(path) {\n    path.hops.forEach(function(hop, idx) {"}

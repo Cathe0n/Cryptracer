@@ -1,1 +1,0 @@
-{"chunk":3,"numChunks":11,"fileHash":"f6aZvUz6enssaWBMmXXFNcTfbnWkldxIBUa1KOiacYg=","filePath":"internal/bitquery/client.go","content":"package bitquery\nfunc gqlQuery(apiKey, query string, variables map[string]interface{}) (json.RawMessage, error) {"}

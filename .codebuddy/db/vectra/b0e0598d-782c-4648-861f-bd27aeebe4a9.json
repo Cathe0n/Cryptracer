@@ -1,1 +1,0 @@
-{"chunk":41,"numChunks":50,"fileHash":"xRcLMdSUQ5JwQLhmLnZAc9oLZNNpqtrddJpeFXs9sGI=","filePath":"main.go","content":" len(tx.Vin), len(tx.Vout)),\n\t\t\t\t})\n\t\t\t}\n"}

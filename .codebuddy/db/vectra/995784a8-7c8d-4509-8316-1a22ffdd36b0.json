@@ -1,1 +1,0 @@
-{"chunk":12,"numChunks":112,"fileHash":"sZrqqvwhZ62anO373OuftYnrwcJDn5iCT1MGcv2hbg0=","filePath":"public/ui.js","content":"import { state } from './state.js';\nexport function showEntityView(nodeId) {\n    const barWidth = (hasReports || hasTaintOnly) ? Math.max(risk, 4) : 100;\n    // White card with a coloured left-border accent. All body text is slate-900"}

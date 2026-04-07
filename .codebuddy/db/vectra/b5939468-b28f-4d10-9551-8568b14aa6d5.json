@@ -1,1 +1,0 @@
-{"chunk":6,"numChunks":10,"fileHash":"o5UMdJKaz8ir8a4cIwEBphK+Jgv6GcHSg6uwGKDeGZM=","filePath":"public/api.js","content":"import { MEMPOOL_API } from './state.js';\nexport async function initNetworkStats() {\n    async function refresh() {\n        try {"}

@@ -1,1 +1,0 @@
-{"chunk":2,"numChunks":11,"fileHash":"f6aZvUz6enssaWBMmXXFNcTfbnWkldxIBUa1KOiacYg=","filePath":"internal/bitquery/client.go","content":"package bitquery\ntype gqlResponse struct {\n\tData   json.RawMessage `json:\"data\"`\n\tErrors []struct {\n\t\tMessage string `json:\"message\"`\n\t} `json:\"errors\"`\n}"}

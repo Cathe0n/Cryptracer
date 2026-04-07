@@ -1,1 +1,0 @@
-{"chunk":10,"numChunks":50,"fileHash":"NADHuyXHjh1yJpB2gWL57uylU/zreNnsnsTl7AXuK5E=","filePath":"internal/aggregator/aggregator.go","content":"package aggregator\nfunc IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {\n\tif inputCount == 1 && spendableOutputCount == 2 && inputTotalValue > 1.0 {"}

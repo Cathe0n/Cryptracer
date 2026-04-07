@@ -1,1 +1,0 @@
-{"chunk":180,"numChunks":198,"fileHash":"w4jhtI3rJrndRARjiRECc4GAf6rhZPv9nGjH6Ls9mZ0=","filePath":"public/graph.js","content":"import { state } from './state.js';\n/**\n * Reset all node/edge colours and opacities back to defaults,\n * remove the destination ring, and clear module-level trace state.\n * Called when the trace panel is closed.\n */"}

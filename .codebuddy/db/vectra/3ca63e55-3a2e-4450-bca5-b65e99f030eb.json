@@ -1,1 +1,0 @@
-{"chunk":8,"numChunks":34,"fileHash":"ven5QOf+6CD06D8all4+LKbOVt34feVlyJMJVLQKOB0=","filePath":"internal/aggregator/Mixer.go","content":"package aggregator\n//\tTF2  cycle duration <3 h   0.10  ← corroborating (Finding 6)\n//\tReuse address reuse absent 0.05  ← weak (Finding 2)"}
