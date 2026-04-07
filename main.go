@@ -8,8 +8,8 @@ import (
 	"money-tracer/db"
 	"money-tracer/internal/aggregator"
 	"money-tracer/internal/bitquery"
-	"money-tracer/internal/blockstream"
 	"money-tracer/internal/intel"
+	"money-tracer/internal/mempool"
 	"money-tracer/internal/tracer"
 	"money-tracer/parser"
 	"net/http"
@@ -227,10 +227,10 @@ func main() {
 		address := c.Param("address")
 		log.Printf("📡 [HISTORY] Fetching live data for: %s", address)
 
-		txs, err := blockstream.GetAddressTxs(address)
+		txs, err := mempool.GetAddressTxs(address)
 		if err != nil || txs == nil {
 			log.Printf("⚠️  [HISTORY] No data found for %s", address)
-			c.JSON(200, []blockstream.Tx{})
+			c.JSON(200, []mempool.Tx{})
 			return
 		}
 		log.Printf("✅ [HISTORY] Retrieved %d transactions for %s", len(txs), address)
@@ -264,7 +264,7 @@ func main() {
 
 	// ── Mixer detection endpoint ──────────────────────────────────────────────
 	// POST /api/mixer-check/:txid
-	// Fetches a live transaction from Blockstream and runs all mixer-detection
+	// Fetches a live transaction from mempool.space and runs all mixer-detection
 	// heuristics against it.  Returns the full MixerResult with breakdown scores.
 	//
 	// Query params:
@@ -282,7 +282,7 @@ func main() {
 
 		log.Printf("🔀 [MIXER-CHECK] Analysing tx: %s (threshold=%.2f)", txid, threshold)
 
-		tx, err := blockstream.GetTx(txid)
+		tx, err := mempool.GetTx(txid)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transaction: %v", err)})
 			return
@@ -292,7 +292,7 @@ func main() {
 			return
 		}
 
-		// Build aggregator.TransactionIO from the live blockstream data
+		// Build aggregator.TransactionIO from the live mempool.space data
 		tio := aggregator.TransactionIO{Txid: tx.Txid, Timestamp: tx.Status.BlockTime}
 		for _, vin := range tx.Vin {
 			if vin.Prevout == nil {
@@ -336,7 +336,7 @@ func main() {
 
 		log.Printf("🏦 [EXCHANGE-CHECK] Analysing address: %s", address)
 
-		txs, err := blockstream.GetAddressTxs(address)
+		txs, err := mempool.GetAddressTxs(address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -439,7 +439,7 @@ func main() {
 
 		log.Printf("🎰 [GAMBLING-CHECK] Analysing address: %s", address)
 
-		txs, err := blockstream.GetAddressTxs(address)
+		txs, err := mempool.GetAddressTxs(address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -489,7 +489,7 @@ func main() {
 
 		log.Printf("⛏️  [MINING-CHECK] Analysing address: %s", address)
 
-		txs, err := blockstream.GetAddressTxs(address)
+		txs, err := mempool.GetAddressTxs(address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -553,11 +553,11 @@ func main() {
 	})
 
 	// ── Per-source live verification endpoint ───────────────────────────────
-	// GET /api/verify/:address?source=chainabuse|walletexplorer|blockstream|bitquery
+	// GET /api/verify/:address?source=chainabuse|walletexplorer|mempool|bitquery
 	//
 	// Performs a fresh live query against one named intelligence source and
 	// returns the raw result so the frontend can display it inline.
-	// The address can also be a txid when source=blockstream.
+	// The address can also be a txid when source=mempool.
 	r.GET("/api/verify/:address", func(c *gin.Context) {
 		address := c.Param("address")
 		source := c.Query("source")
@@ -617,18 +617,18 @@ func main() {
 				"summary": fmt.Sprintf("Attributed to: %s", label),
 			})
 
-		case "blockstream":
+		case "mempool":
 			if isAddr {
-				info, err := blockstream.GetAddressInfo(address)
+				info, err := mempool.GetAddressInfo(address)
 				if err != nil {
-					c.JSON(200, gin.H{"source": "blockstream", "ok": false,
+					c.JSON(200, gin.H{"source": "mempool", "ok": false,
 						"error": err.Error()})
 					return
 				}
 				cs := info.ChainStats
 				balance := cs.FundedTxoSum - cs.SpentTxoSum
 				c.JSON(200, gin.H{
-					"source":   "blockstream",
+					"source":   "mempool",
 					"ok":       true,
 					"found":    true,
 					"tx_count": cs.TxCount,
@@ -638,14 +638,14 @@ func main() {
 					"summary":  fmt.Sprintf("%d confirmed txs, balance %d sat", cs.TxCount, balance),
 				})
 			} else {
-				tx, err := blockstream.GetTx(address)
+				tx, err := mempool.GetTx(address)
 				if err != nil {
-					c.JSON(200, gin.H{"source": "blockstream", "ok": false,
+					c.JSON(200, gin.H{"source": "mempool", "ok": false,
 						"error": err.Error()})
 					return
 				}
 				c.JSON(200, gin.H{
-					"source":    "blockstream",
+					"source":    "mempool",
 					"ok":        true,
 					"found":     true,
 					"confirmed": tx.Status.Confirmed,
@@ -694,7 +694,7 @@ func main() {
 			})
 
 		default:
-			c.JSON(400, gin.H{"error": fmt.Sprintf("Unknown source %q. Valid: chainabuse, walletexplorer, blockstream, bitquery", source)})
+			c.JSON(400, gin.H{"error": fmt.Sprintf("Unknown source %q. Valid: chainabuse, walletexplorer, mempool, bitquery", source)})
 		}
 	})
 
@@ -703,7 +703,7 @@ func main() {
 	//
 	// Lightweight enrichment for nodes discovered via graph expansion.
 	// Runs WalletExplorer label lookup, ChainAbuse risk check, and
-	// Blockstream address stats in parallel. Returns only the intel fields
+	// mempool.space address stats in parallel. Returns only the intel fields
 	// needed to patch the node in fullGraphData — no full graph rebuild.
 	//
 	// Called automatically when any non-enriched node is first clicked.
@@ -767,12 +767,12 @@ func main() {
 			}()
 		}
 
-		// Blockstream address stats (only for address nodes)
+		// mempool.space address stats (only for address nodes)
 		if isAddr {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				info, err := blockstream.GetAddressInfo(address)
+				info, err := mempool.GetAddressInfo(address)
 				if err == nil && info != nil {
 					mu.Lock()
 					res.TxCount = info.ChainStats.TxCount

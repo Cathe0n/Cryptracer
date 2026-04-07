@@ -489,6 +489,7 @@ export function showEntityView(nodeId) {
     const annot = getAnnotation(nodeId) || {};
     const customName = annot.name || '';
     const customColor = annot.color || '';
+    const customEdgeColor = annot.edgeColor || '';
     const customNotes = annot.notes || '';
 
     html += `
@@ -509,6 +510,15 @@ export function showEntityView(nodeId) {
                     style="width:30px;height:30px;border-radius:5px;border:2px solid ${customColor===col.hex?'#1e293b':'#cbd5e1'};background:${col.hex};cursor:pointer" title="${col.name}"></button>`).join('')}
                 <button onclick="window.clearNodeColor('${nodeId}')"
                     style="width:30px;height:30px;border-radius:5px;border:2px solid ${!customColor?'#1e293b':'#cbd5e1'};background:#f1f5f9;font-size:10px;font-weight:700;cursor:pointer;color:#334155" title="Default">✓</button>
+            </div>
+        </div>
+        <div style="margin-bottom:10px">
+            <span class="ep-label">Arrow Color (follows node if not set, 30% desaturated if tainted)</span>
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:6px">
+                ${COLOR_PALETTE.map(col => `<button onclick="window.setNodeEdgeColor('${nodeId}','${col.hex}')"
+                    style="width:30px;height:30px;border-radius:5px;border:2px solid ${customEdgeColor===col.hex?'#1e293b':'#cbd5e1'};background:${col.hex};cursor:pointer" title="${col.name}"></button>`).join('')}
+                <button onclick="window.clearNodeEdgeColor('${nodeId}')"
+                    style="width:30px;height:30px;border-radius:5px;border:2px solid ${!customEdgeColor?'#1e293b':'#cbd5e1'};background:#f1f5f9;font-size:10px;font-weight:700;cursor:pointer;color:#334155" title="Auto">A</button>
             </div>
         </div>
         <button onclick="window.saveNodeAnnotation('${nodeId}')" class="ep-btn-primary">💾 Save Annotations</button>
@@ -1095,7 +1105,7 @@ export async function enrichTxFromMempool(txid) {
 // =============================================================================
 
 /**
- * Save node annotation (notes + color)
+ * Save node annotation (notes + color + edge color)
  */
 window.saveNodeAnnotation = function(nodeId) {
     const nameEl = document.getElementById('nodeName');
@@ -1103,12 +1113,13 @@ window.saveNodeAnnotation = function(nodeId) {
     const name = nameEl ? nameEl.value : '';
     const notes = notesEl ? notesEl.value : '';
     
-    // Get the currently selected color
+    // Get the currently selected colors
     const annot = getAnnotation(nodeId) || {};
     const selectedColor = annot.color || '';
+    const selectedEdgeColor = annot.edgeColor || '';
     
-    // Save the annotation with name, notes, and color
-    setAnnotation(nodeId, name, notes, selectedColor);
+    // Save the annotation with name, notes, and colors
+    setAnnotation(nodeId, name, notes, selectedColor, selectedEdgeColor);
     
     // Update the graph display if available
     if (window.updateGraphNodeColor) {
@@ -1116,6 +1127,9 @@ window.saveNodeAnnotation = function(nodeId) {
     }
     if (window.updateGraphNodeLabel) {
         window.updateGraphNodeLabel(nodeId, name);
+    }
+    if (window.updateGraphEdgeColors) {
+        window.updateGraphEdgeColors(nodeId);
     }
     
     // Show feedback
@@ -1165,6 +1179,52 @@ window.clearNodeColor = function(nodeId) {
     // Update the graph display if available
     if (window.updateGraphNodeColor) {
         window.updateGraphNodeColor(nodeId, null);
+    }
+    
+    // Refresh the entity view
+    if (window.showEntityView) {
+        window.showEntityView(nodeId);
+    }
+};
+
+/**
+ * Set node custom edge color (for arrows pointing to this node)
+ */
+window.setNodeEdgeColor = function(nodeId, hexColor) {
+    const annot = getAnnotation(nodeId) || {};
+    const name = annot.name || '';
+    const notes = annot.notes || '';
+    const color = annot.color || '';
+    
+    // Save the annotation with new edge color, preserving other properties
+    setAnnotation(nodeId, name, notes, color, hexColor);
+    
+    // Update the graph display if available
+    if (window.updateGraphEdgeColors) {
+        window.updateGraphEdgeColors(nodeId);
+    }
+    
+    // Refresh the entity view to show updated edge color selection
+    if (window.showEntityView) {
+        window.showEntityView(nodeId);
+    }
+};
+
+/**
+ * Clear node custom edge color
+ */
+window.clearNodeEdgeColor = function(nodeId) {
+    const annot = getAnnotation(nodeId) || {};
+    const name = annot.name || '';
+    const notes = annot.notes || '';
+    const color = annot.color || '';
+    
+    // Save the annotation with null edge color, preserving other properties
+    setAnnotation(nodeId, name, notes, color, null);
+    
+    // Update the graph display if available
+    if (window.updateGraphEdgeColors) {
+        window.updateGraphEdgeColors(nodeId);
     }
     
     // Refresh the entity view

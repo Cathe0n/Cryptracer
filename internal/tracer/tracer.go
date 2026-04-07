@@ -4,8 +4,8 @@ import (
 	"context"
 	"math"
 	"money-tracer/internal/aggregator"
-	"money-tracer/internal/blockstream"
 	"money-tracer/internal/intel"
+	"money-tracer/internal/mempool"
 	"sort"
 )
 
@@ -82,7 +82,7 @@ var scriptTypePriority = map[string]int{
 }
 
 type scoredOutput struct {
-	vout      blockstream.Vout
+	vout      mempool.Vout
 	score     int
 	conf      string
 	isPeeling bool // set when this output was chosen via peeling heuristic
@@ -101,7 +101,7 @@ type scoredOutput struct {
 //  5. Modern script (+1–5)     — Taproot/SegWit preferred over P2PKH
 //
 // Returns nil if no spendable outputs exist.
-func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutput {
+func pickDestination(tx mempool.Tx, inputAddrs map[string]bool) *scoredOutput {
 	var candidates []scoredOutput
 
 	// ── Peeling chain detection ────────────────────────────────
@@ -179,7 +179,7 @@ func pickDestination(tx blockstream.Tx, inputAddrs map[string]bool) *scoredOutpu
 //
 // Returns (isPeeling bool, indexOfLargeOutput int).
 // indexOfLargeOutput is -1 when isPeeling is false.
-func detectPeelingPattern(tx blockstream.Tx) (bool, int) {
+func detectPeelingPattern(tx mempool.Tx) (bool, int) {
 	// Count real inputs (skip coinbase)
 	realInputs := 0
 	for _, vin := range tx.Vin {
@@ -227,9 +227,9 @@ func detectPeelingPattern(tx blockstream.Tx) (bool, int) {
 	return true, large.idx
 }
 
-// buildTransactionIO converts a blockstream.Tx into the aggregator.TransactionIO
+// buildTransactionIO converts a mempool.Tx into the aggregator.TransactionIO
 // format so we can run mixer-detection heuristics inline during tracing.
-func buildTransactionIO(tx blockstream.Tx) aggregator.TransactionIO {
+func buildTransactionIO(tx mempool.Tx) aggregator.TransactionIO {
 	tio := aggregator.TransactionIO{
 		Txid:      tx.Txid,
 		Timestamp: tx.Status.BlockTime,
@@ -282,14 +282,14 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 		}
 
 		// 1. Fetch live transactions for the current address
-		txs, err := blockstream.GetAddressTxs(currentAddr)
+		txs, err := mempool.GetAddressTxs(currentAddr)
 		if err != nil || len(txs) == 0 {
 			path.StopReason = "no_outgoing_tx"
 			break
 		}
 
 		// 2. Find the most recent TX where this address is a SENDER
-		var sendingTx *blockstream.Tx
+		var sendingTx *mempool.Tx
 		for idx := range txs {
 			for _, vin := range txs[idx].Vin {
 				if vin.Prevout != nil && vin.Prevout.ScriptPubKeyAddress == currentAddr {

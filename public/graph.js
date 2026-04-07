@@ -4,9 +4,83 @@ import { state } from './state.js';
 console.log('Cryptrace: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
-import { getNodeCustomColor, getNodeCustomName } from './annotations.js';
+import { getNodeCustomColor, getNodeCustomName, getNodeCustomEdgeColor } from './annotations.js';
 import { showEntityView } from './ui.js';
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+// ─── Color Utility Functions ───────────────────────────────────────────────────
+
+/**
+ * Desaturate a hex color by reducing saturation by a specified percentage
+ * @param {string} hexColor - Hex color (#rrggbb)
+ * @param {number} desatPercent - Desaturation percentage (0-100), default 30
+ * @returns {string} Desaturated hex color
+ */
+function desaturateColor(hexColor, desatPercent = 30) {
+    if (!hexColor || !hexColor.startsWith('#')) return hexColor;
+    
+    // Convert hex to RGB
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+    
+    // Convert RGB to HSL
+    const rn = r / 255, gn = g / 255, bn = b / 255;
+    const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+    let h, s, l = (max + min) / 2;
+    
+    if (max === min) {
+        h = s = 0;
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case rn: h = (gn - bn) / d + (gn < bn ? 6 : 0); break;
+            case gn: h = (bn - rn) / d + 2; break;
+            case bn: h = (rn - gn) / d + 4; break;
+        }
+        h /= 6;
+    }
+    
+    // Reduce saturation
+    s = Math.max(0, s * (1 - desatPercent / 100));
+    
+    // Convert HSL back to RGB
+    const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+    };
+    
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const rn2 = hue2rgb(p, q, h + 1/3);
+    const gn2 = hue2rgb(p, q, h);
+    const bn2 = hue2rgb(p, q, h - 1/3);
+    
+    const toHex = x => {
+        const hex = Math.round(x * 255).toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+    };
+    
+    return '#' + toHex(rn2) + toHex(gn2) + toHex(bn2);
+}
+
+/**
+ * Check if a node is "tainted" (has risk but no direct reports)
+ * @param {Object} nodeData - Node object with risk and risk_data properties
+ * @returns {boolean} True if node is tainted
+ */
+function isNodeTainted(nodeData) {
+    if (!nodeData || !nodeData.risk || nodeData.risk === 0) return false;
+    const rd = nodeData.risk_data;
+    const hasReports = rd && rd.report_count > 0;
+    const hasError = rd && rd.error;
+    return !hasReports && !hasError;
+}
 
 // ─── D3 / simulation state ───────────────────────────────────────────────────
 let simulation;
@@ -44,6 +118,30 @@ let _targetIdBak      = null;    // stash of original targetId before collapse
 let traceFinalAddr    = null;  // final destination address of current trace
 let tracePathNodeIds  = null;  // Set<id> of nodes in active trace path
 let tracePathEdgeKeys = null;  // Set<"s|t"> of edges in active trace path
+
+// ── Arrow marker management ──────────────────────────────────────────────────
+let defs = null;  // SVG <defs> element for markers
+let arrowMarkerCache = new Map();  // Cache of created arrow marker IDs
+
+/**
+ * Get or create an arrow marker for a specific color
+ * @param {string} color - Hex color code
+ * @returns {string} URL reference to the marker (e.g., "url(#arrowhead-xxx)")
+ */
+function getArrowMarkerId(color) {
+    if (!defs) return "url(#arrowhead-default)";
+    if (!arrowMarkerCache.has(color)) {
+        const markerId = `arrowhead-${color.slice(1)}`;
+        arrowMarkerCache.set(color, markerId);
+        defs.append("marker")
+            .attr("id", markerId).attr("viewBox", "0 -5 10 10")
+            .attr("refX", 10).attr("refY", 0)
+            .attr("markerWidth", 6).attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
+    }
+    return `url(#${arrowMarkerCache.get(color)})`;
+}
 
 // update state/text of the toolbar expand button
 function updateExpandBtn() {
@@ -350,6 +448,24 @@ function _renderGraphImpl(graphData, targetId) {
             });
 
         const defs = svg.append("defs");
+        
+        // Helper to create or retrieve an arrow marker for a color
+        const arrowMarkerCache = new Map();
+        const getArrowMarkerId = (color) => {
+            if (!arrowMarkerCache.has(color)) {
+                const markerId = `arrowhead-${color.slice(1)}`;
+                arrowMarkerCache.set(color, markerId);
+                defs.append("marker")
+                    .attr("id", markerId).attr("viewBox", "0 -5 10 10")
+                    .attr("refX", 10).attr("refY", 0)
+                    .attr("markerWidth", 6).attr("markerHeight", 6)
+                    .attr("orient", "auto")
+                    .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
+            }
+            return `url(#${arrowMarkerCache.get(color)})`;
+        };
+
+        // Create default markers upfront
         const mkArrow = (id, color) => defs.append("marker")
             .attr("id", id).attr("viewBox", "0 -5 10 10")
             .attr("refX", 10).attr("refY", 0)
@@ -371,14 +487,65 @@ function _renderGraphImpl(graphData, targetId) {
             .on("tick", ticked);
 
         const edgeColor = d => {
-              const tn = fullGraphData?.nodes[d.target?.id];
-              const r = tn && tn.risk ? tn.risk : 0;
-              return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
+            const tid = d.target?.id || d.target;
+            const tn = fullGraphData?.nodes[tid];
+            
+            // Check if user set a custom edge color
+            const customEdgeColor = getNodeCustomEdgeColor(tid);
+            if (customEdgeColor) {
+                return customEdgeColor;
+            }
+            
+            // Use target node's color
+            let nodeColor = '#64748b'; // default
+            if (tn) {
+                const customColor = getNodeCustomColor(tn.id);
+                if (customColor) {
+                    nodeColor = customColor;
+                } else if (tn.isTarget) {
+                    nodeColor = '#fbbf24';
+                } else if (tn.mixer_info && tn.mixer_info.is_mixer) {
+                    const MIXER_NODE_COLORS = {
+                        'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed',
+                        'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9',
+                        'JoinMarket': '#0891b2',
+                        'Whirlpool (Samourai)': '#0e7490',
+                        'Centralized Mixer': '#b45309',
+                        'Generic CoinJoin': '#4f46e5',
+                    };
+                    nodeColor = MIXER_NODE_COLORS[tn.mixer_info.raw?.mixer_type] || '#7c3aed';
+                } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
+                else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
+                else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
+                else if (tn.entity_type === 'gambling') nodeColor = '#d97706';
+                else if (tn.member_count > 1) {
+                    if (tn.risk >= 70) nodeColor = '#ef4444';
+                    else if (tn.risk >= 40) nodeColor = '#f97316';
+                    else if (tn.risk >= 10) nodeColor = '#f59e0b';
+                    else nodeColor = '#10b981';
+                } else if (tn.risk) {
+                    if (tn.risk >= 70) nodeColor = '#ef4444';
+                    else if (tn.risk >= 40) nodeColor = '#f97316';
+                    else if (tn.risk >= 10) nodeColor = '#f59e0b';
+                    else nodeColor = '#06b6d4';
+                } else if (tn.type === 'Transaction') {
+                    nodeColor = '#6366f1';
+                } else {
+                    nodeColor = '#0ea5e9';
+                }
+            }
+            
+            // Apply desaturation if node is tainted
+            if (tn && isNodeTainted(tn)) {
+                return desaturateColor(nodeColor, 30);
+            }
+            
+            return nodeColor;
         };
+        
         const edgeArrow = d => {
-              const tn = fullGraphData?.nodes[d.target?.id];
-              const r = tn && tn.risk ? tn.risk : 0;
-              return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
+            const color = edgeColor(d);
+            return getArrowMarkerId(color);
         };
 
         link = g.append("g").attr("class", "links")
@@ -616,18 +783,69 @@ function createEdgeTooltip() {
 }
 
 function drag() {
+    let draggedNodeId = null;
+    let connectedNodesState = null; // Track initial positions of connected nodes
+    let dragStartPos = null; // Track where the drag started
+    
     return d3.drag()
         .on("start", (ev, d) => {
             if (edgeTooltipDiv) edgeTooltipDiv.style.display = 'none';
-            if (!isFrozen && !ev.active && simulation) simulation.alphaTarget(0.3).restart();
+            draggedNodeId = d.id;
+            
+            // Allow dragging if not frozen OR if the dragged node is the selected node
+            const isSelectedNode = d.id === selectedNodeId;
+            if ((!isFrozen || isSelectedNode) && !ev.active && simulation) simulation.alphaTarget(0.3).restart();
             d.fx = d.x; d.fy = d.y;
+            
+            // If dragging the selected node, prepare to move connected nodes
+            if (isSelectedNode) {
+                dragStartPos = { x: d.x, y: d.y };
+                connectedNodesState = new Map();
+                // Find all nodes connected to the selected node
+                if (rawLinks) {
+                    rawLinks.forEach(link => {
+                        const sourceId = link.source?.id || link.source;
+                        const targetId = link.target?.id || link.target;
+                        const connectedId = sourceId === selectedNodeId ? targetId : (targetId === selectedNodeId ? sourceId : null);
+                        
+                        if (connectedId) {
+                            const connectedNode = rawNodes.find(n => n.id === connectedId);
+                            if (connectedNode) {
+                                connectedNodesState.set(connectedId, {
+                                    x: connectedNode.x || 0,
+                                    y: connectedNode.y || 0
+                                });
+                            }
+                        }
+                    });
+                }
+            }
         })
         .on("drag", (ev, d) => {
             d.fx = ev.x; d.fy = ev.y;
+            
+            // Move connected nodes along with the selected node
+            if (d.id === selectedNodeId && connectedNodesState && dragStartPos) {
+                // Calculate how far the mouse has moved from the start of the drag
+                const dx = ev.x - dragStartPos.x;
+                const dy = ev.y - dragStartPos.y;
+                
+                connectedNodesState.forEach((initialPos, connectedId) => {
+                    const connectedNode = rawNodes.find(n => n.id === connectedId);
+                    if (connectedNode) {
+                        connectedNode.fx = initialPos.x + dx;
+                        connectedNode.fy = initialPos.y + dy;
+                    }
+                });
+            }
+            
             if (isFrozen) ticked();
         })
         .on("end", (ev, d) => {
-            if (!isFrozen && !ev.active && simulation) simulation.alphaTarget(0);
+            // Allow simulation to continue if not frozen OR if the dragged node is the selected node
+            const isSelectedNode = d.id === selectedNodeId;
+            if ((!isFrozen || isSelectedNode) && !ev.active && simulation) simulation.alphaTarget(0);
+            
             // Persist the node position so the user's layout is preserved during this session
             d.fx = d.x; d.fy = d.y;
             try {
@@ -636,6 +854,21 @@ function drag() {
                     fullGraphData.nodes[d.id].y = d.y;
                 }
             } catch (e) { /* ignore */ }
+            
+            // Persist connected nodes' positions if we moved them
+            if (isSelectedNode && connectedNodesState) {
+                connectedNodesState.forEach((_, connectedId) => {
+                    const connectedNode = rawNodes.find(n => n.id === connectedId);
+                    if (connectedNode && fullGraphData && fullGraphData.nodes && fullGraphData.nodes[connectedId]) {
+                        fullGraphData.nodes[connectedId].x = connectedNode.x;
+                        fullGraphData.nodes[connectedId].y = connectedNode.y;
+                    }
+                });
+                connectedNodesState = null;
+                dragStartPos = null;
+            }
+            
+            draggedNodeId = null;
         });
 }
 
@@ -651,15 +884,35 @@ function drag() {
 function rebindGraphSelections() {
     const edgeColor = d => {
         const tid = d.target?.id || d.target;
-        const tn  = fullGraphData?.nodes[tid];
-        const r = tn && tn.risk ? tn.risk : 0;
-        return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
+        const tn = fullGraphData?.nodes[tid];
+        
+        // Check if user set a custom edge color
+        const customEdgeColor = getNodeCustomEdgeColor(tid);
+        if (customEdgeColor) {
+            return customEdgeColor;
+        }
+        
+        // Use target node's color based on risk
+        let nodeColor = '#64748b'; // default
+        if (tn) {
+            const r = tn.risk || 0;
+            if (r >= 70) nodeColor = '#ef4444';
+            else if (r >= 40) nodeColor = '#f97316';
+            else if (r >= 10) nodeColor = '#f59e0b';
+            else nodeColor = '#06b6d4';
+        }
+        
+        // Apply desaturation if node is tainted
+        if (tn && isNodeTainted(tn)) {
+            return desaturateColor(nodeColor, 30);
+        }
+        
+        return nodeColor;
     };
+    
     const edgeArrow = d => {
-        const tid = d.target?.id || d.target;
-        const tn  = fullGraphData?.nodes[tid];
-        const r = tn && tn.risk ? tn.risk : 0;
-        return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
+        const color = edgeColor(d);
+        return getArrowMarkerId(color);
     };
 
     // ── Links ────────────────────────────────────────────────────────────────
@@ -1122,6 +1375,79 @@ export function updateGraphNodeLabel(nodeId, customName) {
         const name = getNodeCustomName(d.id);
         return name ? `${name} (${d.label})` : d.label;
     });
+}
+
+/**
+ * Update edge colors for all edges pointing to a specific node
+ * Called when user changes a node's custom edge color annotation
+ */
+export function updateGraphEdgeColors(targetNodeId) {
+    if (!link) return;
+    
+    // We need to re-render all edges since they depend on the full node colors
+    // Create the edge color function inline (same as renderGraph version)
+    const edgeColor = d => {
+        const tid = d.target?.id || d.target;
+        const tn = fullGraphData?.nodes[tid];
+        
+        const customEdgeColor = getNodeCustomEdgeColor(tid);
+        if (customEdgeColor) {
+            return customEdgeColor;
+        }
+        
+        let nodeColor = '#64748b';
+        if (tn) {
+            const customColor = getNodeCustomColor(tn.id);
+            if (customColor) {
+                nodeColor = customColor;
+            } else if (tn.isTarget) {
+                nodeColor = '#fbbf24';
+            } else if (tn.mixer_info && tn.mixer_info.is_mixer) {
+                const MIXER_NODE_COLORS = {
+                    'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed',
+                    'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9',
+                    'JoinMarket': '#0891b2',
+                    'Whirlpool (Samourai)': '#0e7490',
+                    'Centralized Mixer': '#b45309',
+                    'Generic CoinJoin': '#4f46e5',
+                };
+                nodeColor = MIXER_NODE_COLORS[tn.mixer_info.raw?.mixer_type] || '#7c3aed';
+            } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
+            else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
+            else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
+            else if (tn.entity_type === 'gambling') nodeColor = '#d97706';
+            else if (tn.member_count > 1) {
+                if (tn.risk >= 70) nodeColor = '#ef4444';
+                else if (tn.risk >= 40) nodeColor = '#f97316';
+                else if (tn.risk >= 10) nodeColor = '#f59e0b';
+                else nodeColor = '#10b981';
+            } else if (tn.risk) {
+                if (tn.risk >= 70) nodeColor = '#ef4444';
+                else if (tn.risk >= 40) nodeColor = '#f97316';
+                else if (tn.risk >= 10) nodeColor = '#f59e0b';
+                else nodeColor = '#06b6d4';
+            } else if (tn.type === 'Transaction') {
+                nodeColor = '#6366f1';
+            } else {
+                nodeColor = '#0ea5e9';
+            }
+        }
+        
+        if (tn && isNodeTainted(tn)) {
+            return desaturateColor(nodeColor, 30);
+        }
+        
+        return nodeColor;
+    };
+    
+    const edgeArrow = d => {
+        const color = edgeColor(d);
+        return getArrowMarkerId(color);
+    };
+    
+    // Update all edges with new colors and arrows
+    link.attr("stroke", edgeColor)
+        .attr("marker-end", edgeArrow);
 }
 
 // =============================================================================
