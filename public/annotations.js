@@ -34,12 +34,13 @@ export function getAnnotation(nodeId) {
  * @param {string} nodeId - The node ID
  * @param {string} name - Custom display name
  * @param {string} notes - User notes
- * @param {string} color - Hex color code
+ * @param {string} color - Hex color code (node color)
+ * @param {string} edgeColor - Hex color code (arrow/edge color)
  */
-export function setAnnotation(nodeId, name, notes, color) {
+export function setAnnotation(nodeId, name, notes, color, edgeColor) {
     try {
         const all = getAllAnnotations();
-        all[nodeId] = { name: name || '', notes: notes || '', color: color || null };
+        all[nodeId] = { name: name || '', notes: notes || '', color: color || null, edgeColor: edgeColor || null };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
     } catch (e) {
         console.error('Failed to save annotation:', e);
@@ -64,6 +65,16 @@ export function getNodeCustomName(nodeId) {
 export function getNodeCustomColor(nodeId) {
     const annot = getAnnotation(nodeId);
     return annot ? annot.color : null;
+}
+
+/**
+ * Get custom edge color for a node if it exists, otherwise return null
+ * @param {string} nodeId - The node ID
+ * @returns {string|null} Hex color code or null
+ */
+export function getNodeCustomEdgeColor(nodeId) {
+    const annot = getAnnotation(nodeId);
+    return annot ? annot.edgeColor : null;
 }
 
 /**

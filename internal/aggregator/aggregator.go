@@ -11,8 +11,8 @@ import (
 
 	"money-tracer/db"
 	"money-tracer/internal/bitquery"
-	"money-tracer/internal/blockstream"
 	"money-tracer/internal/intel"
+	"money-tracer/internal/mempool"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -929,6 +929,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// 2. Local Neo4j
 	neoToReal := make(map[string]string)
 	if history, err := db.GetMoneyFlow(ctx, id); err == nil && history != nil {
+		log.Printf("✅ [LOCAL-DB] Retrieved money flow for %s", id)
 		for eid, node := range history["nodes"].(map[string]interface{}) {
 			n := node.(map[string]interface{})
 			realID := n["label"].(string)
@@ -943,10 +944,17 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				addEdge(src, tgt, e["amount"].(float64), "Local DB", 0)
 			}
 		}
+	} else {
+		log.Printf("⚠️  [LOCAL-DB] Skipped (no local history for %s)", id)
 	}
 
-	// 3. Live Esplora (Blockstream) — build TransactionIO list for heuristics
-	liveTxs, _ := blockstream.GetAddressTxs(id)
+	// 3. Live mempool.space — build TransactionIO list for heuristics
+	liveTxs, bsErr := mempool.GetAddressTxs(id)
+	if bsErr != nil {
+		log.Printf("⚠️  [MEMPOOL] Failed to fetch txs for %s: %v", id, bsErr)
+	} else {
+		log.Printf("📡 [MEMPOOL] Fetched %d transactions for %s", len(liveTxs), id)
+	}
 	txIOs := make([]TransactionIO, 0, len(liveTxs))
 
 	for _, tx := range liveTxs {
@@ -993,6 +1001,11 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				})
 			}
 		}
+
+		if len(tio.Inputs) > 0 || len(tio.Outputs) > 0 {
+			log.Printf("  📝 TX %s: %d inputs → %d outputs", tx.Txid[:16], len(tio.Inputs), len(tio.Outputs))
+		}
+
 		txIOs = append(txIOs, tio)
 
 		// Per-transaction mixer detection
@@ -1027,7 +1040,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// 4. Bitquery inflows + outflows
 	// Uses GetAddressTransactions (v2 API) which returns both FlowEdges for
 	// graph construction AND fully-hydrated TxIO records that are merged into
-	// the behavioral detection pipeline alongside Blockstream data.
+	// the behavioral detection pipeline alongside mempool.space data.
 	if bqKey != "" {
 		bqResult, err := bitquery.GetAddressTransactions(id, bqKey, 200)
 		if err != nil {
@@ -1047,10 +1060,10 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 			}
 
 			// 4b. Convert Bitquery TxIOs into aggregator.TransactionIO so
-			// behavioral detectors see the full history, not just Blockstream's
+			// behavioral detectors see the full history, not just mempool.space's
 			// most-recent 50 transactions.
 			for _, btio := range bqResult.TxIOs {
-				// Skip txids already seen from Blockstream to avoid duplicates
+				// Skip txids already seen from mempool.space to avoid duplicates
 				alreadySeen := false
 				for _, existing := range txIOs {
 					if existing.Txid == btio.Txid {
@@ -1083,9 +1096,9 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 	}
 
-	// ── Behavioral detection (runs on FULL txIOs: Blockstream + Bitquery) ──────
+	// ── Behavioral detection (runs on FULL txIOs: mempool.space + Bitquery) ────
 	// Exchange, gambling, mining, peeling and clustering all run here so they
-	// see the combined dataset from both sources, not just Blockstream's 50 TXs.
+	// see the combined dataset from both sources, not just mempool.space's 50 TXs.
 
 	// ── Exchange detection ─────────────────────────────────────
 	er := IsExchangeAddress(txIOs, defaultExchangeThreshold)
@@ -1200,6 +1213,10 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 
 	// 7. Build summary
 	graph.Summary = buildSummary(graph)
+
+	// Final diagnostic log
+	log.Printf("📊 [GRAPH] Final: %d nodes, %d edges | Node breakdown: %v",
+		len(graph.Nodes), len(graph.Edges), len(graph.Nodes))
 
 	return graph
 }

@@ -1,4 +1,4 @@
-import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, toggleWalletView, expandNode, expandSelected, expandAll, saveSession, restoreSession, checkPendingSession } from './graph.js';
+import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, updateGraphEdgeColors, toggleWalletView, expandNode, expandSelected, expandAll, saveSession, restoreSession, checkPendingSession } from './graph.js';
 import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool, showEntityView } from './ui.js';
 import { runTracePath, closeTraceView } from './tracer.js';
@@ -30,6 +30,7 @@ window.runTracePath     = runTracePath;
 window.closeTraceView   = closeTraceView;
 window.updateGraphNodeColor = updateGraphNodeColor;
 window.updateGraphNodeLabel = updateGraphNodeLabel;
+window.updateGraphEdgeColors = updateGraphEdgeColors;
 window.toggleWalletView    = toggleWalletView;
 window.expandNode          = expandNode;
 window.expandSelected      = expandSelected;
