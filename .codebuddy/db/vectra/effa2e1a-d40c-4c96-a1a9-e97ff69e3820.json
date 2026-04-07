@@ -1,0 +1,1 @@
+{"chunk":1,"numChunks":4,"fileHash":"a9yBqQECuGtluFcHvnY3/QF/WTV2r98i3/LagpvGGII=","filePath":"parser/tsv_parser.go","content":"package parser\nfunc ImportData(path string, isInput bool) {"}
