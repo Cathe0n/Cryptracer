@@ -22,6 +22,8 @@ export const mempoolGetTx          = txid  => mempoolFetch(`/tx/${encodeURICompo
 export const mempoolGetFees        = ()    => mempoolFetch('/v1/fees/recommended');
 export const mempoolGetTxProjection = txid => mempoolFetch(`/v1/tx/${encodeURIComponent(txid)}/projection`);
 export const mempoolGetBlockHeight = ()    => mempoolFetch('/blocks/tip/height');
+export const mempoolGetMiningPools = (period = '1w') => mempoolFetch(`/v1/mining/pools/${period}`);
+export const mempoolGetMiningPool  = (slug) => mempoolFetch(`/v1/mining/pool/${encodeURIComponent(slug)}`);
 
 let feeRefreshInterval = null;
 

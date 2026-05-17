@@ -6,6 +6,81 @@ import { getAnnotation, setAnnotation, COLOR_PALETTE } from './annotations.js';
 // stub helpers in case graph.js isn't loaded first
 window.updateExpandBtn = window.updateExpandBtn || function() { /* fallback no-op */ };
 
+// ─── Entity enrichment data ───────────────────────────────────────────────────
+/**
+ * Known exchange identifiers mapped to display names and descriptions
+ * Expand this mapping to include more exchanges as needed
+ */
+const KNOWN_EXCHANGES = {
+    'binance': { name: 'Binance', icon: '🏦', color: '#f7931a', desc: 'Major cryptocurrency exchange' },
+    'kraken': { name: 'Kraken', icon: '🏦', color: '#264c96', desc: 'Established cryptocurrency exchange' },
+    'coinbase': { name: 'Coinbase', icon: '🏦', color: '#0052ff', desc: 'U.S.-based cryptocurrency exchange' },
+    'gemini': { name: 'Gemini', icon: '🏦', color: '#122140', desc: 'Digital asset exchange' },
+    'huobi': { name: 'Huobi', icon: '🏦', color: '#0096ff', desc: 'Global cryptocurrency exchange' },
+    'bitfinex': { name: 'Bitfinex', icon: '🏦', color: '#1a1a1a', desc: 'Cryptocurrency trading platform' },
+    'ftx': { name: 'FTX', icon: '🏦', color: '#1f87ff', desc: 'Cryptocurrency derivatives exchange' },
+    'bybit': { name: 'Bybit', icon: '🏦', color: '#f7931a', desc: 'Derivatives trading platform' },
+};
+
+/**
+ * Get enriched entity information from node data
+ * @param {Object} nodeData - Node data object
+ * @returns {Object|null} Enriched entity info or null
+ */
+export function getEnrichedEntityInfo(nodeData) {
+    if (!nodeData.entity_type && !nodeData.is_coinbase) return null;
+    
+    const type = nodeData.entity_type?.toLowerCase() || '';
+    const label = nodeData.label || '';
+    const labelLower = label.toLowerCase();
+    
+    // Check for mining transactions (coinbase reward transactions)
+    if (nodeData.type === 'Transaction' && nodeData.is_coinbase) {
+        return { 
+            type: 'mining', 
+            name: 'Mining Reward Tx', 
+            icon: '⛏️', 
+            color: '#64748b', 
+            desc: 'Coinbase transaction — block mining reward' 
+        };
+    }
+    
+    // Check for known exchanges
+    if (type === 'exchange') {
+        for (const [key, info] of Object.entries(KNOWN_EXCHANGES)) {
+            if (labelLower.includes(key) || labelLower.includes(info.name.toLowerCase())) {
+                return { type: 'exchange', ...info, detected: true };
+            }
+        }
+        // Generic exchange if no specific match
+        return { type: 'exchange', name: 'Exchange', icon: '🏦', color: '#0284c7', desc: 'Identified cryptocurrency exchange' };
+    }
+    
+    if (type === 'mining') {
+        // Try to extract pool name
+        let poolName = 'Mining Pool';
+        if (labelLower.includes('stratum')) poolName = 'Status-based Mining Pool';
+        else if (labelLower.includes('block')) poolName = 'Block Mining Pool';
+        else if (labelLower.includes('pool')) poolName = 'Mining Pool';
+        
+        return { type: 'mining', name: poolName, icon: '⛏️', color: '#64748b', desc: 'Cryptocurrency mining pool' };
+    }
+    
+    if (type === 'gambling') {
+        return { type: 'gambling', name: 'Gambling Platform', icon: '🎰', color: '#d97706', desc: 'Identified gambling service' };
+    }
+    
+    if (type === 'darknet') {
+        return { type: 'darknet', name: 'Darknet Service', icon: '🕷️', color: '#be123c', desc: 'Darknet marketplace or service' };
+    }
+    
+    if (type === 'mixer') {
+        return { type: 'mixer', name: 'Coin Mixer', icon: '🌀', color: '#7c3aed', desc: 'Coin mixing service for privacy' };
+    }
+    
+    return null;
+}
+
 export function showEntityView(nodeId) {
     // track selected node for toolbar button (shared globally)
     window.selectedNodeId = nodeId;
@@ -319,6 +394,24 @@ export function showEntityView(nodeId) {
             : `<button onclick="window.expandNode('${nodeId}')" class="ep-btn-expand">🔍 Expand Node</button>`;
     }
 
+    // ── Entity Classification Card ────────────────────────────────────────────
+    const enrichedEntity = getEnrichedEntityInfo(nodeData);
+    if (enrichedEntity) {
+        const bgColor = enrichedEntity.color;
+        const hexToRgb = (hex) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            if (!result) return '255,165,0';
+            return [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)].join(',');
+        };
+        const rgb = hexToRgb(bgColor);
+        html += `
+    <div class="ep-card" style="background:rgba(${rgb},0.08)!important;border-left:4px solid ${bgColor}!important">
+        <div class="ep-heading" style="color:${bgColor}!important;margin-bottom:6px">${enrichedEntity.icon} ${enrichedEntity.name}</div>
+        <div class="ep-body">${enrichedEntity.desc}</div>
+        ${enrichedEntity.type === 'exchange' && enrichedEntity.detected ? `<div class="ep-body-sm" style="margin-top:6px!important;color:#4ade80">✓ Automatically identified from address label</div>` : ''}
+    </div>`;
+    }
+
     // Entity info + mempool link
     html += `
     <div>
@@ -327,9 +420,9 @@ export function showEntityView(nodeId) {
             ${hasReports && risk >= 70 ? `<span class="ep-badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">🚨 CRITICAL RISK</span>` : ''}
             ${hasReports && risk >= 40 && risk < 70 ? `<span class="ep-badge" style="background:#ffedd5;color:#9a3412;border:1px solid #fdba74">⚠️ HIGH RISK</span>` : ''}
             ${nodeData.mixer_info?.is_mixer ? `<span class="ep-badge" style="background:#2e1065;color:#c4b5fd;border:1px solid #7c3aed">🌀 ${nodeData.mixer_info.raw?.mixer_type||'MIXER'} (${nodeData.mixer_info.confidence||0}%)</span>` : ''}
-            ${nodeData.entity_type === 'exchange' || nodeData.exchange_info?.flagged ? `<span class="ep-badge" style="background:#e0f2fe;color:#075985;border:1px solid #bae6fd">🏦 EXCHANGE</span>` : ''}
-            ${nodeData.entity_type === 'gambling' || nodeData.gambling_info?.flagged ? `<span class="ep-badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe">🎰 GAMBLING</span>` : ''}
-            ${nodeData.entity_type === 'mining' || nodeData.mining_info?.flagged ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">⛏️ MINING POOL</span>` : ''}
+            ${enrichedEntity ? '' : (nodeData.entity_type === 'exchange' || nodeData.exchange_info?.flagged ? `<span class="ep-badge" style="background:#e0f2fe;color:#075985;border:1px solid #bae6fd">🏦 EXCHANGE</span>` : '')}
+            ${enrichedEntity ? '' : (nodeData.entity_type === 'gambling' || nodeData.gambling_info?.flagged ? `<span class="ep-badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe">🎰 GAMBLING</span>` : '')}
+            ${enrichedEntity ? '' : (nodeData.entity_type === 'mining' || nodeData.mining_info?.flagged ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">⛏️ MINING POOL</span>` : '')}
             ${hasTaintOnly && risk >= 40 ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">🔗 TAINT ${risk}</span>` : ''}
             <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}" target="_blank" rel="noopener"
                class="ep-badge ep-link" style="background:#ecfeff;border:1px solid #a5f3fc">🔍 mempool.space ↗</a>

@@ -69,7 +69,7 @@ type UTXO struct {
 }
 
 // client is a shared HTTP client with a reasonable timeout.
-var client = &http.Client{Timeout: 10 * time.Second}
+var client = &http.Client{Timeout: 30 * time.Second}
 
 func get(path string, dst interface{}) error {
 	url := BaseURL + path

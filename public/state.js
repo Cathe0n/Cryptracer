@@ -14,5 +14,6 @@ export const state = {
     labelsVisible: true,
     isFrozen: false,
     calendarTxDates: {},
-    calendarViewDate: new Date()
+    calendarViewDate: new Date(),
+    nodeCount: 0
 };

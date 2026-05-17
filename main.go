@@ -227,7 +227,7 @@ func main() {
 		address := c.Param("address")
 		log.Printf("📡 [HISTORY] Fetching live data for: %s", address)
 
-		txs, err := mempool.GetAddressTxs(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(address)
 		if err != nil || txs == nil {
 			log.Printf("⚠️  [HISTORY] No data found for %s", address)
 			c.JSON(200, []mempool.Tx{})
@@ -282,7 +282,7 @@ func main() {
 
 		log.Printf("🔀 [MIXER-CHECK] Analysing tx: %s (threshold=%.2f)", txid, threshold)
 
-		tx, err := mempool.GetTx(txid)
+		tx, err := aggregator.GetTxWithFallback(txid)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transaction: %v", err)})
 			return
@@ -336,7 +336,7 @@ func main() {
 
 		log.Printf("🏦 [EXCHANGE-CHECK] Analysing address: %s", address)
 
-		txs, err := mempool.GetAddressTxs(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -439,7 +439,7 @@ func main() {
 
 		log.Printf("🎰 [GAMBLING-CHECK] Analysing address: %s", address)
 
-		txs, err := mempool.GetAddressTxs(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -489,7 +489,7 @@ func main() {
 
 		log.Printf("⛏️  [MINING-CHECK] Analysing address: %s", address)
 
-		txs, err := mempool.GetAddressTxs(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -638,7 +638,7 @@ func main() {
 					"summary":  fmt.Sprintf("%d confirmed txs, balance %d sat", cs.TxCount, balance),
 				})
 			} else {
-				tx, err := mempool.GetTx(address)
+				tx, err := aggregator.GetTxWithFallback(address)
 				if err != nil {
 					c.JSON(200, gin.H{"source": "mempool", "ok": false,
 						"error": err.Error()})
@@ -772,7 +772,7 @@ func main() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				info, err := mempool.GetAddressInfo(address)
+				info, err := aggregator.GetAddressInfoWithFallback(address)
 				if err == nil && info != nil {
 					mu.Lock()
 					res.TxCount = info.ChainStats.TxCount

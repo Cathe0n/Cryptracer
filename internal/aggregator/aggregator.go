@@ -7,10 +7,12 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"money-tracer/db"
 	"money-tracer/internal/bitquery"
+	"money-tracer/internal/blockstream"
 	"money-tracer/internal/intel"
 	"money-tracer/internal/mempool"
 )
@@ -43,6 +45,11 @@ type ProvenanceNode struct {
 	// ── Extended entity intelligence ──────────────────────────
 	GamblingInfo *GamblingResult `json:"gambling_info,omitempty"`
 	MiningInfo   *MiningResult   `json:"mining_info,omitempty"`
+
+	// ── Mining transaction detection ─────────────────────────
+	IsCoinbase     bool              `json:"is_coinbase,omitempty"`      // true if transaction is a coinbase (block reward)
+	InputCount     int               `json:"input_count,omitempty"`      // number of transaction inputs (0 for coinbase)
+	MiningPoolInfo *mempool.PoolInfo `json:"mining_pool_info,omitempty"` // pool that mined the block (set for coinbase & confirmed txs)
 }
 
 type ProvenanceEdge struct {
@@ -151,6 +158,165 @@ type DetectionResult struct {
 }
 
 const defaultMixerThreshold = 0.70
+
+// ─────────────────────────────────────────────────────────────
+// FALLBACK DATA FETCHING HELPERS
+// ─────────────────────────────────────────────────────────────
+
+// convertBlockstreamTx converts a blockstream transaction to mempool format
+func convertBlockstreamTx(bstx *blockstream.Tx) *mempool.Tx {
+	if bstx == nil {
+		return nil
+	}
+
+	// Convert Vins
+	vins := make([]mempool.Vin, len(bstx.Vin))
+	for i, v := range bstx.Vin {
+		var prevout *mempool.Vout
+		if v.Prevout != nil {
+			prevout = &mempool.Vout{
+				Value:               v.Prevout.Value,
+				ScriptPubKeyAddress: v.Prevout.ScriptPubKeyAddress,
+				ScriptPubKeyType:    v.Prevout.ScriptPubKeyType,
+			}
+		}
+		vins[i] = mempool.Vin{
+			Txid:     v.Txid,
+			Vout:     v.Vout,
+			Sequence: v.Sequence,
+			Prevout:  prevout,
+		}
+	}
+
+	// Convert Vouts
+	vouts := make([]mempool.Vout, len(bstx.Vout))
+	for i, v := range bstx.Vout {
+		vouts[i] = mempool.Vout{
+			Value:               v.Value,
+			ScriptPubKeyAddress: v.ScriptPubKeyAddress,
+			ScriptPubKeyType:    v.ScriptPubKeyType,
+		}
+	}
+
+	return &mempool.Tx{
+		Txid: bstx.Txid,
+		Vin:  vins,
+		Vout: vouts,
+		Status: mempool.Status{
+			Confirmed:   bstx.Status.Confirmed,
+			BlockHeight: bstx.Status.BlockHeight,
+			BlockTime:   bstx.Status.BlockTime,
+		},
+		Fee:    bstx.Fee,
+		Weight: bstx.Weight,
+		Size:   bstx.Size,
+	}
+}
+
+// convertBlockstreamTxs converts a slice of blockstream transactions to mempool format
+func convertBlockstreamTxs(bstxs []blockstream.Tx) []mempool.Tx {
+	result := make([]mempool.Tx, len(bstxs))
+	for i, tx := range bstxs {
+		converted := convertBlockstreamTx(&tx)
+		if converted != nil {
+			result[i] = *converted
+		}
+	}
+	return result
+}
+
+// convertBlockstreamAddressInfo converts blockstream address info to mempool format
+func convertBlockstreamAddressInfo(bsinfo *blockstream.AddressInfo) *mempool.AddressInfo {
+	if bsinfo == nil {
+		return nil
+	}
+
+	return &mempool.AddressInfo{
+		Address: bsinfo.Address,
+		ChainStats: mempool.AddressStats{
+			FundedTxoSum: bsinfo.ChainStats.FundedTxoSum,
+			SpentTxoSum:  bsinfo.ChainStats.SpentTxoSum,
+			TxCount:      bsinfo.ChainStats.TxCount,
+		},
+		MempoolStats: mempool.AddressStats{
+			FundedTxoSum: bsinfo.MempoolStats.FundedTxoSum,
+			SpentTxoSum:  bsinfo.MempoolStats.SpentTxoSum,
+			TxCount:      bsinfo.MempoolStats.TxCount,
+		},
+	}
+}
+
+// GetAddressTxsWithFallback attempts to fetch address transactions from mempool.space first,
+// falling back to blockstream.info if mempool fails or times out.
+func GetAddressTxsWithFallback(address string) ([]mempool.Tx, error) {
+	// Try mempool first
+	txs, err := mempool.GetAddressTxs(address)
+	if err == nil && txs != nil {
+		log.Printf("✅ [MEMPOOL] Successfully fetched transactions for %s", address)
+		return txs, nil
+	}
+
+	// Log why mempool failed
+	log.Printf("⚠️  [MEMPOOL] Failed to fetch txs for %s: %v — attempting fallback to blockstream", address, err)
+
+	// Fallback to blockstream
+	bsTxs, bsErr := blockstream.GetAddressTxs(address)
+	if bsErr != nil {
+		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch txs for %s: %v", address, bsErr)
+		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%v)", err, bsErr)
+	}
+
+	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched %d transactions for %s", len(bsTxs), address)
+	return convertBlockstreamTxs(bsTxs), nil
+}
+
+// GetTxWithFallback attempts to fetch a transaction from mempool.space first,
+// falling back to blockstream.info if mempool fails or times out.
+func GetTxWithFallback(txid string) (*mempool.Tx, error) {
+	// Try mempool first
+	tx, err := mempool.GetTx(txid)
+	if err == nil && tx != nil {
+		log.Printf("✅ [MEMPOOL] Successfully fetched tx %s", txid[:16])
+		return tx, nil
+	}
+
+	// Log why mempool failed
+	log.Printf("⚠️  [MEMPOOL] Failed to fetch tx %s: %v — attempting fallback to blockstream", txid, err)
+
+	// Fallback to blockstream
+	bsTx, bsErr := blockstream.GetTx(txid)
+	if bsErr != nil {
+		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch tx %s: %v", txid, bsErr)
+		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%v)", err, bsErr)
+	}
+
+	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched tx %s", txid[:16])
+	return convertBlockstreamTx(bsTx), nil
+}
+
+// GetAddressInfoWithFallback attempts to fetch address info from mempool.space first,
+// falling back to blockstream.info if mempool fails or times out.
+func GetAddressInfoWithFallback(address string) (*mempool.AddressInfo, error) {
+	// Try mempool first
+	info, err := mempool.GetAddressInfo(address)
+	if err == nil && info != nil {
+		log.Printf("✅ [MEMPOOL] Successfully fetched address info for %s", address)
+		return info, nil
+	}
+
+	// Log why mempool failed
+	log.Printf("⚠️  [MEMPOOL] Failed to fetch address info for %s: %v — attempting fallback to blockstream", address, err)
+
+	// Fallback to blockstream
+	bsInfo, bsErr := blockstream.GetAddressInfo(address)
+	if bsErr != nil {
+		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch address info for %s: %v", address, bsErr)
+		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%v)", err, bsErr)
+	}
+
+	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched address info for %s", address)
+	return convertBlockstreamAddressInfo(bsInfo), nil
+}
 
 // IsCoinMixer performs multi-rule heuristic analysis to detect mixing transactions.
 //
@@ -948,14 +1114,70 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		log.Printf("⚠️  [LOCAL-DB] Skipped (no local history for %s)", id)
 	}
 
-	// 3. Live mempool.space — build TransactionIO list for heuristics
-	liveTxs, bsErr := mempool.GetAddressTxs(id)
-	if bsErr != nil {
-		log.Printf("⚠️  [MEMPOOL] Failed to fetch txs for %s: %v", id, bsErr)
-	} else {
-		log.Printf("📡 [MEMPOOL] Fetched %d transactions for %s", len(liveTxs), id)
-	}
+	var liveTxs []mempool.Tx
+	var bqResult *bitquery.AddressTransactions
+	var riskData *intel.ChainAbuseRiskData
+	var label string
+	var wg sync.WaitGroup
+
+	wg.Add(3)
+	// Parallel fetch: Mempool/Blockstream
+	go func() {
+		defer wg.Done()
+		var err error
+		liveTxs, err = GetAddressTxsWithFallback(id)
+		if err != nil {
+			log.Printf("⚠️  [FETCH-TX] %v", err)
+		}
+	}()
+
+	// Parallel fetch: Bitquery
+	go func() {
+		defer wg.Done()
+		if bqKey != "" {
+			var err error
+			bqResult, err = bitquery.GetAddressTransactions(id, bqKey, 200)
+			if err != nil {
+				log.Printf("⚠️  [BITQUERY] %v", err)
+			}
+		}
+	}()
+
+	// Parallel fetch: Intel
+	go func() {
+		defer wg.Done()
+		label = intel.GetLabel(id)
+		riskData = intel.GetChainAbuseRisk(id, caKey)
+	}()
+
+	wg.Wait()
+
 	txIOs := make([]TransactionIO, 0, len(liveTxs))
+
+	// Block-pool cache: blockHash → *mempool.PoolInfo
+	// Many transactions in a single graph share the same recent blocks, so
+	// caching here reduces the number of /v1/block/:hash API calls to O(unique blocks)
+	// rather than O(transactions). Nil entries mean "looked up, no pool data."
+	blockPoolCache := make(map[string]*mempool.PoolInfo)
+	lookupBlockPool := func(blockHash string) *mempool.PoolInfo {
+		if blockHash == "" {
+			return nil
+		}
+		if p, found := blockPoolCache[blockHash]; found {
+			return p // may be nil — that's a valid cached result
+		}
+		pool, err := mempool.GetBlockPool(blockHash)
+		if err != nil {
+			log.Printf("⚠️  [BLOCK-POOL] %s: %v", blockHash[:min16(len(blockHash))], err)
+			blockPoolCache[blockHash] = nil
+			return nil
+		}
+		blockPoolCache[blockHash] = pool
+		if pool != nil {
+			log.Printf("⛏️  [BLOCK-POOL] block %s → %s (%s)", blockHash[:min16(len(blockHash))], pool.Name, pool.Slug)
+		}
+		return pool
+	}
 
 	for _, tx := range liveTxs {
 		addNode(tx.Txid, tx.Txid, "Transaction", "Esplora API", 0)
@@ -988,6 +1210,43 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				})
 			}
 		}
+
+		// Mark transaction node with coinbase flag, input count, and mining pool.
+		// - IsCoinbase: true when any Vin has no Prevout (block-reward transaction).
+		// - MiningPoolInfo: populated for every confirmed transaction by querying
+		//   mempool.space's /v1/block/:hash endpoint via the cached lookupBlockPool
+		//   helper. This surfaces "Miner: Foundry USA" style attribution on every
+		//   confirmed tx node — the same data mempool.space shows in its UI.
+		// - EntityType = EntityMining is set when the pool is identified; this drives
+		//   the amber colour, ⛏ label prefix, and the [HIDE MINING] filter.
+		if n, ok := graph.Nodes[tx.Txid]; ok {
+			n.IsCoinbase = tio.HasCoinbase
+			n.InputCount = len(tx.Vin)
+
+			if tx.Status.Confirmed && tx.Status.BlockHash != "" {
+				poolInfo := lookupBlockPool(tx.Status.BlockHash)
+				if poolInfo != nil {
+					n.MiningPoolInfo = poolInfo
+					n.EntityType = EntityMining
+					if tio.HasCoinbase {
+						n.Label = poolInfo.Name + " (Coinbase)"
+					} else {
+						n.Label = poolInfo.Name + " (TX)"
+					}
+					log.Printf("⛏️  [POOL-TAG] tx %s → %s (coinbase=%v)",
+						tx.Txid[:min16(len(tx.Txid))], poolInfo.Name, tio.HasCoinbase)
+				} else if tio.HasCoinbase {
+					n.EntityType = EntityMining
+					n.Label = "Coinbase TX"
+				}
+			} else if tio.HasCoinbase {
+				n.EntityType = EntityMining
+				n.Label = "Coinbase TX"
+			}
+
+			graph.Nodes[tx.Txid] = n
+		}
+
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKeyAddress != "" {
 				addr := vout.ScriptPubKeyAddress
@@ -1041,59 +1300,58 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// Uses GetAddressTransactions (v2 API) which returns both FlowEdges for
 	// graph construction AND fully-hydrated TxIO records that are merged into
 	// the behavioral detection pipeline alongside mempool.space data.
-	if bqKey != "" {
-		bqResult, err := bitquery.GetAddressTransactions(id, bqKey, 200)
-		if err != nil {
-			log.Printf("⚠️  [BITQUERY] %v", err)
-		} else {
-			// 4a. Add flow edges and nodes to the graph
-			for _, flow := range bqResult.Flows {
-				addNode(flow.FromAddr, flow.FromAddr, "Address", "Bitquery", 0)
-				addNode(flow.ToAddr, flow.ToAddr, "Address", "Bitquery", 0)
-				if flow.TxHash != "" {
-					addNode(flow.TxHash, flow.TxHash, "Transaction", "Bitquery", 0)
-					addEdge(flow.FromAddr, flow.TxHash, flow.ValueBTC, "Bitquery", flow.Timestamp)
-					addEdge(flow.TxHash, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
-				} else {
-					addEdge(flow.FromAddr, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
+	if bqResult != nil {
+		// 4a. Add flow edges and nodes to the graph
+		for _, flow := range bqResult.Flows {
+			addNode(flow.FromAddr, flow.FromAddr, "Address", "Bitquery", 0)
+			addNode(flow.ToAddr, flow.ToAddr, "Address", "Bitquery", 0)
+			if flow.TxHash != "" {
+				addNode(flow.TxHash, flow.TxHash, "Transaction", "Bitquery", 0)
+				addEdge(flow.FromAddr, flow.TxHash, flow.ValueBTC, "Bitquery", flow.Timestamp)
+				addEdge(flow.TxHash, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
+			} else {
+				addEdge(flow.FromAddr, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
+			}
+		}
+
+		// 4b. Convert Bitquery TxIOs into aggregator.TransactionIO
+		for _, btio := range bqResult.TxIOs {
+			alreadySeen := false
+			for _, existing := range txIOs {
+				if existing.Txid == btio.Txid {
+					alreadySeen = true
+					break
 				}
+			}
+			if alreadySeen {
+				continue
 			}
 
-			// 4b. Convert Bitquery TxIOs into aggregator.TransactionIO so
-			// behavioral detectors see the full history, not just mempool.space's
-			// most-recent 50 transactions.
-			for _, btio := range bqResult.TxIOs {
-				// Skip txids already seen from mempool.space to avoid duplicates
-				alreadySeen := false
-				for _, existing := range txIOs {
-					if existing.Txid == btio.Txid {
-						alreadySeen = true
-						break
-					}
-				}
-				if alreadySeen {
-					continue
-				}
-				tio := TransactionIO{Txid: btio.Txid, Timestamp: btio.Timestamp}
-				for _, inp := range btio.Inputs {
-					tio.Inputs = append(tio.Inputs, TxInput{
-						Address: inp.Address,
-						Value:   inp.Value,
-					})
-				}
-				for _, out := range btio.Outputs {
-					tio.Outputs = append(tio.Outputs, TxOutput{
-						Address:    out.Address,
-						Value:      out.Value,
-						ScriptType: "", // Bitquery v2 bitcoin endpoint does not expose script type
-					})
-				}
-				txIOs = append(txIOs, tio)
-				addNode(btio.Txid, btio.Txid, "Transaction", "Bitquery", 0)
+			tio := TransactionIO{Txid: btio.Txid, Timestamp: btio.Timestamp}
+			for _, inp := range btio.Inputs {
+				tio.Inputs = append(tio.Inputs, TxInput{
+					Address: inp.Address,
+					Value:   inp.Value,
+				})
 			}
-			log.Printf("📡 [BITQUERY] merged %d new txs into behavioral pipeline (total: %d)",
-				bqResult.TotalTxs, len(txIOs))
+			for _, out := range btio.Outputs {
+				tio.Outputs = append(tio.Outputs, TxOutput{
+					Address:    out.Address,
+					Value:      out.Value,
+					ScriptType: "", // Bitquery v2 bitcoin endpoint does not expose script type
+				})
+			}
+			txIOs = append(txIOs, tio)
+			addNode(btio.Txid, btio.Txid, "Transaction", "Bitquery", 0)
+			// Mark Bitquery transaction with input count
+			if n, ok := graph.Nodes[btio.Txid]; ok {
+				n.InputCount = len(btio.Inputs)
+				n.IsCoinbase = len(btio.Inputs) == 0
+				graph.Nodes[btio.Txid] = n
+			}
 		}
+		log.Printf("📡 [BITQUERY] merged %d new txs into behavioral pipeline (total: %d)",
+			bqResult.TotalTxs, len(txIOs))
 	}
 
 	// ── Behavioral detection (runs on FULL txIOs: mempool.space + Bitquery) ────
@@ -1181,8 +1439,8 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// they returned data, so the frontend intelligence panel always shows them
 	// with their Verify and Open buttons, and the cross-validation engine can
 	// correctly report "queried but found nothing" rather than silently omitting.
-	label := intel.GetLabel(id)
-	riskData := intel.GetChainAbuseRisk(id, caKey)
+	label = intel.GetLabel(id)
+	riskData = intel.GetChainAbuseRisk(id, caKey)
 
 	if n, ok := graph.Nodes[id]; ok {
 		// Always add WalletExplorer — it is a public service with no key required.
@@ -1275,4 +1533,12 @@ func intMax(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// min16 returns min(n, 16) — used to safely truncate txid/blockHash log strings.
+func min16(n int) int {
+	if n < 16 {
+		return n
+	}
+	return 16
 }

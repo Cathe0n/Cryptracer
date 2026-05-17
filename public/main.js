@@ -1,4 +1,4 @@
-import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, updateGraphEdgeColors, toggleWalletView, expandNode, expandSelected, expandAll, saveSession, restoreSession, checkPendingSession } from './graph.js';
+import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, updateGraphEdgeColors, toggleWalletView, expandNode, expandSelected, expandAll, saveSession, restoreSession, checkPendingSession, toggleMiningFilter, toggleIncomingFilter, toggleOutgoingFilter, updateNodeCountDisplay } from './graph.js';
 import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool, showEntityView } from './ui.js';
 import { runTracePath, closeTraceView } from './tracer.js';
@@ -15,6 +15,9 @@ window.toggleFreeze     = toggleFreeze;
 window.toggleLayout     = toggleLayout;
 window.toggleLabels     = toggleLabels;
 window.toggleTimestamps = toggleTimestamps;
+window.toggleMiningFilter = toggleMiningFilter;
+window.toggleIncomingFilter = toggleIncomingFilter;
+window.toggleOutgoingFilter = toggleOutgoingFilter;
 window.zoomIn           = zoomIn;
 window.zoomOut          = zoomOut;
 window.recenterGraph    = recenterGraph;
@@ -38,6 +41,7 @@ window.expandAll           = expandAll;
 window.saveSession         = saveSession;
 window.restoreSession      = restoreSession;
 window.checkPendingSession = checkPendingSession;
+window.updateNodeCountDisplay = updateNodeCountDisplay;
 
 // Boot network stats ticker and restore any pending session
 window.addEventListener('DOMContentLoaded', () => {

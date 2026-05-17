@@ -5,7 +5,8 @@ console.log('Cryptrace: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
 import { getNodeCustomColor, getNodeCustomName, getNodeCustomEdgeColor } from './annotations.js';
-import { showEntityView } from './ui.js';
+import { showEntityView, getEnrichedEntityInfo } from './ui.js';
+import { showToast } from './utils.js';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // ─── Color Utility Functions ───────────────────────────────────────────────────
@@ -82,6 +83,91 @@ function isNodeTainted(nodeData) {
     return !hasReports && !hasError;
 }
 
+/**
+ * Update node count display in both DOM and state
+ * @param {number} count - Number of nodes to display
+ */
+function updateNodeCountDisplay(count) {
+    const previousCount = state.nodeCount;
+    state.nodeCount = count;
+    const el = document.getElementById('nodeCount');
+    if (el) {
+        el.textContent = count.toLocaleString();
+        
+        // Trigger animation when count changes
+        if (count !== previousCount) {
+            // Remove existing animation classes
+            el.classList.remove('updating', 'flash');
+            // Trigger reflow to restart animation
+            void el.offsetWidth;
+            // Add animation classes
+            el.classList.add('updating');
+            if (count > previousCount) {
+                el.classList.add('flash');
+            }
+            // Remove animation classes after animation completes
+            setTimeout(() => {
+                el.classList.remove('updating', 'flash');
+            }, 800);
+        }
+    }
+}
+
+/**
+ * Update mixer detection display
+ * @param {Array} mixerNodes - Array of nodes with mixer_info detected
+ */
+function updateMixerDetectionDisplay(mixerNodes) {
+    const panel = document.getElementById('mixerDetectionPanel');
+    const countEl = document.getElementById('mixerCount');
+    const statusEl = document.getElementById('mixerStatus');
+    const detailsEl = document.getElementById('mixerDetails');
+    
+    if (!panel || !countEl || !statusEl) return;
+    
+    if (mixerNodes.length === 0) {
+        panel.classList.add('hidden');
+        return;
+    }
+    
+    // Show the panel
+    panel.classList.remove('hidden');
+    
+    // Update count
+    countEl.textContent = mixerNodes.length;
+    
+    // Update status
+    if (mixerNodes.length === 1) {
+        statusEl.textContent = '⚠️ 1 Mixer Found';
+    } else {
+        statusEl.textContent = `⚠️ ${mixerNodes.length} Mixers Found`;
+    }
+    
+    // Build details
+    let detailsHTML = '';
+    mixerNodes.slice(0, 5).forEach(mixer => {
+        const type = mixer.mixer_info?.raw?.mixer_type || 'Unknown';
+        const conf = mixer.mixer_info?.confidence || 0;
+        const shortId = mixer.id.substring(0, 12) + '...';
+        detailsHTML += `
+            <div class="p-2 rounded bg-indigo-900/40 border border-indigo-500/30">
+                <div class="font-bold text-indigo-300">${type}</div>
+                <div class="text-slate-400 text-[7px] mt-0.5">${shortId}</div>
+                <div class="text-indigo-400 text-[8px] mt-1">Confidence: <strong>${conf}%</strong></div>
+            </div>
+        `;
+    });
+    
+    if (mixerNodes.length > 5) {
+        detailsHTML += `<div class="text-slate-500 text-[8px] italic p-2">+${mixerNodes.length - 5} more mixers</div>`;
+    }
+    
+    if (detailsEl) {
+        detailsEl.innerHTML = detailsHTML;
+        detailsEl.classList.remove('hidden');
+    }
+}
+
 // ─── D3 / simulation state ───────────────────────────────────────────────────
 let simulation;
 let svg;
@@ -100,6 +186,9 @@ let timestampsVisible = true;
 let edgeTooltipsVisible = false; // show amount+timestamp tooltips on hover when true
 let isFrozen = false;
 let currentLayout = 'force';  // 'force' | 'tree'
+let miningFilterActive = false; // true when hiding mining pool nodes
+let incomingFilterActive = false; // true when showing only incoming transactions
+let outgoingFilterActive = false; // true when showing only outgoing transactions
 let rawNodes = [];
 let rawLinks = [];
 let calendarTxDates = {};
@@ -141,6 +230,114 @@ function getArrowMarkerId(color) {
             .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
     }
     return `url(#${arrowMarkerCache.get(color)})`;
+}
+
+// ── Mining Pool Detection (using mempool.space API) ──────────────────────────
+let miningPoolsCache = null;  // Cache of mining pools fetched from API
+let miningPoolSlugMap = {};   // Map of slug -> pool info for quick lookup
+let miningPoolCacheTimeout = 3600000; // 1 hour cache
+let miningPoolCacheTime = 0;
+
+/**
+ * Fetch and cache mining pools from mempool.space API
+ * @returns {Promise<Object>} Mining pools data { pools: [...], blockCount, lastEstimatedHashrate }
+ */
+async function fetchMiningPools() {
+    const now = Date.now();
+    // Use cache if fresh (within 1 hour)
+    if (miningPoolsCache && (now - miningPoolCacheTime) < miningPoolCacheTimeout) {
+        return miningPoolsCache;
+    }
+    
+    try {
+        const { mempoolGetMiningPools } = await import('./api.js');
+        const data = await mempoolGetMiningPools('1w');
+        if (data && data.pools) {
+            // Build slug map for quick reference
+            miningPoolSlugMap = {};
+            data.pools.forEach(pool => {
+                miningPoolSlugMap[pool.slug] = pool;
+            });
+            miningPoolsCache = data;
+            miningPoolCacheTime = now;
+            return data;
+        }
+    } catch (err) {
+        console.warn('Failed to fetch mining pools from mempool.space:', err);
+    }
+    return null;
+}
+
+/**
+ * Check if a node is a known mining pool or mining transaction
+ * Detects both mining pool address nodes AND coinbase transaction nodes
+ * @param {Object} nodeData - Node data object
+ * @returns {Object|null} Mining pool/tx info or null
+ */
+function detectMiningPool(nodeData) {
+    if (!nodeData) return null;
+
+    // ── Tier 1: hard data set by backend (100% reliable) ────────────────────
+    // The aggregator calls /v1/block/:hash for every confirmed tx and writes
+    // mining_pool_info + entity_type='mining' on matches. Trust these blindly.
+    if (nodeData.mining_pool_info) {
+        return nodeData.mining_pool_info;
+    }
+    if (nodeData.entity_type === 'mining') {
+        const lbl = (nodeData.label || '').toLowerCase();
+        for (const [slug, pool] of Object.entries(miningPoolSlugMap)) {
+            if (lbl.includes(slug) || lbl.includes(pool.name.toLowerCase())) return pool;
+        }
+        return { name: nodeData.label || 'Mining Pool', slug: 'unknown', entity_type: 'mining' };
+    }
+
+    // ── Tier 2: explicit coinbase flag on Transaction nodes ──────────────────
+    // IMPORTANT: DO NOT check input_count === 0 here.
+    // In the Go JSON response, input_count defaults to 0 for every Transaction
+    // node that was added via addNode() without going through the TX-enrichment
+    // loop (e.g., Bitquery-sourced nodes, local-DB nodes).  Using it as a
+    // coinbase signal causes ALL unenriched transaction nodes to be flagged,
+    // which removes ALL edges from the graph — the exact bug this fixes.
+    if (nodeData.type === 'Transaction') {
+        if (nodeData.is_coinbase === true) {
+            return { name: 'Coinbase TX', slug: 'coinbase', entity_type: 'mining', is_coinbase: true };
+        }
+        if (nodeData.mining_info) {
+            return { name: 'Mining Pool TX', slug: 'mining_pool_tx', entity_type: 'mining' };
+        }
+        // Label-based matching: only fire when the backend has already embedded
+        // a pool name in the label (e.g. "Foundry USA (Coinbase)", "F2Pool (TX)")
+        const lbl = (nodeData.label || '').toLowerCase();
+        if (lbl.includes('coinbase tx') || lbl.endsWith('(coinbase)')) {
+            return { name: nodeData.label, slug: 'coinbase', entity_type: 'mining', is_coinbase: true };
+        }
+        for (const [slug, pool] of Object.entries(miningPoolSlugMap)) {
+            if (pool.name && lbl.includes(pool.name.toLowerCase())) {
+                return { name: pool.name, slug, entity_type: 'mining' };
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Get enriched display name for a node, prioritizing entity enrichment
+ * @param {string} nodeId - The node ID
+ * @param {Object} nodeData - The node data object
+ * @returns {string} Display name to show in graph
+ */
+function getEnrichedNodeName(nodeId, nodeData) {
+    // First check for user-provided custom name
+    const customName = getNodeCustomName(nodeId);
+    if (customName) return customName;
+    
+    // Then check for enriched entity info
+    const enriched = getEnrichedEntityInfo(nodeData);
+    if (enriched && enriched.name) return enriched.name;
+    
+    // Fall back to node label or ID
+    return nodeData.label || nodeId;
 }
 
 // update state/text of the toolbar expand button
@@ -376,6 +573,14 @@ export async function runSleuth(forcedId) {
         console.log(`Received ${nodeCount} nodes, ${edgeCount} edges`);
 
         setBusy(true, 'PROCESSING GRAPH DATA...', `Found ${nodeCount} entities and ${edgeCount} transactions`);
+        
+        // Show mixer detection is active
+        showToast(
+            '🌀 Advanced Mixer Detection Engine Active — Analyzing transaction patterns...',
+            'info',
+            3000
+        );
+        
         document.getElementById('intelBox').classList.remove('hidden');
         document.getElementById('riskCount').innerText     = data.graph.nodes[id]?.risk  || 0;
         document.getElementById('identityLabel').innerText = data.graph.nodes[id]?.label || id;
@@ -422,12 +627,58 @@ function _renderGraphImpl(graphData, targetId) {
         // clear any node selection when the graph is reset
         selectedNodeId = null;
         updateExpandBtn();
+
+        // Fetch mining pools data for filtering
+        setBusy(true, 'LOADING GRAPH DATA...', 'Fetching mining pool information');
+        fetchMiningPools().catch(err => {
+            console.warn('Failed to fetch mining pools, falling back to entity_type detection:', err);
+        });
         const nodes = Object.entries(graphData.nodes).map(([id, n]) => ({
             id, ...n, label: n.label || id, isTarget: id === targetId
         }));
         const links = graphData.edges.map(e => ({ ...e, source: e.source, target: e.target }));
         rawNodes = nodes;
         rawLinks = links;
+
+        // ─── Analyze Mixer Detection Results ───────────────────────────────────
+        const mixerDetections = nodes.filter(n => n.mixer_info && n.mixer_info.is_mixer);
+        
+        // Update the mixer detection panel in the sidebar
+        updateMixerDetectionDisplay(mixerDetections);
+        
+        if (mixerDetections.length > 0) {
+            showToast(
+                `🌀 Advanced Mixer Detection: Found ${mixerDetections.length} mixing transaction(s)`,
+                'mixer',
+                7000
+            );
+            
+            // Show details for each detected mixer
+            mixerDetections.slice(0, 3).forEach(mixer => {
+                const mixerType = mixer.mixer_info.raw?.mixer_type || 'Unknown Mixer';
+                const confidence = mixer.mixer_info.confidence || 0;
+                const shortId = mixer.id.substring(0, 14) + '...';
+                showToast(
+                    `${mixerType} (${confidence}% confidence) • ${shortId}`,
+                    'mixer',
+                    5000
+                );
+            });
+            
+            if (mixerDetections.length > 3) {
+                showToast(
+                    `+${mixerDetections.length - 3} more mixer(s) detected in graph`,
+                    'info',
+                    4000
+                );
+            }
+        } else {
+            showToast(
+                '✓ Analysis complete - No mixers detected in this transaction chain',
+                'success',
+                4000
+            );
+        }
 
         setBusy(true, 'INITIALIZING SVG...', 'Setting up D3 rendering context');
         const containerEl = document.getElementById('graph-container');
@@ -436,7 +687,7 @@ function _renderGraphImpl(graphData, targetId) {
 
         svg = d3.select(containerEl).append("svg")
             .attr("width", width).attr("height", height)
-            .style("background", "#ffffff")
+            .style("background", "#ffffff")   // white background
             .attr("viewBox", [-width / 2, -height / 2, width, height])
             .on("click", ev => {
                 if (ev.target.tagName === 'svg') { 
@@ -478,12 +729,44 @@ function _renderGraphImpl(graphData, targetId) {
         mkArrow("arrowhead-risk",      "#ef4444");
         mkArrow("arrowhead-trace",     "#f97316");
 
+        // ── Compute per-node degree for adaptive sizing + charge ──────────────
+        const degreeMap = new Map(nodes.map(n => [n.id, 0]));
+        const links_copy = graphData.edges.map(e => ({ ...e, source: e.source, target: e.target }));
+        links_copy.forEach(l => {
+            const s = l.source?.id || l.source;
+            const t = l.target?.id || l.target;
+            if (s) degreeMap.set(s, (degreeMap.get(s) || 0) + 1);
+            if (t) degreeMap.set(t, (degreeMap.get(t) || 0) + 1);
+        });
+        nodes.forEach(n => { n._degree = degreeMap.get(n.id) || 0; });
+
         g = svg.append("g");
 
         simulation = d3.forceSimulation(nodes)
-            .force("link", d3.forceLink(links).id(d => d.id).distance(d => d.amount > 1 ? 100 : 50))
-            .force("charge", d3.forceManyBody().strength(-100))
-            .force("center", d3.forceCenter(0, 0))
+            .force("link", d3.forceLink(links).id(d => d.id)
+                .distance(d => {
+                    const sd = (d.source._degree || d.source?.data?._degree || 0);
+                    const td = (d.target._degree || d.target?.data?._degree || 0);
+                    const combined = sd + td;
+                    if (combined > 12) return 240;
+                    if (d.amount > 1) return 160;
+                    return 110;
+                })
+                .strength(0.4)
+            )
+            .force("charge", d3.forceManyBody()
+                .strength(d => {
+                    // Transaction nodes get much stronger repulsion
+                    if (d.type === 'Transaction') {
+                        return -1200;
+                    }
+                    // Address nodes get normal repulsion based on degree
+                    return Math.max(-800, -300 - (d._degree || 0) * 30);
+                })
+                .distanceMax(900)
+            )
+            .force("collide", d3.forceCollide(d => nodeRadius(d) + 8).strength(0.8))
+            .force("center", d3.forceCenter(0, 0).strength(0.03))
             .on("tick", ticked);
 
         const edgeColor = d => {
@@ -517,7 +800,7 @@ function _renderGraphImpl(graphData, targetId) {
                 } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
                 else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
                 else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
-                else if (tn.entity_type === 'gambling') nodeColor = '#d97706';
+                else if (tn.entity_type === 'mining' || detectMiningPool(tn)) nodeColor = '#facc15';
                 else if (tn.member_count > 1) {
                     if (tn.risk >= 70) nodeColor = '#ef4444';
                     else if (tn.risk >= 40) nodeColor = '#f97316';
@@ -577,21 +860,28 @@ function _renderGraphImpl(graphData, targetId) {
             'Generic CoinJoin':              '#4f46e5', // indigo-600
         };
 
+        const ENTITY_COLORS = {
+            'mixer':    '#7c3aed',
+            'exchange': '#0284c7',
+            'darknet':  '#be123c',
+            'gambling': '#d97706',
+            'mining':   '#facc15'
+        };
+
         const getNodeColor = d => {
             const customColor = getNodeCustomColor(d.id);
             if (customColor) return customColor;
             if (d.isTarget) return '#fbbf24';
+
             // Mixer transaction nodes: colour by specific mixer protocol
             if (d.mixer_info && d.mixer_info.is_mixer) {
                 const mt = d.mixer_info.raw && d.mixer_info.raw.mixer_type;
                 return MIXER_NODE_COLORS[mt] || '#7c3aed';
             }
-            // Entity-type based colours for known address classifications
-            if (d.entity_type === 'mixer')    return '#7c3aed';
-            if (d.entity_type === 'exchange') return '#0284c7';
-            if (d.entity_type === 'darknet')  return '#be123c';
-            if (d.entity_type === 'gambling') return '#d97706';
-            if (d.entity_type === 'mining')   return '#64748b';
+
+            if (ENTITY_COLORS[d.entity_type]) return ENTITY_COLORS[d.entity_type];
+            if (detectMiningPool(d)) return ENTITY_COLORS.mining;
+
             // Multi-address wallet clusters: emerald with risk overlay
             if (d.member_count > 1) {
                 if (d.risk >= 70) return '#ef4444';
@@ -606,13 +896,29 @@ function _renderGraphImpl(graphData, targetId) {
             .selectAll("circle").data(nodes).enter().append("circle")
             .attr("class", "node")
             .attr("r", d => {
-            if (d.isTarget) return 18;
-            if (d.member_count > 1) return Math.min(11 + d.member_count * 0.9, 26); // wallet cluster
-            if (d.type === 'Transaction') return 4;
-            if (d.risk) return 12;
-            return 7;
-        })
+                const deg = d._degree || 0;
+                const bonus = Math.min(deg * 0.6, 7); // hub bonus: up to +7px
+                if (d.isTarget) return 20;
+                if (d.member_count > 1) return Math.min(12 + d.member_count * 0.9, 28);
+                if (d.is_coinbase || d.entity_type === 'mining' || detectMiningPool(d)) return 10 + bonus;
+                if (d.type === 'Transaction') return 4 + Math.min(bonus * 0.4, 3);
+                if (d.risk >= 70) return 14 + bonus;
+                if (d.risk >= 40) return 12 + bonus;
+                if (d.risk)       return 10 + bonus;
+                return 6 + Math.min(bonus, 4);
+            })
             .attr("fill", getNodeColor)
+            .attr("stroke", d => {
+                if (d.isTarget) return '#fbbf24';
+                if (d.is_coinbase || d.entity_type === 'mining' || detectMiningPool(d)) return '#d97706';
+                if (d.risk >= 70) return '#dc2626';
+                if (d.risk >= 40) return '#ea580c';
+                if (d.mixer_info?.is_mixer) return '#7c3aed';
+                if (d.type === 'Transaction') return '#4338ca';
+                return 'none';
+            })
+            .attr("stroke-width", d => (d.isTarget || d.risk >= 40 || d.is_coinbase) ? 2 : 1)
+            .attr("stroke-opacity", 0.6)
             .on("click", (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
             .on("mouseover", (ev, d) => highlightNeighbors(d, true))
             .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
@@ -622,13 +928,48 @@ function _renderGraphImpl(graphData, targetId) {
         label = g.append("g").attr("class", "labels")
             .selectAll("text").data(nodes).enter().append("text")
             .attr("class", "node-label")
-            .text(d => getNodeCustomName(d.id) || d.label)
-            .attr("title", d => {
-                const customName = getNodeCustomName(d.id);
-                return customName ? `${customName} (${d.label})` : d.label;
+            .text(d => {
+                const base = getEnrichedNodeName(d.id, d);
+                // ── Mining badge ─────────────────────────────────────────────
+                if (d.is_coinbase || d.entity_type === 'mining' || detectMiningPool(d)) {
+                    const pi = detectMiningPool(d);
+                    const poolName = pi?.name && pi.name !== 'Mining Reward Tx' ? pi.name
+                        : (d.is_coinbase ? 'Coinbase TX' : null);
+                    if (poolName && poolName !== base) return `⛏ ${poolName}`;
+                    return `⛏ ${base}`;
+                }
+                // ── Address truncation ───────────────────────────────────────
+                // Show first 8 + last 6 chars for raw addresses/txids to keep
+                // the graph readable at default zoom. Meaningful labels (pool names,
+                // service names set by WalletExplorer) are shown in full.
+                if (base.length > 18 && base === d.id) {
+                    return base.slice(0, 8) + '…' + base.slice(-6);
+                }
+                if (base.length > 24) return base.slice(0, 20) + '…';
+                return base;
             })
-            .attr("dx", 12).attr("dy", ".35em")
-            .attr("fill", "#1e293b").attr("font-size", "11px").attr("font-weight", "500");
+            .attr("title", d => d.label || d.id)
+            .attr("dx", 10).attr("dy", ".35em")
+            .attr("fill", "#1e293b") // Dark slate text for white background
+            .attr("font-size", d => {
+                // Bigger text for high-importance nodes
+                if (d.isTarget) return "13px";
+                if (d.risk >= 70 || d.entity_type === 'mining') return "11px";
+                return "10px";
+            })
+            .attr("font-weight", d => (d.isTarget || d.risk >= 40 || d.entity_type === 'mining') ? "700" : "500")
+            // Only show labels for notable nodes by default; others appear on hover/zoom
+            .style("display", d => {
+                if (!labelsVisible) return "none";
+                if (d.isTarget) return null;
+                if (d.risk >= 40) return null;
+                if (d.entity_type === 'mining' || d.is_coinbase) return null;
+                if (d.entity_type === 'exchange' || d.entity_type === 'mixer') return null;
+                if (d._degree >= 4) return null;  // hubs always labelled
+                // Hide labels for plain low-degree nodes at initial render
+                // (they appear on hover via highlightNeighbors)
+                return "none";
+            });
 
         // Edge labels (timestamp + amount)
         edgeLabel = g.append("g").attr("class", "edge-labels")
@@ -657,12 +998,14 @@ function _renderGraphImpl(graphData, targetId) {
         svg.call(zoom);
         state.svg = svg;
 
-        document.getElementById('nodeCount').textContent = nodes.length.toLocaleString();
+        updateNodeCountDisplay(nodes.length);
         document.getElementById('edgeCount').textContent = links.length.toLocaleString();
 
         initTimeline(links);
         setBusy(true, 'CALCULATING LAYOUT...', 'Running D3 force simulation');
-        setTimeout(() => { simulation.stop(); recenterGraph(); updateExpandRings(); setBusy(false); }, 3000);
+        // Extended warmup: 5s for large graphs (≥100 nodes), 3s otherwise
+        const warmupMs = nodes.length >= 100 ? 5000 : 3000;
+        setTimeout(() => { simulation.stop(); recenterGraph(); updateExpandRings(); setBusy(false); }, warmupMs);
 
     } catch (err) {
         console.error('renderGraph error:', err);
@@ -671,14 +1014,19 @@ function _renderGraphImpl(graphData, targetId) {
     }
 }
 
-// Returns the visual radius of a node data object (mirrors the .attr("r") logic)
+// Returns the visual radius of a node data object (mirrors the .attr("r") logic above)
 function nodeRadius(d) {
-    if (!d) return 7;
-    if (d.isTarget) return 18;
-    if (d.member_count > 1) return Math.min(11 + d.member_count * 0.9, 26);
-    if (d.type === 'Transaction') return 4;
-    if (d.risk) return 12;
-    return 7;
+    if (!d) return 6;
+    const deg = d._degree || 0;
+    const bonus = Math.min(deg * 0.6, 7);
+    if (d.isTarget) return 20;
+    if (d.member_count > 1) return Math.min(12 + d.member_count * 0.9, 28);
+    if (d.is_coinbase || d.entity_type === 'mining') return 10 + bonus;
+    if (d.type === 'Transaction') return 4 + Math.min(bonus * 0.4, 3);
+    if (d.risk >= 70) return 14 + bonus;
+    if (d.risk >= 40) return 12 + bonus;
+    if (d.risk)       return 10 + bonus;
+    return 6 + Math.min(bonus, 4);
 }
 
 function ticked() {
@@ -1143,15 +1491,21 @@ async function expandNode(nodeId) {
         updateExpandRings();
 
         // Update counters in sidebar
-        document.getElementById('nodeCount').textContent = rawNodes.length.toLocaleString();
+        updateNodeCountDisplay(rawNodes.length);
         document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
 
         // ── Rebuild simulation — do NOT reuse old one ────────────────────────
         // The old simulation already has stale node/link references.
         if (simulation) simulation.stop();
         simulation = d3.forceSimulation(rawNodes)
-            .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => (d.amount||0) > 1 ? 100 : 50))
-            .force("charge", d3.forceManyBody().strength(-120))
+            .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
+                // Transactions need more space from their connections
+                if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
+                    return (d.amount||0) > 1 ? 200 : 130;
+                }
+                return (d.amount||0) > 1 ? 150 : 90;
+            }))
+            .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -400 : -200))
             .force("center", d3.forceCenter(0, 0))
             .on("tick", ticked);
 
@@ -1276,13 +1630,18 @@ async function expandAll() {
 
                     rebindGraphSelections();
                     updateExpandRings();
-                    document.getElementById('nodeCount').textContent = rawNodes.length.toLocaleString();
+                    updateNodeCountDisplay(rawNodes.length);
                     document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
 
                     if (simulation) simulation.stop();
                     simulation = d3.forceSimulation(rawNodes)
-                        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => (d.amount||0) > 1 ? 100 : 50))
-                        .force('charge', d3.forceManyBody().strength(-120))
+                        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
+                            if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
+                                return (d.amount||0) > 1 ? 200 : 130;
+                            }
+                            return (d.amount||0) > 1 ? 150 : 90;
+                        }))
+                        .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -400 : -200))
                         .force('center', d3.forceCenter(0, 0))
                         .on('tick', ticked);
                     refreshTimelineFromRawLinks();
@@ -1364,16 +1723,22 @@ export function updateGraphNodeLabel(nodeId, customName) {
     // Update the label text and tooltip
     label.text(d => {
         if (d.id === nodeId) {
-            return getNodeCustomName(nodeId) || d.label;
+            return getEnrichedNodeName(nodeId, d);
         }
-        return getNodeCustomName(d.id) || d.label;
+        return getEnrichedNodeName(d.id, d);
     }).attr("title", d => {
         if (d.id === nodeId) {
-            const name = getNodeCustomName(nodeId);
-            return name ? `${name} (${d.label})` : d.label;
+            const customName = getNodeCustomName(nodeId);
+            const enrichedName = getEnrichedNodeName(nodeId, d);
+            if (customName) return `${customName} (${d.label})`;
+            if (enrichedName && enrichedName !== d.label && enrichedName !== d.id) return `${enrichedName} (${d.label})`;
+            return d.label;
         }
-        const name = getNodeCustomName(d.id);
-        return name ? `${name} (${d.label})` : d.label;
+        const customName = getNodeCustomName(d.id);
+        const enrichedName = getEnrichedNodeName(d.id, d);
+        if (customName) return `${customName} (${d.label})`;
+        if (enrichedName && enrichedName !== d.label && enrichedName !== d.id) return `${enrichedName} (${d.label})`;
+        return d.label;
     });
 }
 
@@ -1415,7 +1780,7 @@ export function updateGraphEdgeColors(targetNodeId) {
             } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
             else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
             else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
-            else if (tn.entity_type === 'gambling') nodeColor = '#d97706';
+            else if (tn.entity_type === 'mining' || tn.mining_info?.flagged) nodeColor = '#facc15';
             else if (tn.member_count > 1) {
                 if (tn.risk >= 70) nodeColor = '#ef4444';
                 else if (tn.risk >= 40) nodeColor = '#f97316';
@@ -1591,8 +1956,13 @@ function applyForceLayout() {
 
     // Simulation was nulled in applyTreeLayout — rebuild it from the stored raw data.
     simulation = d3.forceSimulation(node.data())
-        .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => d.amount > 1 ? 100 : 50))
-        .force("charge", d3.forceManyBody().strength(-100))
+        .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
+            if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
+                return d.amount > 1 ? 200 : 130;
+            }
+            return d.amount > 1 ? 150 : 90;
+        }))
+        .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -400 : -180))
         .force("center", d3.forceCenter(0, 0))
         .on("tick", ticked);
 
@@ -1617,7 +1987,18 @@ export function toggleLayout() {
 
 export function toggleLabels() {
     labelsVisible = !labelsVisible;
-    label.style("display", labelsVisible ? "block" : "none");
+    if (!labelsVisible) {
+        label.style("display", "none");
+    } else {
+        // Restore selective label visibility
+        label.style("display", d => {
+            if (d.isTarget || d.risk >= 40) return null;
+            if (d.entity_type === 'mining' || d.is_coinbase) return null;
+            if (d.entity_type === 'exchange' || d.entity_type === 'mixer') return null;
+            if (d._degree >= 4) return null;
+            return "none";
+        });
+    }
     document.getElementById('labelToggleText').textContent = labelsVisible ? '[HIDE LABELS]' : '[SHOW LABELS]';
 }
 
@@ -1682,10 +2063,11 @@ function applyLinkHighlight(activePred) {
 function highlightNeighbors(d, hovering) {
     if (hovering) {
         updateLinkedByIndex();
-        node.style("opacity", o => connected(d, o) ? 1 : 0.12);
+        node.style("opacity", o => connected(d, o) ? 1 : 0.1);
         applyLinkHighlight(o => o.source === d || o.target === d);
-        label.style("opacity", o => connected(d, o) ? 1 : 0.08);
-        // Show edge labels only for edges connected to the hovered node
+        // Show all labels for connected nodes while hovering, even if normally hidden
+        label.style("opacity", o => connected(d, o) ? 1 : 0.0)
+             .style("display", o => (connected(d, o) && labelsVisible) ? null : "none");
         if (edgeLabel) {
             edgeLabel.style('display', e => (timestampsVisible && (e.source === d || e.target === d)) ? 'block' : 'none');
         }
@@ -1710,19 +2092,57 @@ function highlightNode(nodeId) {
 
 function unhighlightAll() {
     if (!node || !link || !label) return;
-    node.style("opacity", 1);
-    link.style("opacity", 0.85)
+
+    // If mining filter is active, maintain the hidden state of mining nodes and their neighbors
+    let miningNodeIds = new Set();
+    let miningNeighborIds = new Set();
+    if (miningFilterActive) {
+        rawNodes.forEach(n => { if (detectMiningPool(n)) miningNodeIds.add(n.id); });
+        rawLinks.forEach(l => {
+            const s = l.source?.id || l.source;
+            const t = l.target?.id || l.target;
+            if (miningNodeIds.has(s)) miningNeighborIds.add(t);
+            if (miningNodeIds.has(t)) miningNeighborIds.add(s);
+        });
+    }
+    const isHidden = (id) => {
+        if (!miningFilterActive) return false;
+        return miningNodeIds.has(id) || (miningNeighborIds.has(id) && id !== currentTargetId);
+    };
+
+    node.style("opacity", 1).style("display", d => isHidden(d.id) ? "none" : null);
+    link.style("opacity", 0.7)
+        .style("display", d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            return (isHidden(s) || isHidden(t)) ? "none" : null;
+        })
         .attr("stroke", d => {
             const tn = fullGraphData?.nodes[d.target?.id];
-            const r = tn && tn.risk ? tn.risk : 0;
-            return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
+            if (!tn) return "#475569";
+            if (tn.is_coinbase || tn.entity_type === 'mining' || detectMiningPool(tn)) return "#facc15";
+            const r = tn.risk || 0;
+            return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#475569";
         })
         .attr("marker-end", d => {
             const tn = fullGraphData?.nodes[d.target?.id];
-            const r = tn && tn.risk ? tn.risk : 0;
+            const r = tn?.risk || 0;
             return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
         });
-    label.style("opacity", 1);
+    // Restore selective label visibility
+    label.style("opacity", 1)
+         .style("display", d => {
+            if (!labelsVisible) return "none";
+            if (miningFilterActive) {
+                const pi = detectMiningPool(d);
+                if (pi) return "none";
+            }
+            if (d.isTarget || d.risk >= 40) return null;
+            if (d.entity_type === 'mining' || d.is_coinbase) return null;
+            if (d.entity_type === 'exchange' || d.entity_type === 'mixer') return null;
+            if (d._degree >= 4) return null;
+            return "none";
+         });
 }
 
 // Toggle timestamps visibility for hover/select; wired to toolbar button
@@ -1743,6 +2163,239 @@ export function toggleEdgeTooltips() {
     if (btn) btn.textContent = edgeTooltipsVisible ? '[TOOLTIPS ON]' : '[TOOLTIPS]';
     // Hide any visible labels when turning off
     if (!edgeTooltipsVisible && edgeLabel) edgeLabel.style('display', 'none');
+}
+
+// Toggle mining pool filter — visually hide/show mining nodes using display:none.
+// This approach NEVER mutates rawNodes/rawLinks or restarts the simulation,
+// which means node positions are preserved and edges can never become 0.
+export function toggleMiningFilter() {
+    if (!fullGraphData || !node) return;
+    miningFilterActive = !miningFilterActive;
+    // Turn off other filters when enabling mining filter
+    if (miningFilterActive) {
+        incomingFilterActive = false;
+        outgoingFilterActive = false;
+    }
+    applyFilters();
+}
+
+// Toggle incoming transactions filter — show only transactions coming TO the target
+export function toggleIncomingFilter() {
+    if (!fullGraphData || !node || !currentTargetId) return;
+    incomingFilterActive = !incomingFilterActive;
+    // Turn off other filters when enabling incoming filter
+    if (incomingFilterActive) {
+        outgoingFilterActive = false;
+        miningFilterActive = false;
+    }
+    applyFilters();
+}
+
+// Toggle outgoing transactions filter — show only transactions going FROM the target
+export function toggleOutgoingFilter() {
+    if (!fullGraphData || !node || !currentTargetId) return;
+    outgoingFilterActive = !outgoingFilterActive;
+    // Turn off other filters when enabling outgoing filter
+    if (outgoingFilterActive) {
+        incomingFilterActive = false;
+        miningFilterActive = false;
+    }
+    applyFilters();
+}
+
+function applyMiningFilter() {
+    if (!fullGraphData || !node || !link || !label) return;
+
+    // Collect mining node IDs — strict criteria only, no input_count heuristic
+    const miningNodeIds = new Set();
+    const miningNames   = [];
+    rawNodes.forEach(n => {
+        const pi = detectMiningPool(n);
+        if (pi) {
+            miningNodeIds.add(n.id);
+            const name = pi.name || n.label || 'Mining';
+            if (!miningNames.includes(name)) miningNames.push(name);
+        }
+    });
+
+    // Find neighbors of mining nodes to also hide them (noise reduction)
+    const miningNeighborIds = new Set();
+    rawLinks.forEach(l => {
+        const s = l.source?.id || l.source;
+        const t = l.target?.id || l.target;
+        if (miningNodeIds.has(s)) miningNeighborIds.add(t);
+        if (miningNodeIds.has(t)) miningNeighborIds.add(s);
+    });
+
+    const txt = document.getElementById('miningFilterText');
+
+    if (miningFilterActive) {
+        const isHidden = (id) => {
+            if (miningNodeIds.has(id)) return true;
+            // Hide nodes connected to mining nodes, unless it's the target of investigation
+            if (miningNeighborIds.has(id) && id !== currentTargetId) return true;
+            return false;
+        };
+
+        // ── Hide mining nodes, neighbors, + edges via display:none ────────────
+        node.style("display",  d => isHidden(d.id) ? "none" : null);
+        label.style("display", d => (labelsVisible && !isHidden(d.id)) ? null : "none");
+        link.style("display",  d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            return (isHidden(s) || isHidden(t)) ? "none" : null;
+        });
+
+        if (txt) txt.textContent = miningNodeIds.size > 0
+            ? `[SHOW MINING (${miningNodeIds.size})]`
+            : '[MINING FILTER ON]';
+
+        // Update visible counts (don't change rawNodes/rawLinks — just the display)
+        const visNodes = rawNodes.filter(n => !isHidden(n.id)).length;
+        const visLinks = rawLinks.filter(l => {
+            const s = l.source?.id || l.source;
+            const t = l.target?.id || l.target;
+            return !isHidden(s) && !isHidden(t);
+        }).length;
+        updateNodeCountDisplay(visNodes);
+        document.getElementById('edgeCount').textContent = visLinks.toLocaleString();
+
+        const det = document.getElementById('loaderDetails');
+        if (det) {
+            if (miningNodeIds.size > 0) {
+                const list  = miningNames.slice(0, 3).join(', ');
+                const extra = miningNames.length > 3 ? ` +${miningNames.length - 3}` : '';
+                const totalHidden = rawNodes.length - visNodes;
+                det.textContent = `⛏ Hiding ${totalHidden} node(s) (Pools: ${miningNodeIds.size}, Payouts: ${totalHidden - miningNodeIds.size}): ${list}${extra}`;
+            } else {
+                det.textContent = '⛏ No mining nodes detected in current graph';
+            }
+        }
+
+    } else {
+        // ── Restore all hidden elements ───────────────────────────────────────
+        node.style("display",  null);
+        // Restore label visibility respecting the labelsVisible toggle
+        label.style("display", d => {
+            if (!labelsVisible) return "none";
+            if (d.isTarget || d.risk >= 40 || d.entity_type === 'mining' || d.is_coinbase) return null;
+            if (d.entity_type === 'exchange' || d.entity_type === 'mixer') return null;
+            if (d._degree >= 4) return null;
+            return "none";
+        });
+        link.style("display",  null);
+
+        if (txt) txt.textContent = '[MINING]';
+        updateNodeCountDisplay(rawNodes.length);
+        document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
+
+        const det = document.getElementById('loaderDetails');
+        if (det) det.textContent = miningNodeIds.size > 0
+            ? `⛏ Mining nodes restored (${miningNodeIds.size})` : '';
+    }
+}
+
+function applyIncomingOutgoingFilters() {
+    if (!fullGraphData || !node || !link || !label) return;
+    if (!currentTargetId) return;
+
+    const incomingBtn = document.getElementById('incomingFilterText');
+    const outgoingBtn = document.getElementById('outgoingFilterText');
+
+    if (incomingFilterActive) {
+        // Show only transactions coming TO the target
+        const visibleNodeIds = new Set([currentTargetId]);
+        const visibleEdgeIds = new Set();
+        let incomingCount = 0;
+        
+        rawLinks.forEach(l => {
+            const t = l.target?.id || l.target;
+            // Show edges where target is the destination
+            if (t === currentTargetId) {
+                visibleEdgeIds.add(`${l.source?.id || l.source}|${t}`);
+                visibleNodeIds.add(l.source?.id || l.source);
+                incomingCount++;
+            }
+        });
+
+        node.style("display", d => visibleNodeIds.has(d.id) ? null : "none");
+        label.style("display", d => (labelsVisible && visibleNodeIds.has(d.id)) ? null : "none");
+        link.style("display", d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            const edgeId = `${s}|${t}`;
+            return visibleEdgeIds.has(edgeId) ? null : "none";
+        });
+        
+        if (incomingBtn) incomingBtn.textContent = `[INCOMING (${incomingCount})]`;
+        if (outgoingBtn) outgoingBtn.textContent = 'Outgoing';
+        
+        // Update node and edge counts
+        updateNodeCountDisplay(visibleNodeIds.size);
+        document.getElementById('edgeCount').textContent = incomingCount.toLocaleString();
+        
+        const det = document.getElementById('loaderDetails');
+        if (det) det.textContent = `← Showing ${incomingCount} incoming transaction(s)`;
+    } else if (outgoingFilterActive) {
+        // Show only transactions going FROM the target
+        const visibleNodeIds = new Set([currentTargetId]);
+        const visibleEdgeIds = new Set();
+        let outgoingCount = 0;
+        
+        rawLinks.forEach(l => {
+            const s = l.source?.id || l.source;
+            // Show edges where target is the source
+            if (s === currentTargetId) {
+                visibleEdgeIds.add(`${s}|${l.target?.id || l.target}`);
+                visibleNodeIds.add(l.target?.id || l.target);
+                outgoingCount++;
+            }
+        });
+
+        node.style("display", d => visibleNodeIds.has(d.id) ? null : "none");
+        label.style("display", d => (labelsVisible && visibleNodeIds.has(d.id)) ? null : "none");
+        link.style("display", d => {
+            const s = d.source?.id || d.source;
+            const t = d.target?.id || d.target;
+            const edgeId = `${s}|${t}`;
+            return visibleEdgeIds.has(edgeId) ? null : "none";
+        });
+        
+        if (incomingBtn) incomingBtn.textContent = 'Incoming';
+        if (outgoingBtn) outgoingBtn.textContent = `[OUTGOING (${outgoingCount})]`;
+        
+        // Update node and edge counts
+        updateNodeCountDisplay(visibleNodeIds.size);
+        document.getElementById('edgeCount').textContent = outgoingCount.toLocaleString();
+        
+        const det = document.getElementById('loaderDetails');
+        if (det) det.textContent = `→ Showing ${outgoingCount} outgoing transaction(s)`;
+    } else {
+        // Show all nodes and edges normally
+        node.style("display", null);
+        link.style("display", null);
+        label.style("display", d => {
+            if (!labelsVisible) return "none";
+            if (d.isTarget || d.risk >= 40 || d.entity_type === 'mining' || d.is_coinbase) return null;
+            if (d.entity_type === 'exchange' || d.entity_type === 'mixer') return null;
+            if (d._degree >= 4) return null;
+            return "none";
+        });
+        if (incomingBtn) incomingBtn.textContent = 'Incoming';
+        if (outgoingBtn) outgoingBtn.textContent = 'Outgoing';
+        
+        updateNodeCountDisplay(rawNodes.length);
+        document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
+    }
+}
+
+// Combined filter function that applies all active filters
+function applyFilters() {
+    if (miningFilterActive) {
+        applyMiningFilter();
+    } else {
+        applyIncomingOutgoingFilters();
+    }
 }
 
 // =============================================================================
@@ -2290,8 +2943,8 @@ export async function mergePathIntoGraph(path) {
     // Kick off a gentle simulation over everything already in the graph
     if (simulation) simulation.stop();
     simulation = d3.forceSimulation(rawNodes)
-        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(60))
-        .force('charge', d3.forceManyBody().strength(-120))
+        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => d.type === 'Transaction' ? 140 : 100))
+        .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -450 : -220))
         .force('center', d3.forceCenter(0, 0))
         .alphaDecay(0.03)
         .on('tick', ticked);
@@ -2378,7 +3031,7 @@ export async function mergePathIntoGraph(path) {
         // Apply highlight to path so far
         applyTraceHighlight();
 
-        document.getElementById('nodeCount').textContent = rawNodes.length.toLocaleString();
+        updateNodeCountDisplay(rawNodes.length);
         document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
 
         // Pause between hops so the user sees each one appear
@@ -2542,6 +3195,7 @@ window.graphSearchClear = function() {
 
 export { expandNode, expandSelected, expandAll, updateExpandRings, updateExpandBtn };
 export { saveSession, restoreSession, checkPendingSession };
+export { updateNodeCountDisplay, updateMixerDetectionDisplay };
 
 
 // =============================================================================
