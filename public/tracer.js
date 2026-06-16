@@ -1,4 +1,4 @@
-// tracer.js — Forward path tracer for Cryptracker
+// tracer.js — Forward path tracer for Cryptracer
 // Calls /api/trace-path/:address, merges hops into the live D3 graph,
 // and highlights the traced chain with orange edges + final destination node.
 

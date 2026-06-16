@@ -26,16 +26,16 @@ type AdvancedMixerDetectionResult struct {
 // TransactionLevelMixerIndicators represents transaction-level patterns
 type TransactionLevelMixerIndicators struct {
 	// Structure patterns
-	HasOneInput           bool    // Single input requirement
-	HasTwoOutputs         bool    // Exactly 2 outputs
-	InputIsP2SH           bool    // P2SH script type
-	OutputP2SHCount       int     // Count of P2SH outputs
-	InputValueBTC         float64 // Input amount in BTC
-	ExceedsValueThreshold bool    // > 1 BTC
+	HasOneInput           bool  // Single input requirement
+	HasTwoOutputs         bool  // Exactly 2 outputs
+	InputIsP2SH           bool  // P2SH script type
+	OutputP2SHCount       int   // Count of P2SH outputs
+	InputValueSats        int64 // Input amount in Satoshis
+	ExceedsValueThreshold bool  // > 1 BTC
 
 	// Amount fraction pattern
-	P2SHOutputValue    float64
-	NonP2SHOutputValue float64
+	P2SHOutputValue    int64
+	NonP2SHOutputValue int64
 	AmountRatio        float64 // P2SH / Non-P2SH ratio
 	ExceedsAmountRatio bool    // >= 5x
 
@@ -88,12 +88,12 @@ func Phase1_DetectMixingTransaction(tx *TransactionIO) *TransactionLevelMixerInd
 
 	// Pattern 2: Input Value Threshold (> 1 BTC)
 	if len(tx.Inputs) > 0 {
-		totalInputValue := 0.0
+		var totalInputValue int64
 		for _, input := range tx.Inputs {
 			totalInputValue += input.Value
 		}
-		result.InputValueBTC = totalInputValue
-		result.ExceedsValueThreshold = totalInputValue > 1.0
+		result.InputValueSats = totalInputValue
+		result.ExceedsValueThreshold = totalInputValue > 100000000
 		if result.ExceedsValueThreshold {
 			result.PatternMatches++
 		}
@@ -119,7 +119,7 @@ func Phase1_DetectMixingTransaction(tx *TransactionIO) *TransactionLevelMixerInd
 
 	// Pattern 4: Amount Fraction Pattern (P2SH output >= 5x non-P2SH)
 	if result.NonP2SHOutputValue > 0 {
-		result.AmountRatio = result.P2SHOutputValue / result.NonP2SHOutputValue
+		result.AmountRatio = float64(result.P2SHOutputValue) / float64(result.NonP2SHOutputValue)
 		result.ExceedsAmountRatio = result.AmountRatio >= 5.0
 		if result.ExceedsAmountRatio {
 			result.PatternMatches++
@@ -313,8 +313,8 @@ func detectChainAnomalies(txChain *[]TransactionIO) int {
 
 		// Anomaly 2: Value spikes unexpectedly
 		if i > 0 {
-			prevTotal := 0.0
-			currTotal := 0.0
+			var prevTotal int64
+			var currTotal int64
 			for _, o := range (*txChain)[i-1].Outputs {
 				prevTotal += o.Value
 			}
@@ -322,7 +322,7 @@ func detectChainAnomalies(txChain *[]TransactionIO) int {
 				currTotal += o.Value
 			}
 			if currTotal > 0 && prevTotal > 0 {
-				ratio := currTotal / prevTotal
+				ratio := float64(currTotal) / float64(prevTotal)
 				if ratio > 1.5 || ratio < 0.5 {
 					// Rare value spikes indicate anomalies
 				}
@@ -441,7 +441,7 @@ func LogAdvancedDetectionResult(result *AdvancedMixerDetectionResult, txID strin
 	if result.Phase1Result != nil {
 		p1 := result.Phase1Result
 		log.Printf("1:2 Structure: %v (In:%v Out:%v)", p1.HasOneInput && p1.HasTwoOutputs, p1.HasOneInput, p1.HasTwoOutputs)
-		log.Printf("Input Value: %.4f BTC (Threshold: %v)", p1.InputValueBTC, p1.ExceedsValueThreshold)
+		log.Printf("Input Value: %.4f BTC (Threshold: %v)", float64(p1.InputValueSats)/1e8, p1.ExceedsValueThreshold)
 		log.Printf("P2SH Outputs: %d", p1.OutputP2SHCount)
 		log.Printf("Amount Ratio: %.2f:1 (Valid: %v)", p1.AmountRatio, p1.ExceedsAmountRatio)
 		log.Printf("Pattern Matches: %d/4", p1.PatternMatches)

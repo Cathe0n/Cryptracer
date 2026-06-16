@@ -175,6 +175,11 @@ func main() {
 	publicSub, _ := fs.Sub(publicFS, "public")
 	r.StaticFS("/ui", http.FS(publicSub))
 
+	// Serve favicon at the root for browsers that auto-detect it
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		c.FileFromFS("logo.png", http.FS(publicSub))
+	})
+
 	// ── Config endpoints ──────────────────────────────────────────────────────
 
 	r.POST("/api/config/test", func(c *gin.Context) {
@@ -227,7 +232,7 @@ func main() {
 		address := c.Param("address")
 		log.Printf("📡 [HISTORY] Fetching live data for: %s", address)
 
-		txs, err := aggregator.GetAddressTxsWithFallback(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(c.Request.Context(), address)
 		if err != nil || txs == nil {
 			log.Printf("⚠️  [HISTORY] No data found for %s", address)
 			c.JSON(200, []mempool.Tx{})
@@ -282,7 +287,7 @@ func main() {
 
 		log.Printf("🔀 [MIXER-CHECK] Analysing tx: %s (threshold=%.2f)", txid, threshold)
 
-		tx, err := aggregator.GetTxWithFallback(txid)
+		tx, err := aggregator.GetTxWithFallback(c.Request.Context(), txid)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transaction: %v", err)})
 			return
@@ -300,14 +305,14 @@ func main() {
 			}
 			tio.Inputs = append(tio.Inputs, aggregator.TxInput{
 				Address:  vin.Prevout.ScriptPubKeyAddress,
-				Value:    float64(vin.Prevout.Value) / 1e8,
+				Value:    vin.Prevout.Value,
 				Sequence: vin.Sequence,
 			})
 		}
 		for _, vout := range tx.Vout {
 			tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
 				Address:    vout.ScriptPubKeyAddress,
-				Value:      float64(vout.Value) / 1e8,
+				Value:      vout.Value,
 				ScriptType: vout.ScriptPubKeyType,
 			})
 		}
@@ -336,7 +341,7 @@ func main() {
 
 		log.Printf("🏦 [EXCHANGE-CHECK] Analysing address: %s", address)
 
-		txs, err := aggregator.GetAddressTxsWithFallback(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(c.Request.Context(), address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -352,14 +357,14 @@ func main() {
 				}
 				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
 					Address:  vin.Prevout.ScriptPubKeyAddress,
-					Value:    float64(vin.Prevout.Value) / 1e8,
+					Value:    vin.Prevout.Value,
 					Sequence: vin.Sequence,
 				})
 			}
 			for _, vout := range tx.Vout {
 				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
 					Address:    vout.ScriptPubKeyAddress,
-					Value:      float64(vout.Value) / 1e8,
+					Value:      vout.Value,
 					ScriptType: vout.ScriptPubKeyType,
 				})
 			}
@@ -439,7 +444,7 @@ func main() {
 
 		log.Printf("🎰 [GAMBLING-CHECK] Analysing address: %s", address)
 
-		txs, err := aggregator.GetAddressTxsWithFallback(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(c.Request.Context(), address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -455,14 +460,14 @@ func main() {
 				}
 				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
 					Address:  vin.Prevout.ScriptPubKeyAddress,
-					Value:    float64(vin.Prevout.Value) / 1e8,
+					Value:    vin.Prevout.Value,
 					Sequence: vin.Sequence,
 				})
 			}
 			for _, vout := range tx.Vout {
 				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
 					Address:    vout.ScriptPubKeyAddress,
-					Value:      float64(vout.Value) / 1e8,
+					Value:      vout.Value,
 					ScriptType: vout.ScriptPubKeyType,
 				})
 			}
@@ -489,7 +494,7 @@ func main() {
 
 		log.Printf("⛏️  [MINING-CHECK] Analysing address: %s", address)
 
-		txs, err := aggregator.GetAddressTxsWithFallback(address)
+		txs, err := aggregator.GetAddressTxsWithFallback(c.Request.Context(), address)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to fetch transactions: %v", err)})
 			return
@@ -505,14 +510,14 @@ func main() {
 				}
 				tio.Inputs = append(tio.Inputs, aggregator.TxInput{
 					Address:  vin.Prevout.ScriptPubKeyAddress,
-					Value:    float64(vin.Prevout.Value) / 1e8,
+					Value:    vin.Prevout.Value,
 					Sequence: vin.Sequence,
 				})
 			}
 			for _, vout := range tx.Vout {
 				tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
 					Address:    vout.ScriptPubKeyAddress,
-					Value:      float64(vout.Value) / 1e8,
+					Value:      vout.Value,
 					ScriptType: vout.ScriptPubKeyType,
 				})
 			}
@@ -544,7 +549,7 @@ func main() {
 			c.JSON(400, gin.H{"error": "Bitquery key not configured — add BITQUERY_KEY to .env"})
 			return
 		}
-		flows, err := bitquery.GetWalletFlows(address, bqKey)
+		flows, err := bitquery.GetWalletFlows(c.Request.Context(), address, bqKey)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -638,7 +643,7 @@ func main() {
 					"summary":  fmt.Sprintf("%d confirmed txs, balance %d sat", cs.TxCount, balance),
 				})
 			} else {
-				tx, err := aggregator.GetTxWithFallback(address)
+				tx, err := aggregator.GetTxWithFallback(c.Request.Context(), address)
 				if err != nil {
 					c.JSON(200, gin.H{"source": "mempool", "ok": false,
 						"error": err.Error()})
@@ -663,7 +668,7 @@ func main() {
 					"error": "Bitquery API key not configured."})
 				return
 			}
-			flows, err := bitquery.GetWalletFlows(address, bqKey)
+			flows, err := bitquery.GetWalletFlows(c.Request.Context(), address, bqKey)
 			if err != nil {
 				c.JSON(200, gin.H{"source": "bitquery", "ok": false, "error": err.Error()})
 				return
@@ -772,7 +777,7 @@ func main() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				info, err := aggregator.GetAddressInfoWithFallback(address)
+				info, err := aggregator.GetAddressInfoWithFallback(c.Request.Context(), address)
 				if err == nil && info != nil {
 					mu.Lock()
 					res.TxCount = info.ChainStats.TxCount
@@ -799,8 +804,7 @@ func main() {
 
 	// ─── Boot banner ──────────────────────────────────────────────────────────
 	fmt.Println("\n" + strings.Repeat("=", 60)) // Separator line
-	fmt.Println("🔓 Cryptrace is READY")
-	fmt.Println("🔓 Cryptracer is READY")
+	fmt.Println(" CRYPTRACER – Money Flow Analysis Platform")
 	fmt.Println(strings.Repeat("=", 60)) // Separator line
 
 	if dbInitialized {

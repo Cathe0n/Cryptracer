@@ -1,12 +1,13 @@
 import { state } from './state.js';
-// D3.js Graph Renderer — Cryptrace
+// D3.js Graph Renderer — Cryptracer
 // Mempool.space API integrated for live on-chain enrichment
-console.log('Cryptrace: D3 Renderer Loaded');
+console.log('Cryptracer: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
 import { getNodeCustomColor, getNodeCustomName, getNodeCustomEdgeColor } from './annotations.js';
 import { showEntityView, getEnrichedEntityInfo } from './ui.js';
 import { showToast } from './utils.js';
+import { initPlayback } from './playback.js';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // ─── Color Utility Functions ───────────────────────────────────────────────────
@@ -81,6 +82,66 @@ function isNodeTainted(nodeData) {
     const hasReports = rd && rd.report_count > 0;
     const hasError = rd && rd.error;
     return !hasReports && !hasError;
+}
+
+/**
+ * Calculate the color for an edge based on its target node properties and annotations
+ * @param {Object} d - D3 link data object
+ * @returns {string} Hex color
+ */
+function getEdgeColor(d) {
+    const tid = d.target?.id || d.target;
+    const tn = fullGraphData?.nodes[tid];
+    
+    // Check if user set a custom edge color
+    const customEdgeColor = getNodeCustomEdgeColor(tid);
+    if (customEdgeColor) return customEdgeColor;
+    
+    // Use target node's color
+    let nodeColor = '#64748b'; // default
+    if (tn) {
+        const customColor = getNodeCustomColor(tn.id);
+        if (customColor) {
+            nodeColor = customColor;
+        } else if (tn.isTarget) {
+            nodeColor = '#fbbf24';
+        } else if (tn.mixer_info && tn.mixer_info.is_mixer) {
+            const MIXER_NODE_COLORS = {
+                'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed',
+                'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9',
+                'JoinMarket': '#0891b2',
+                'Whirlpool (Samourai)': '#0e7490',
+                'Centralized Mixer': '#b45309',
+                'Generic CoinJoin': '#4f46e5',
+            };
+            nodeColor = MIXER_NODE_COLORS[tn.mixer_info.raw?.mixer_type] || '#7c3aed';
+        } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
+        else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
+        else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
+        else if (tn.entity_type === 'mining' || detectMiningPool(tn)) nodeColor = '#facc15';
+        else if (tn.member_count > 1) {
+            if (tn.risk >= 70) nodeColor = '#ef4444';
+            else if (tn.risk >= 40) nodeColor = '#f97316';
+            else if (tn.risk >= 10) nodeColor = '#f59e0b';
+            else nodeColor = '#10b981';
+        } else if (tn.risk) {
+            if (tn.risk >= 70) nodeColor = '#ef4444';
+            else if (tn.risk >= 40) nodeColor = '#f97316';
+            else if (tn.risk >= 10) nodeColor = '#f59e0b';
+            else nodeColor = '#06b6d4';
+        } else if (tn.type === 'Transaction') {
+            nodeColor = '#6366f1';
+        } else {
+            nodeColor = '#0ea5e9';
+        }
+    }
+    
+    // Apply desaturation if node is tainted
+    if (tn && isNodeTainted(tn)) {
+        return desaturateColor(nodeColor, 30);
+    }
+    
+    return nodeColor;
 }
 
 /**
@@ -397,17 +458,26 @@ const setBusy = (isBusy, title = 'RECONSTRUCTING TIMELINE...', details = '') => 
 // MEMPOOL.SPACE API HELPERS
 // =============================================================================
 
-/** Fetch with 8s timeout */
+/** Fetch with 8s timeout and mempool.guide fallback */
 async function mempoolFetch(path) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const res = await fetch(`${MEMPOOL_API}${path}`, { signal: controller.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-    } finally {
-        clearTimeout(timeout);
+    const apis = [MEMPOOL_API, "https://mempool.guide/api", "https://blockstream.info/api"];
+    let lastErr;
+
+    for (const api of apis) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        try {
+            const res = await fetch(`${api}${path}`, { signal: controller.signal });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (err) {
+            lastErr = err;
+            continue; // Try next API
+        } finally {
+            clearTimeout(timeout);
+        }
     }
+    throw lastErr || new Error("All mempool APIs failed");
 }
 
 const mempoolGetAddress    = addr  => mempoolFetch(`/address/${encodeURIComponent(addr)}`);
@@ -639,6 +709,7 @@ function _renderGraphImpl(graphData, targetId) {
         const links = graphData.edges.map(e => ({ ...e, source: e.source, target: e.target }));
         rawNodes = nodes;
         rawLinks = links;
+        window._rawLinks = rawLinks;  // Expose to playback module
 
         // ─── Analyze Mixer Detection Results ───────────────────────────────────
         const mixerDetections = nodes.filter(n => n.mixer_info && n.mixer_info.is_mixer);
@@ -698,23 +769,22 @@ function _renderGraphImpl(graphData, targetId) {
                 }
             });
 
-        const defs = svg.append("defs");
-        
-        // Helper to create or retrieve an arrow marker for a color
-        const arrowMarkerCache = new Map();
-        const getArrowMarkerId = (color) => {
-            if (!arrowMarkerCache.has(color)) {
-                const markerId = `arrowhead-${color.slice(1)}`;
-                arrowMarkerCache.set(color, markerId);
-                defs.append("marker")
-                    .attr("id", markerId).attr("viewBox", "0 -5 10 10")
-                    .attr("refX", 10).attr("refY", 0)
-                    .attr("markerWidth", 6).attr("markerHeight", 6)
-                    .attr("orient", "auto")
-                    .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
+        defs = svg.append("defs");
+        arrowMarkerCache.clear();
+
+        // Add search pulse animation style
+        svg.append("style").text(`
+            @keyframes search-pulse {
+                0% { filter: drop-shadow(0 0 2px #fbbf24); stroke-width: 2; }
+                50% { filter: drop-shadow(0 0 12px #fbbf24); stroke-width: 6; }
+                100% { filter: drop-shadow(0 0 2px #fbbf24); stroke-width: 2; }
             }
-            return `url(#${arrowMarkerCache.get(color)})`;
-        };
+            .search-highlight {
+                animation: search-pulse 1.5s ease-in-out infinite;
+                stroke: #fbbf24 !important;
+                stroke-opacity: 1 !important;
+            }
+        `);
 
         // Create default markers upfront
         const mkArrow = (id, color) => defs.append("marker")
@@ -748,96 +818,51 @@ function _renderGraphImpl(graphData, targetId) {
                     const sd = (d.source._degree || d.source?.data?._degree || 0);
                     const td = (d.target._degree || d.target?.data?._degree || 0);
                     const combined = sd + td;
-                    if (combined > 12) return 240;
-                    if (d.amount > 1) return 160;
-                    return 110;
+                    // Mining nodes get extra link distance to push them away from the cluster
+                    const srcNode = fullGraphData?.nodes[d.source?.id || d.source];
+                    const tgtNode = fullGraphData?.nodes[d.target?.id || d.target];
+                    const isMiningLink = (srcNode && (srcNode.entity_type === 'mining' || srcNode.mining_pool_info)) ||
+                                         (tgtNode && (tgtNode.entity_type === 'mining' || tgtNode.mining_pool_info));
+                    if (isMiningLink) return 100;
+                    if (combined > 12) return 70;
+                    if (d.amount > 1) return 50;
+                    return 35;
                 })
-                .strength(0.4)
+                .strength(0.6)
             )
             .force("charge", d3.forceManyBody()
                 .strength(d => {
-                    // Transaction nodes get much stronger repulsion
-                    if (d.type === 'Transaction') {
-                        return -1200;
+                    // Mining nodes get moderate repulsion to space them out but allow normal nodes closer
+                    if (d.entity_type === 'mining' || d.mining_pool_info) {
+                        return -950;
                     }
-                    // Address nodes get normal repulsion based on degree
-                    return Math.max(-800, -300 - (d._degree || 0) * 30);
+                    // Transaction nodes get repulsion for clustering
+                    if (d.type === 'Transaction') {
+                        return -500;
+                    }
+                    // Address nodes get standard repulsion for tight clustering
+                    return Math.max(-400, -100 - (d._degree || 0) * 10);
                 })
-                .distanceMax(900)
+                .distanceMax(600)
             )
-            .force("collide", d3.forceCollide(d => nodeRadius(d) + 8).strength(0.8))
+            .force("collide", d3.forceCollide(d => {
+                // Mining nodes keep their spacing
+                if (d.entity_type === 'mining' || d.mining_pool_info) {
+                    return nodeRadius(d) + 8;
+                }
+                // Normal nodes get tighter collision radius for closer clustering
+                return nodeRadius(d) + 3;
+            }).strength(0.8))
             .force("center", d3.forceCenter(0, 0).strength(0.03))
             .on("tick", ticked);
-
-        const edgeColor = d => {
-            const tid = d.target?.id || d.target;
-            const tn = fullGraphData?.nodes[tid];
-            
-            // Check if user set a custom edge color
-            const customEdgeColor = getNodeCustomEdgeColor(tid);
-            if (customEdgeColor) {
-                return customEdgeColor;
-            }
-            
-            // Use target node's color
-            let nodeColor = '#64748b'; // default
-            if (tn) {
-                const customColor = getNodeCustomColor(tn.id);
-                if (customColor) {
-                    nodeColor = customColor;
-                } else if (tn.isTarget) {
-                    nodeColor = '#fbbf24';
-                } else if (tn.mixer_info && tn.mixer_info.is_mixer) {
-                    const MIXER_NODE_COLORS = {
-                        'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed',
-                        'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9',
-                        'JoinMarket': '#0891b2',
-                        'Whirlpool (Samourai)': '#0e7490',
-                        'Centralized Mixer': '#b45309',
-                        'Generic CoinJoin': '#4f46e5',
-                    };
-                    nodeColor = MIXER_NODE_COLORS[tn.mixer_info.raw?.mixer_type] || '#7c3aed';
-                } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
-                else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
-                else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
-                else if (tn.entity_type === 'mining' || detectMiningPool(tn)) nodeColor = '#facc15';
-                else if (tn.member_count > 1) {
-                    if (tn.risk >= 70) nodeColor = '#ef4444';
-                    else if (tn.risk >= 40) nodeColor = '#f97316';
-                    else if (tn.risk >= 10) nodeColor = '#f59e0b';
-                    else nodeColor = '#10b981';
-                } else if (tn.risk) {
-                    if (tn.risk >= 70) nodeColor = '#ef4444';
-                    else if (tn.risk >= 40) nodeColor = '#f97316';
-                    else if (tn.risk >= 10) nodeColor = '#f59e0b';
-                    else nodeColor = '#06b6d4';
-                } else if (tn.type === 'Transaction') {
-                    nodeColor = '#6366f1';
-                } else {
-                    nodeColor = '#0ea5e9';
-                }
-            }
-            
-            // Apply desaturation if node is tainted
-            if (tn && isNodeTainted(tn)) {
-                return desaturateColor(nodeColor, 30);
-            }
-            
-            return nodeColor;
-        };
-        
-        const edgeArrow = d => {
-            const color = edgeColor(d);
-            return getArrowMarkerId(color);
-        };
 
         link = g.append("g").attr("class", "links")
             .selectAll("line").data(links).enter().append("line")
             .attr("class", "link")
-            .attr("stroke", edgeColor)
+            .style("stroke", d => getEdgeColor(d))
             .attr("stroke-opacity", 0.85)
             .attr("stroke-width", d => Math.max(2.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 8)))
-            .attr("marker-end", edgeArrow);
+            .attr("marker-end", d => getArrowMarkerId(getEdgeColor(d)));
         state.link = link;
 
         const riskColor = r => {
@@ -846,50 +871,6 @@ function _renderGraphImpl(graphData, targetId) {
             if (r >= 40) return '#f97316'; // med-high: orange
             if (r >= 10) return '#f59e0b'; // low-med: amber
             return '#06b6d4'; // minimal: teal
-        };
-
-        // Function to get node color, considering custom annotations
-        // Mixer type colour map — aligned with aggregator.go MixerType constants
-        // Sources: Schnoering & Vazirgiannis (2023), Shojaeinasab et al. (2023)
-        const MIXER_NODE_COLORS = {
-            'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed', // violet-700
-            'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9', // violet-800
-            'JoinMarket':                    '#0891b2', // cyan-600
-            'Whirlpool (Samourai)':          '#0e7490', // cyan-700
-            'Centralized Mixer':             '#b45309', // amber-700
-            'Generic CoinJoin':              '#4f46e5', // indigo-600
-        };
-
-        const ENTITY_COLORS = {
-            'mixer':    '#7c3aed',
-            'exchange': '#0284c7',
-            'darknet':  '#be123c',
-            'gambling': '#d97706',
-            'mining':   '#facc15'
-        };
-
-        const getNodeColor = d => {
-            const customColor = getNodeCustomColor(d.id);
-            if (customColor) return customColor;
-            if (d.isTarget) return '#fbbf24';
-
-            // Mixer transaction nodes: colour by specific mixer protocol
-            if (d.mixer_info && d.mixer_info.is_mixer) {
-                const mt = d.mixer_info.raw && d.mixer_info.raw.mixer_type;
-                return MIXER_NODE_COLORS[mt] || '#7c3aed';
-            }
-
-            if (ENTITY_COLORS[d.entity_type]) return ENTITY_COLORS[d.entity_type];
-            if (detectMiningPool(d)) return ENTITY_COLORS.mining;
-
-            // Multi-address wallet clusters: emerald with risk overlay
-            if (d.member_count > 1) {
-                if (d.risk >= 70) return '#ef4444';
-                if (d.risk >= 40) return '#f97316';
-                if (d.risk >= 10) return '#f59e0b';
-                return '#10b981';
-            }
-            return d.risk ? riskColor(d.risk) : (d.type === 'Transaction' ? '#6366f1' : '#0ea5e9');
         };
 
         node = g.append("g").attr("class", "nodes")
@@ -907,7 +888,7 @@ function _renderGraphImpl(graphData, targetId) {
                 if (d.risk)       return 10 + bonus;
                 return 6 + Math.min(bonus, 4);
             })
-            .attr("fill", getNodeColor)
+            .attr("fill", d => defaultNodeFill(d))
             .attr("stroke", d => {
                 if (d.isTarget) return '#fbbf24';
                 if (d.is_coinbase || d.entity_type === 'mining' || detectMiningPool(d)) return '#d97706';
@@ -944,6 +925,11 @@ function _renderGraphImpl(graphData, targetId) {
                 // service names set by WalletExplorer) are shown in full.
                 if (base.length > 18 && base === d.id) {
                     return base.slice(0, 8) + '…' + base.slice(-6);
+                }
+                // If node has a label that isn't the ID (Huobi, Binance, etc), show "Label (ID)"
+                if (base !== d.id) {
+                    const shortId = d.id.slice(0, 4) + '…' + d.id.slice(-4);
+                    return `${base} (${shortId})`;
                 }
                 if (base.length > 24) return base.slice(0, 20) + '…';
                 return base;
@@ -1002,6 +988,7 @@ function _renderGraphImpl(graphData, targetId) {
         document.getElementById('edgeCount').textContent = links.length.toLocaleString();
 
         initTimeline(links);
+        initPlayback();  // Initialize time-travel animation with current graph timestamps
         setBusy(true, 'CALCULATING LAYOUT...', 'Running D3 force simulation');
         // Extended warmup: 5s for large graphs (≥100 nodes), 3s otherwise
         const warmupMs = nodes.length >= 100 ? 5000 : 3000;
@@ -1230,39 +1217,6 @@ function drag() {
  * ones are entered. The simulation is NOT rebuilt here — callers do that.
  */
 function rebindGraphSelections() {
-    const edgeColor = d => {
-        const tid = d.target?.id || d.target;
-        const tn = fullGraphData?.nodes[tid];
-        
-        // Check if user set a custom edge color
-        const customEdgeColor = getNodeCustomEdgeColor(tid);
-        if (customEdgeColor) {
-            return customEdgeColor;
-        }
-        
-        // Use target node's color based on risk
-        let nodeColor = '#64748b'; // default
-        if (tn) {
-            const r = tn.risk || 0;
-            if (r >= 70) nodeColor = '#ef4444';
-            else if (r >= 40) nodeColor = '#f97316';
-            else if (r >= 10) nodeColor = '#f59e0b';
-            else nodeColor = '#06b6d4';
-        }
-        
-        // Apply desaturation if node is tainted
-        if (tn && isNodeTainted(tn)) {
-            return desaturateColor(nodeColor, 30);
-        }
-        
-        return nodeColor;
-    };
-    
-    const edgeArrow = d => {
-        const color = edgeColor(d);
-        return getArrowMarkerId(color);
-    };
-
     // ── Links ────────────────────────────────────────────────────────────────
     g.select(".links").selectAll("line")
         .data(rawLinks, l => {
@@ -1273,10 +1227,10 @@ function rebindGraphSelections() {
         .join(
             enter => enter.append("line")
                 .attr("class", "link")
-                .attr("stroke", edgeColor)
+                .style("stroke", d => getEdgeColor(d))
                 .attr("stroke-opacity", 0.85)
                 .attr("stroke-width", d => Math.max(2.5, Math.min(Math.sqrt((d.amount||0)+1)*2, 8)))
-                .attr("marker-end", edgeArrow),
+                .attr("marker-end", d => getArrowMarkerId(getEdgeColor(d))),
             update => update,
             exit   => exit.remove()
         );
@@ -1485,6 +1439,7 @@ async function expandNode(nodeId) {
             fullGraphData.edges.push(e);
             newEdgeCount++;
         });
+        window._rawLinks = rawLinks;  // Update playback module with new links
 
         // ── Re-bind D3 selections with the merged data ───────────────────────
         rebindGraphSelections();
@@ -1501,11 +1456,11 @@ async function expandNode(nodeId) {
             .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
                 // Transactions need more space from their connections
                 if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
-                    return (d.amount||0) > 1 ? 200 : 130;
+                    return (d.amount||0) > 1 ? 120 : 80;
                 }
-                return (d.amount||0) > 1 ? 150 : 90;
+                return (d.amount||0) > 1 ? 100 : 60;
             }))
-            .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -400 : -200))
+            .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -100))
             .force("center", d3.forceCenter(0, 0))
             .on("tick", ticked);
 
@@ -1627,6 +1582,7 @@ async function expandAll() {
                         if (!fullGraphData.edges) fullGraphData.edges = [];
                         fullGraphData.edges.push(e);
                     });
+                    window._rawLinks = rawLinks;  // Update playback module with new links
 
                     rebindGraphSelections();
                     updateExpandRings();
@@ -1637,11 +1593,11 @@ async function expandAll() {
                     simulation = d3.forceSimulation(rawNodes)
                         .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
                             if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
-                                return (d.amount||0) > 1 ? 200 : 130;
+                                return (d.amount||0) > 1 ? 120 : 80;
                             }
-                            return (d.amount||0) > 1 ? 150 : 90;
+                            return (d.amount||0) > 1 ? 100 : 60;
                         }))
-                        .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -400 : -200))
+                        .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -100))
                         .force('center', d3.forceCenter(0, 0))
                         .on('tick', ticked);
                     refreshTimelineFromRawLinks();
@@ -1750,69 +1706,9 @@ export function updateGraphEdgeColors(targetNodeId) {
     if (!link) return;
     
     // We need to re-render all edges since they depend on the full node colors
-    // Create the edge color function inline (same as renderGraph version)
-    const edgeColor = d => {
-        const tid = d.target?.id || d.target;
-        const tn = fullGraphData?.nodes[tid];
-        
-        const customEdgeColor = getNodeCustomEdgeColor(tid);
-        if (customEdgeColor) {
-            return customEdgeColor;
-        }
-        
-        let nodeColor = '#64748b';
-        if (tn) {
-            const customColor = getNodeCustomColor(tn.id);
-            if (customColor) {
-                nodeColor = customColor;
-            } else if (tn.isTarget) {
-                nodeColor = '#fbbf24';
-            } else if (tn.mixer_info && tn.mixer_info.is_mixer) {
-                const MIXER_NODE_COLORS = {
-                    'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed',
-                    'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9',
-                    'JoinMarket': '#0891b2',
-                    'Whirlpool (Samourai)': '#0e7490',
-                    'Centralized Mixer': '#b45309',
-                    'Generic CoinJoin': '#4f46e5',
-                };
-                nodeColor = MIXER_NODE_COLORS[tn.mixer_info.raw?.mixer_type] || '#7c3aed';
-            } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
-            else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
-            else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
-            else if (tn.entity_type === 'mining' || tn.mining_info?.flagged) nodeColor = '#facc15';
-            else if (tn.member_count > 1) {
-                if (tn.risk >= 70) nodeColor = '#ef4444';
-                else if (tn.risk >= 40) nodeColor = '#f97316';
-                else if (tn.risk >= 10) nodeColor = '#f59e0b';
-                else nodeColor = '#10b981';
-            } else if (tn.risk) {
-                if (tn.risk >= 70) nodeColor = '#ef4444';
-                else if (tn.risk >= 40) nodeColor = '#f97316';
-                else if (tn.risk >= 10) nodeColor = '#f59e0b';
-                else nodeColor = '#06b6d4';
-            } else if (tn.type === 'Transaction') {
-                nodeColor = '#6366f1';
-            } else {
-                nodeColor = '#0ea5e9';
-            }
-        }
-        
-        if (tn && isNodeTainted(tn)) {
-            return desaturateColor(nodeColor, 30);
-        }
-        
-        return nodeColor;
-    };
-    
-    const edgeArrow = d => {
-        const color = edgeColor(d);
-        return getArrowMarkerId(color);
-    };
-    
-    // Update all edges with new colors and arrows
-    link.attr("stroke", edgeColor)
-        .attr("marker-end", edgeArrow);
+    // Edge color logic updated to use common defaultNodeFill logic implicitly 
+    // or explicit refresh
+    _recolorEdges();
 }
 
 // =============================================================================
@@ -1919,10 +1815,10 @@ function applyTreeLayout() {
         .selectAll("line")
         .data(treeLinkData)
         .enter().append("line")
-        .attr("stroke", "#64748b")
+        .style("stroke", d => getEdgeColor(d))
         .attr("stroke-opacity", 0.85)
         .attr("stroke-width", d => Math.max(1.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 6)))
-        .attr("marker-end", "url(#arrowhead-default)")
+        .attr("marker-end", d => getArrowMarkerId(getEdgeColor(d)))
         .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
         .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
 
@@ -1958,11 +1854,11 @@ function applyForceLayout() {
     simulation = d3.forceSimulation(node.data())
         .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
             if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
-                return d.amount > 1 ? 200 : 130;
+                return d.amount > 1 ? 120 : 80;
             }
-            return d.amount > 1 ? 150 : 90;
+            return d.amount > 1 ? 100 : 60;
         }))
-        .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -400 : -180))
+        .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -90))
         .force("center", d3.forceCenter(0, 0))
         .on("tick", ticked);
 
@@ -2046,17 +1942,13 @@ function connected(a, b) {
 
 function applyLinkHighlight(activePred) {
     link.style("opacity", o => activePred(o) ? 1 : 0.12)
-        .attr("stroke", o => {
+        .style("stroke", o => {
             if (activePred(o)) return "#0ea5e9";
-            const tn = fullGraphData?.nodes[o.target?.id];
-            const r = tn && tn.risk ? tn.risk : 0;
-            return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#64748b";
+            return getEdgeColor(o);
         })
         .attr("marker-end", o => {
             if (activePred(o)) return "url(#arrowhead-highlight)";
-            const tn = fullGraphData?.nodes[o.target?.id];
-            const r = tn && tn.risk ? tn.risk : 0;
-            return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
+            return getArrowMarkerId(getEdgeColor(o));
         });
 }
 
@@ -2117,18 +2009,9 @@ function unhighlightAll() {
             const t = d.target?.id || d.target;
             return (isHidden(s) || isHidden(t)) ? "none" : null;
         })
-        .attr("stroke", d => {
-            const tn = fullGraphData?.nodes[d.target?.id];
-            if (!tn) return "#475569";
-            if (tn.is_coinbase || tn.entity_type === 'mining' || detectMiningPool(tn)) return "#facc15";
-            const r = tn.risk || 0;
-            return r >= 70 ? "#ef4444" : r >= 40 ? "#f97316" : r >= 10 ? "#f59e0b" : "#475569";
-        })
-        .attr("marker-end", d => {
-            const tn = fullGraphData?.nodes[d.target?.id];
-            const r = tn?.risk || 0;
-            return r >= 70 ? "url(#arrowhead-risk)" : "url(#arrowhead-default)";
-        });
+        .style("stroke", d => getEdgeColor(d))
+        .attr("marker-end", d => getArrowMarkerId(getEdgeColor(d)));
+
     // Restore selective label visibility
     label.style("opacity", 1)
          .style("display", d => {
@@ -2801,10 +2684,10 @@ function applyTraceHighlight() {
         })
         .style('opacity', d => tracePathNodeIds.has(d.id) ? 1 : 0.15);
 
-    link.attr('stroke', d => {
+    link.style('stroke', d => {
             const s = d.source?.id || d.source;
             const t = d.target?.id || d.target;
-            return tracePathEdgeKeys.has(s + '|' + t) ? '#f97316' : '#64748b';
+            return tracePathEdgeKeys.has(s + '|' + t) ? '#f97316' : getEdgeColor(d);
         })
         .attr('stroke-width', d => {
             const s = d.source?.id || d.source;
@@ -2814,7 +2697,7 @@ function applyTraceHighlight() {
         .attr('marker-end', d => {
             const s = d.source?.id || d.source;
             const t = d.target?.id || d.target;
-            return tracePathEdgeKeys.has(s + '|' + t) ? 'url(#arrowhead-trace)' : 'url(#arrowhead-default)';
+            return tracePathEdgeKeys.has(s + '|' + t) ? 'url(#arrowhead-trace)' : getArrowMarkerId(getEdgeColor(d));
         })
         .style('opacity', d => {
             const s = d.source?.id || d.source;
@@ -2881,7 +2764,7 @@ export async function mergePathIntoGraph(path) {
                 }
             });
 
-        const defs = svg.append('defs');
+        defs = svg.append('defs');
         const mkArrow = (id, color) => defs.append('marker').attr('id', id)
             .attr('viewBox', '0 -5 10 10').attr('refX', 10).attr('refY', 0)
             .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
@@ -2943,8 +2826,8 @@ export async function mergePathIntoGraph(path) {
     // Kick off a gentle simulation over everything already in the graph
     if (simulation) simulation.stop();
     simulation = d3.forceSimulation(rawNodes)
-        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => d.type === 'Transaction' ? 140 : 100))
-        .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -450 : -220))
+        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => d.type === 'Transaction' ? 80 : 60))
+        .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -225 : -110))
         .force('center', d3.forceCenter(0, 0))
         .alphaDecay(0.03)
         .on('tick', ticked);
@@ -3020,6 +2903,7 @@ export async function mergePathIntoGraph(path) {
 
         // Rebind selections so new nodes/edges enter the DOM
         rebindGraphSelections();
+        window._rawLinks = rawLinks;  // Update playback module with new links
 
         // Restart simulation with a small kick so new nodes animate in
         if (simulation) {
@@ -3073,17 +2957,9 @@ export function clearPathHighlight() {
         .attr('r',    d => d.isTarget ? 18 : (d.type === 'Transaction' ? 4 : (d.risk ? 12 : 7)))
         .style('opacity', 1);
 
-    link.attr('stroke', d => {
-            const tn = fullGraphData?.nodes[d.target?.id];
-            const r = tn && tn.risk ? tn.risk : 0;
-            return r >= 70 ? '#ef4444' : r >= 40 ? '#f97316' : r >= 10 ? '#f59e0b' : '#64748b';
-        })
+    link.style('stroke', d => getEdgeColor(d))
         .attr('stroke-width', d => Math.max(2.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 8)))
-        .attr('marker-end', d => {
-            const tn = fullGraphData?.nodes[d.target?.id];
-            const r = tn && tn.risk ? tn.risk : 0;
-            return r >= 70 ? 'url(#arrowhead-risk)' : 'url(#arrowhead-default)';
-        })
+        .attr('marker-end', d => getArrowMarkerId(getEdgeColor(d)))
         .style('opacity', 0.85);
 
     label.style('opacity', 1);
@@ -3106,6 +2982,7 @@ window.graphSearch = function(query) {
         if (resultEl) resultEl.innerHTML = '';
         // Clear any existing highlight
         if (state.node) state.node.attr('opacity', 1);
+        if (state.node) state.node.classed('search-highlight', false);
         return;
     }
 
@@ -3118,6 +2995,12 @@ window.graphSearch = function(query) {
     // Highlight matches vs non-matches in the graph
     if (state.node) {
         state.node.attr('opacity', d => {
+            if (walletViewActive && d.members) {
+                return d.members.some(mId => 
+                    mId.toLowerCase().includes(query) || 
+                    ((_fullGraphDataBak?.nodes[mId]?.label || '').toLowerCase().includes(query))
+                ) ? 1 : 0.15;
+            }
             const match = d.id.toLowerCase().includes(query) ||
                           (d.label || '').toLowerCase().includes(query);
             return match ? 1 : 0.15;
@@ -3158,23 +3041,24 @@ window.graphSearch = function(query) {
 
 // Jump to a node and optionally open its panel
 window.graphSearchSelect = function(nodeId, openPanel = true) {
-    const n = rawNodes.find(n => n.id === nodeId);
+    // Resolve the ID if we are in Wallet View (cluster-collapsed)
+    let actualId = nodeId;
+    if (walletViewActive) {
+        actualId = getWalletId(nodeId, _fullGraphDataBak || fullGraphData);
+    }
+
+    const n = rawNodes.find(n => n.id === actualId);
     if (!n || !state.svg || !zoom) return;
 
-    // SVG viewBox is centred at (0,0) — same convention as recenterGraph().
-    // d3.zoomIdentity.scale(k).translate(-nx, -ny) centres node at the viewport origin.
     const k = 2.2;
     state.svg.transition().duration(600)
         .call(zoom.transform, d3.zoomIdentity.scale(k).translate(-(n.x || 0), -(n.y || 0)));
 
-    // Flash the node with a yellow ring
+    // Apply the "glow in and out" pulse animation
     if (state.node) {
-        state.node.filter(d => d.id === nodeId)
-            .attr('stroke', '#fbbf24')
-            .attr('stroke-width', 4)
-            .transition().duration(1200).delay(400)
-            .attr('stroke', null)
-            .attr('stroke-width', null);
+        state.node.classed('search-highlight', false); // Clear previous
+        state.node.filter(d => d.id === actualId)
+            .classed('search-highlight', true);
     }
 
     if (openPanel && window.showEntityView) {
@@ -3185,7 +3069,10 @@ window.graphSearchSelect = function(nodeId, openPanel = true) {
 
 // Clear search highlights
 window.graphSearchClear = function() {
-    if (state.node) state.node.attr('opacity', 1);
+    if (state.node) {
+        state.node.attr('opacity', 1);
+        state.node.classed('search-highlight', false);
+    }
     const q = document.getElementById('graphSearchInput');
     const r = document.getElementById('graphSearchResults');
     if (q) q.value = '';

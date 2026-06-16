@@ -1,18 +1,27 @@
 import { MEMPOOL_API } from './state.js';
 
 async function mempoolFetch(path) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-        const res = await fetch(`${MEMPOOL_API}${path}`, { signal: controller.signal });
-        if (!res.ok) {
-            // Throw an object with status and a more descriptive message
-            throw { status: res.status, message: `HTTP ${res.status}: ${res.statusText || 'Error'}` };
+    const apis = [MEMPOOL_API, "https://mempool.guide/api", "https://blockstream.info/api"];
+    let lastErr;
+
+    for (const api of apis) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        try {
+            const res = await fetch(`${api}${path}`, { signal: controller.signal });
+            if (!res.ok) {
+                throw { status: res.status, message: `HTTP ${res.status}: ${res.statusText || 'Error'}` };
+            }
+            return await res.json();
+        } catch (err) {
+            lastErr = err;
+            console.warn(`⚠️ [API Fallback] ${api} failed, trying next...`, err);
+            continue; // Try next API in the chain
+        } finally {
+            clearTimeout(timeout);
         }
-        return await res.json();
-    } finally {
-        clearTimeout(timeout);
     }
+    throw lastErr || new Error("All blockchain data providers failed");
 }
 
 export const mempoolGetAddress     = addr  => mempoolFetch(`/address/${encodeURIComponent(addr)}`);
