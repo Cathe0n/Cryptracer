@@ -2,7 +2,6 @@ package tracer
 
 import (
 	"context"
-	"math"
 	"money-tracer/internal/aggregator"
 	"money-tracer/internal/intel"
 	"money-tracer/internal/mempool"
@@ -62,11 +61,14 @@ func StopReasonLabel(r string) string {
 	}
 }
 
-// isRoundBTC returns true if a BTC value is "round" — a signal of intentional payment.
-func isRoundBTC(btc float64) bool {
-	for _, step := range []float64{1, 0.5, 0.25, 0.1, 0.05, 0.01, 0.005, 0.001, 0.0001} {
-		remainder := math.Mod(btc, step)
-		if remainder/step < 0.001 || (step-remainder)/step < 0.001 {
+// isRoundSats returns true if a value is "round" — a signal of intentional payment.
+func isRoundSats(sats int64) bool {
+	if sats == 0 {
+		return false
+	}
+	steps := []int64{100000000, 50000000, 25000000, 10000000, 5000000, 1000000, 500000, 100000, 10000}
+	for _, step := range steps {
+		if sats%step == 0 {
 			return true
 		}
 	}
@@ -130,11 +132,10 @@ func pickDestination(tx mempool.Tx, inputAddrs map[string]bool) *scoredOutput {
 		if !inputAddrs[addr] {
 			score += 4
 		}
-		btc := float64(vout.Value) / 1e8
-		if isRoundBTC(btc) {
+		if isRoundSats(vout.Value) {
 			score += 2
 		}
-		if btc >= 0.001 {
+		if vout.Value >= 100000 {
 			score += 1
 		}
 		if p, ok := scriptTypePriority[vout.ScriptPubKeyType]; ok {
@@ -241,14 +242,14 @@ func buildTransactionIO(tx mempool.Tx) aggregator.TransactionIO {
 		}
 		tio.Inputs = append(tio.Inputs, aggregator.TxInput{
 			Address:  vin.Prevout.ScriptPubKeyAddress,
-			Value:    float64(vin.Prevout.Value) / 1e8,
+			Value:    vin.Prevout.Value,
 			Sequence: vin.Sequence,
 		})
 	}
 	for _, vout := range tx.Vout {
 		tio.Outputs = append(tio.Outputs, aggregator.TxOutput{
 			Address:    vout.ScriptPubKeyAddress,
-			Value:      float64(vout.Value) / 1e8,
+			Value:      vout.Value,
 			ScriptType: vout.ScriptPubKeyType,
 		})
 	}

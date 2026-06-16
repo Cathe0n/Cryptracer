@@ -2,6 +2,7 @@ import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggl
 import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool, showEntityView } from './ui.js';
 import { runTracePath, closeTraceView } from './tracer.js';
+import { startPlayback, pausePlayback, resumePlayback, stopPlayback, togglePlayback, setPlaybackSpeed, increaseSpeed, decreaseSpeed, nextFrame, previousFrame, initPlayback, getPlaybackStats } from './playback.js';
 
 console.log('Cryptracer: D3 Renderer Loaded (Modular)');
 // Backend uses Blockstream API, Frontend uses Mempool.space for live enrichment.
@@ -42,6 +43,20 @@ window.saveSession         = saveSession;
 window.restoreSession      = restoreSession;
 window.checkPendingSession = checkPendingSession;
 window.updateNodeCountDisplay = updateNodeCountDisplay;
+
+// Playback / Time-Travel Animation controls
+window.startPlayback  = startPlayback;
+window.pausePlayback  = pausePlayback;
+window.resumePlayback = resumePlayback;
+window.stopPlayback   = stopPlayback;
+window.togglePlayback = togglePlayback;
+window.setPlaybackSpeed = setPlaybackSpeed;
+window.increaseSpeed  = increaseSpeed;
+window.decreaseSpeed  = decreaseSpeed;
+window.nextFrame      = nextFrame;
+window.previousFrame  = previousFrame;
+window.initPlayback   = initPlayback;
+window.getPlaybackStats = getPlaybackStats;
 
 // Boot network stats ticker and restore any pending session
 window.addEventListener('DOMContentLoaded', () => {

@@ -33,8 +33,8 @@ type AddressMixingFeatures struct {
 	AF1InputTxCount  int     `json:"af1_input_tx_count"`
 	AF2OutputTxCount int     `json:"af2_output_tx_count"`
 	AF3IoTxRatio     float64 `json:"af3_io_tx_ratio"`
-	AF4TotalReceived float64 `json:"af4_total_received_btc"`
-	AF5TotalSent     float64 `json:"af5_total_sent_btc"`
+	AF4TotalReceived int64   `json:"af4_total_received_btc"`
+	AF5TotalSent     int64   `json:"af5_total_sent_btc"`
 	// AF6 ~1.0 for mixers: "amount out ≈ amount in" (Finding 5)
 	AF6IoAmtRatio float64 `json:"af6_io_amount_ratio"`
 
@@ -91,8 +91,8 @@ type SweeperResult struct {
 	Confidence       float64 `json:"confidence"`
 	InputCount       int     `json:"input_count"`
 	OutputCount      int     `json:"output_count"`
-	TotalValueIn     float64 `json:"total_value_in_btc"`
-	InputMedianValue float64 `json:"input_median_value_btc"`
+	TotalValueIn     int64   `json:"total_value_in_btc"`
+	InputMedianValue int64   `json:"input_median_value_btc"`
 	Notes            string  `json:"notes"`
 }
 
@@ -135,14 +135,14 @@ func IsMixingAddress(addr string, txs []TransactionIO, threshold float64) Addres
 	feat := &result.Features
 	coInputSet := make(map[string]struct{})
 	coOutputSet := make(map[string]struct{})
-	var sumCoIn, sumCoOut float64
+	var sumCoIn, sumCoOut int
 	var sendEvCnt, recvEvCnt int
 
 	for _, ev := range events {
 		if ev.IsSend {
 			feat.AF1InputTxCount++
 			feat.AF5TotalSent += ev.Amount
-			sumCoIn += float64(len(ev.CoAddrs))
+			sumCoIn += len(ev.CoAddrs)
 			sendEvCnt++
 			for _, a := range ev.CoAddrs {
 				coInputSet[a] = struct{}{}
@@ -150,7 +150,7 @@ func IsMixingAddress(addr string, txs []TransactionIO, threshold float64) Addres
 		} else {
 			feat.AF2OutputTxCount++
 			feat.AF4TotalReceived += ev.Amount
-			sumCoOut += float64(len(ev.CoAddrs))
+			sumCoOut += len(ev.CoAddrs)
 			recvEvCnt++
 			for _, a := range ev.CoAddrs {
 				coOutputSet[a] = struct{}{}
@@ -164,13 +164,13 @@ func IsMixingAddress(addr string, txs []TransactionIO, threshold float64) Addres
 		feat.AF3IoTxRatio = float64(feat.AF1InputTxCount) / float64(feat.AF2OutputTxCount)
 	}
 	if feat.AF5TotalSent > 0 {
-		feat.AF6IoAmtRatio = feat.AF4TotalReceived / feat.AF5TotalSent
+		feat.AF6IoAmtRatio = float64(feat.AF4TotalReceived) / float64(feat.AF5TotalSent)
 	}
 	if sendEvCnt > 0 {
-		feat.TF3AvgCoInputAddrs = sumCoIn / float64(sendEvCnt)
+		feat.TF3AvgCoInputAddrs = float64(sumCoIn) / float64(sendEvCnt)
 	}
 	if recvEvCnt > 0 {
-		feat.TF4AvgCoOutputAddrs = sumCoOut / float64(recvEvCnt)
+		feat.TF4AvgCoOutputAddrs = float64(sumCoOut) / float64(recvEvCnt)
 	}
 
 	// ── RULE 1: AF6 amount ratio ~1.0 (weight 0.30) ──────────────────────
@@ -194,7 +194,7 @@ func IsMixingAddress(addr string, txs []TransactionIO, threshold float64) Addres
 		var balances []float64
 		var durations []float64
 		for _, c := range cycles {
-			balances = append(balances, c.balance)
+			balances = append(balances, float64(c.balance)/1e8)
 			durations = append(durations, float64(c.durationSec))
 		}
 
@@ -307,7 +307,7 @@ func IsSweeperTransaction(tx TransactionIO) SweeperResult {
 	}
 
 	spendableOuts := 0
-	var totalOut float64
+	var totalOut int64
 	for _, o := range tx.Outputs {
 		if o.ScriptType != "op_return" && o.Address != "" {
 			spendableOuts++
@@ -318,8 +318,8 @@ func IsSweeperTransaction(tx TransactionIO) SweeperResult {
 		return result
 	}
 
-	inputVals := make([]float64, 0, len(tx.Inputs))
-	var totalIn float64
+	inputVals := make([]int64, 0, len(tx.Inputs))
+	var totalIn int64
 	for _, inp := range tx.Inputs {
 		if inp.Value > 0 {
 			inputVals = append(inputVals, inp.Value)
@@ -330,7 +330,7 @@ func IsSweeperTransaction(tx TransactionIO) SweeperResult {
 		return result
 	}
 
-	sort.Float64s(inputVals)
+	sort.Slice(inputVals, func(i, j int) bool { return inputVals[i] < inputVals[j] })
 	medianIn := inputVals[len(inputVals)/2]
 	maxIn := inputVals[len(inputVals)-1]
 
@@ -340,14 +340,14 @@ func IsSweeperTransaction(tx TransactionIO) SweeperResult {
 	// Signal 2: input value uniformity — low coefficient of variation (0.30)
 	cv := 0.0
 	if medianIn > 0 {
-		cv = stdDev(inputVals) / medianIn
+		cv = stdDevInt(inputVals) / float64(medianIn)
 	}
 	uniformityScore := math.Max(1.0-math.Min(cv/2.0, 1.0), 0)
 
 	// Signal 3: output concentration vs individual inputs (0.30)
 	concentrationScore := 0.0
 	if maxIn > 0 {
-		r := totalOut / maxIn
+		r := float64(totalOut) / float64(maxIn)
 		if r >= 5 {
 			concentrationScore = math.Min((r-5)/45.0, 1.0)
 		}
@@ -366,8 +366,8 @@ func IsSweeperTransaction(tx TransactionIO) SweeperResult {
 		result.Notes = fmt.Sprintf(
 			"Sweeper: %d inputs (median=%.6f BTC, CV=%.2f) → %d outputs "+
 				"(total=%.4f BTC); concentration=%.1fx largest input",
-			len(tx.Inputs), medianIn, cv, spendableOuts, totalOut,
-			totalOut/math.Max(maxIn, 1e-8))
+			len(tx.Inputs), float64(medianIn)/1e8, cv, spendableOuts, float64(totalOut)/1e8,
+			float64(totalOut)/math.Max(float64(maxIn), 1.0))
 	}
 	return result
 }
@@ -388,11 +388,11 @@ func CheckCentralizedMixerStrict(tx TransactionIO) (flagged bool, score float64,
 		return false, 0, ""
 	}
 
-	var totalIn float64
+	var totalIn int64
 	for _, inp := range tx.Inputs {
 		totalIn += inp.Value
 	}
-	if totalIn <= 1.0 {
+	if totalIn <= 100000000 {
 		return false, 0, ""
 	}
 
@@ -416,7 +416,7 @@ func CheckCentralizedMixerStrict(tx TransactionIO) (flagged bool, score float64,
 		return false, 0, ""
 	}
 
-	var p2shVal, nonP2SHVal float64
+	var p2shVal, nonP2SHVal int64
 	if p2shCount == 1 {
 		for _, o := range spendable {
 			if o.ScriptType == "p2sh" {
@@ -427,11 +427,11 @@ func CheckCentralizedMixerStrict(tx TransactionIO) (flagged bool, score float64,
 		}
 	} else {
 		// Both P2SH: use amount as criterion (Shojaeinasab §3.5 rule 2)
-		p2shVal = math.Max(spendable[0].Value, spendable[1].Value)
-		nonP2SHVal = math.Min(spendable[0].Value, spendable[1].Value)
+		p2shVal = max(spendable[0].Value, spendable[1].Value)
+		nonP2SHVal = min(spendable[0].Value, spendable[1].Value)
 	}
 
-	if nonP2SHVal <= 0 || p2shVal/nonP2SHVal < 5.0 {
+	if nonP2SHVal <= 0 || float64(p2shVal)/float64(nonP2SHVal) < 5.0 {
 		return false, 0, ""
 	}
 
@@ -440,7 +440,7 @@ func CheckCentralizedMixerStrict(tx TransactionIO) (flagged bool, score float64,
 	score = 0.82
 	note = fmt.Sprintf(
 		"Centralized mixer (Shojaeinasab strict): 1-in 2-out, P2SH out=%.6f (%.1fx recipient=%.6f), input=%.4f BTC",
-		p2shVal, p2shVal/nonP2SHVal, nonP2SHVal, totalIn)
+		float64(p2shVal)/1e8, float64(p2shVal)/float64(nonP2SHVal), float64(nonP2SHVal)/1e8, float64(totalIn)/1e8)
 	return true, score, note
 }
 
@@ -541,7 +541,7 @@ func CombinedMixingScore(
 
 type txEvent struct {
 	Timestamp int64
-	Amount    float64
+	Amount    int64
 	IsSend    bool
 	CoAddrs   []string
 	TxID      string
@@ -605,7 +605,7 @@ type mixingCycle struct {
 	startTime   int64
 	endTime     int64
 	durationSec int64
-	balance     float64
+	balance     int64
 }
 
 func extractMixingCycles(events []txEvent) []mixingCycle {
@@ -620,7 +620,7 @@ func extractMixingCycles(events []txEvent) []mixingCycle {
 			break
 		}
 		cycleStart := events[i].Timestamp
-		var received float64
+		var received int64
 		for i < n && !events[i].IsSend {
 			received += events[i].Amount
 			i++
@@ -628,7 +628,7 @@ func extractMixingCycles(events []txEvent) []mixingCycle {
 		if i >= n {
 			break
 		}
-		var sent float64
+		var sent int64
 		cycleEnd := events[i].Timestamp
 		for i < n && events[i].IsSend {
 			sent += events[i].Amount
@@ -703,6 +703,24 @@ func stdDev(vals []float64) float64 {
 	var sumSq float64
 	for _, v := range vals {
 		d := v - m
+		sumSq += d * d
+	}
+	return math.Sqrt(sumSq / float64(len(vals)))
+}
+
+// stdDevInt returns the population standard deviation of an int64 slice.
+func stdDevInt(vals []int64) float64 {
+	if len(vals) < 2 {
+		return 0
+	}
+	var sum int64
+	for _, v := range vals {
+		sum += v
+	}
+	m := float64(sum) / float64(len(vals))
+	var sumSq float64
+	for _, v := range vals {
+		d := float64(v) - m
 		sumSq += d * d
 	}
 	return math.Sqrt(sumSq / float64(len(vals)))

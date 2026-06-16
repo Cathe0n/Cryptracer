@@ -157,7 +157,7 @@ func IsGamblingAddress(txs []TransactionIO, threshold float64) GamblingResult {
 		outCount := 0
 		for _, inp := range tx.Inputs {
 			if inp.Value > 0 {
-				allInputValues = append(allInputValues, inp.Value)
+				allInputValues = append(allInputValues, float64(inp.Value)/1e8)
 			}
 			if inp.Address != "" {
 				uniqueSenders[inp.Address] = struct{}{}
@@ -165,7 +165,7 @@ func IsGamblingAddress(txs []TransactionIO, threshold float64) GamblingResult {
 		}
 		for _, out := range tx.Outputs {
 			if out.Value > 0 && out.ScriptType != "op_return" {
-				allOutputValues = append(allOutputValues, out.Value)
+				allOutputValues = append(allOutputValues, float64(out.Value)/1e8)
 				outCount++
 			}
 		}
@@ -332,8 +332,8 @@ func IsMiningPoolAddress(txs []TransactionIO, threshold float64) MiningResult {
 	for _, tx := range txs {
 		if len(tx.Outputs) >= 5 {
 			for _, out := range tx.Outputs {
-				if out.Value > 0.0001 {
-					payoutValues = append(payoutValues, out.Value)
+				if out.Value > 10000 {
+					payoutValues = append(payoutValues, float64(out.Value)/1e8)
 				}
 			}
 		}

@@ -2,8 +2,7 @@
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <title>Cryptracer | D3 Edition</title>
-    <!-- Using D3.js modules instead of the old Sigma.js renderer -->
+    <title>Cryptracer</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <!-- Tailwind CSS v2 pre-built — no build step, no console warning -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
@@ -189,9 +188,8 @@
 
     <header class="h-16 border-b border-slate-800 bg-slate-900/95 flex items-center px-8 justify-between shrink-0 z-50">
         <div class="flex items-center gap-3">
-            <div class="w-2.5 h-2.5 bg-cyan-500 rounded-full shadow-[0_0_12px_#06b6d4]"></div>
+            <img src="/ui/logo.png" alt="Cryptracer Logo" class="w-8 h-8 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]">
             <span class="font-bold text-white text-sm tracking-[0.3em] uppercase">Cryptracer</span>
-            <span class="text-[9px] text-cyan-400 bg-cyan-950 px-2 py-1 rounded">D3 EDITION</span>
         </div>
         <!-- Live network stats ticker -->
         <div id="networkStats" class="flex items-center px-4 max-w-lg overflow-hidden">
@@ -426,15 +424,64 @@
                      style="margin-top:4px;max-height:220px;overflow-y:auto"></div>
             </div>
             
-            <!-- Timeline Floating UI -->
+            <!-- Timeline Floating UI with Playback Controls -->
             <div id="timelineUI" class="absolute bottom-10 left-10 right-10 bg-slate-900/90 border border-slate-800 p-6 rounded-xl backdrop-blur-xl z-50 hidden shadow-2xl">
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex items-center gap-3">
                         <span class="text-[10px] font-bold text-cyan-500 tracking-widest uppercase">Chronological Flow</span>
                         <span id="dateDisplay" class="text-xs font-mono text-white bg-cyan-950 px-3 py-1 rounded-md border border-cyan-800">2017-08-01</span>
                     </div>
-                    <div class="text-[9px] text-slate-500 uppercase font-bold">Adjust slider to filter by time</div>
+                    <div class="flex items-center gap-3">
+                        <div id="playbackStatus" class="text-[9px] text-slate-400 uppercase font-bold">Stopped</div>
+                        <div id="playbackProgress" class="text-[9px] text-slate-500 uppercase font-bold">Frame 0 / 0</div>
+                    </div>
                 </div>
+                
+                <!-- Playback Controls -->
+                <div class="flex items-center gap-2 mb-4 pb-4 border-b border-slate-700">
+                    <button onclick="togglePlayback()" 
+                        id="playPauseBtn"
+                        title="Play/Pause time-travel animation"
+                        class="flex items-center justify-center w-8 h-8 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition">
+                        ▶
+                    </button>
+                    
+                    <button onclick="stopPlayback()" 
+                        title="Stop playback and reset"
+                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition">
+                        ⏹
+                    </button>
+                    
+                    <button onclick="previousFrame()" 
+                        title="Previous frame"
+                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition">
+                        ⏮
+                    </button>
+                    
+                    <button onclick="nextFrame()" 
+                        title="Next frame"
+                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition">
+                        ⏭
+                    </button>
+                    
+                    <div class="flex items-center gap-2 ml-2 pl-2 border-l border-slate-700">
+                        <button onclick="decreaseSpeed()" 
+                            title="Decrease speed (min 0.5x)"
+                            class="flex items-center justify-center w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold transition">
+                            −
+                        </button>
+                        <span id="playbackSpeed" class="text-xs font-mono text-cyan-300 bg-slate-800 px-2 py-1 rounded min-w-12 text-center">1.0x</span>
+                        <button onclick="increaseSpeed()" 
+                            title="Increase speed (max 4.0x)"
+                            class="flex items-center justify-center w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold transition">
+                            +
+                        </button>
+                    </div>
+                    
+                    <div class="ml-auto text-[9px] text-slate-500 uppercase font-bold">Scrub or play to animate</div>
+                </div>
+                
+                <!-- Time Slider -->
                 <input type="range" id="timeSlider" min="0" max="100" value="100" class="w-full">
             </div>
 

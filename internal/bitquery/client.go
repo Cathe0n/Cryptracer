@@ -2,6 +2,7 @@ package bitquery
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -108,7 +109,7 @@ type gqlResponse struct {
 	} `json:"errors"`
 }
 
-func gqlQuery(apiKey, query string, variables map[string]interface{}) (json.RawMessage, error) {
+func gqlQuery(ctx context.Context, apiKey, query string, variables map[string]interface{}) (json.RawMessage, error) {
 	bearer, err := getBearer(apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("bitquery auth: %w", err)
@@ -116,7 +117,7 @@ func gqlQuery(apiKey, query string, variables map[string]interface{}) (json.RawM
 
 	body, _ := json.Marshal(gqlRequest{Query: query, Variables: variables})
 	req, err := http.NewRequest("POST", gqlEndpoint, bytes.NewBuffer(body))
-	if err != nil {
+	if err != nil { // No need to wrap here, NewRequest returns a fresh error
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -124,7 +125,7 @@ func gqlQuery(apiKey, query string, variables map[string]interface{}) (json.RawM
 	req.Header.Set("X-API-KEY", apiKey) // fallback for v1-style keys
 
 	cl := &http.Client{Timeout: 30 * time.Second}
-	resp, err := cl.Do(req)
+	resp, err := cl.Do(req.WithContext(ctx)) // Use context for request timeout/cancellation
 	if err != nil {
 		return nil, fmt.Errorf("bitquery request: %w", err)
 	}
@@ -161,7 +162,7 @@ func gqlQuery(apiKey, query string, variables map[string]interface{}) (json.RawM
 // GetAddressTransactions fetches up to limit inflows and outflows for a Bitcoin
 // address using the Bitquery v2 Bitcoin endpoint. Returns both flat FlowEdges
 // (for graph edges) and fully-hydrated TxIO records (for behavioral detection).
-func GetAddressTransactions(address, apiKey string, limit int) (*AddressTransactions, error) {
+func GetAddressTransactions(ctx context.Context, address, apiKey string, limit int) (*AddressTransactions, error) {
 	if limit <= 0 {
 		limit = 200
 	}
@@ -192,7 +193,7 @@ func GetAddressTransactions(address, apiKey string, limit int) (*AddressTransact
 	  }
 	}`
 
-	data, err := gqlQuery(apiKey, query, map[string]interface{}{
+	data, err := gqlQuery(ctx, apiKey, query, map[string]interface{}{
 		"address": address,
 		"limit":   limit,
 	})
@@ -292,8 +293,8 @@ func GetAddressTransactions(address, apiKey string, limit int) (*AddressTransact
 }
 
 // GetWalletFlows is the backward-compatible wrapper used by existing callers.
-func GetWalletFlows(address, apiKey string) ([]FlowEdge, error) {
-	res, err := GetAddressTransactions(address, apiKey, 200)
+func GetWalletFlows(ctx context.Context, address, apiKey string) ([]FlowEdge, error) {
+	res, err := GetAddressTransactions(ctx, address, apiKey, 200)
 	if err != nil {
 		return nil, err
 	}

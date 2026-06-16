@@ -1,4 +1,4 @@
-#  Cryptracker – Bitcoin Transaction Forensics & Money Flow Analysis
+#  Cryptracer – Bitcoin Transaction Forensics & Money Flow Analysis
 
 > **Advanced on-chain intelligence platform for Bitcoin transaction tracing, mixer detection, and money flow visualization.**
 
@@ -11,7 +11,7 @@
 
 ## Overview
 
-**Cryptracker** is a research thesis project designed for advanced Bitcoin transaction analysis. It reconstructs money flows on the blockchain by:
+**Cryptracer** is a research thesis project designed for advanced Bitcoin transaction analysis. It reconstructs money flows on the blockchain by:
 
 1. **Tracing forward transactions** using change-detection heuristics to identify real payments
 2. **Detecting coin mixers** through pattern recognition and behavioral analysis
@@ -82,6 +82,7 @@ This tool is intended for **academic research**, **compliance investigations**, 
 | **Bitquery** | Extended transaction flows |  Limited | [bitquery.io](https://bitquery.io) |
 | **Blockstream** | Real-time blockchain data |  Unlimited | Free public API |
 | **Mempool.space** | Live fees & network stats |  Unlimited | Free public API |
+| **Mempool.guide** | Live data fallback | Unlimited | Free public API |
 | **WalletExplorer.com** | Entity Attribution and cross valifation |  Unlimited | Free public API |
 ### Database
 
@@ -288,4 +289,3 @@ index  tx_hash  vout/vin  scriptpubkey_type  value_btc  ...  address
 
 **Last Updated:** March 2, 2026  
 **Status:** Active Development 🚀
-

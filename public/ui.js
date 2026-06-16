@@ -172,8 +172,14 @@ export function showEntityView(nodeId) {
     // if the parent also uses !important on lower-specificity selectors.
     let html = `
     <style id="ep-theme">
-      #entityContent { color: #e2e8f0 !important; background: transparent !important; }
-      #entityContent .ep-wrap { display:flex; flex-direction:column; gap:12px; }
+      #entityView { overflow-y: auto !important; height: 100% !important; }
+      #entityContent {
+        color: #e2e8f0 !important;
+        background: transparent !important;
+        overflow-y: auto !important;
+        height: 100% !important;
+      }
+      #entityContent .ep-wrap { display:flex; flex-direction:column; gap:12px; padding-bottom: 30px !important; }
       #entityContent .ep-card {
         background: #1e293b !important;
         border: 1px solid #334155 !important;
@@ -435,8 +441,8 @@ export function showEntityView(nodeId) {
                 <span style="font-family:monospace;font-size:10px;font-weight:600;
                              color:#e2e8f0;word-break:break-all;flex:1;line-height:1.5;
                              letter-spacing:0.01em;user-select:all"
-                      title="${nodeData.label}">${nodeData.label}</span>
-                <button onclick="navigator.clipboard.writeText('${nodeData.label}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='⎘',1200)})"
+                      title="${nodeId}">${nodeId}</span>
+                <button onclick="navigator.clipboard.writeText('${nodeId}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='⎘',1200)})"
                         title="Copy to clipboard"
                         style="flex-shrink:0;background:#1e293b;border:1px solid #475569;
                                border-radius:5px;color:#94a3b8;font-size:11px;padding:3px 7px;
@@ -863,7 +869,7 @@ export function showEntityView(nodeId) {
 
         html += `<div class="ep-divider">
             <div class="ep-heading" style="margin-bottom:8px">🔍 Intelligence Sources</div>
-            <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">${sourceCards}</div>
+            <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;max-height:320px;overflow-y:auto;padding-right:4px">${sourceCards}</div>
             <div style="display:flex;align-items:center;gap:6px;background:${summaryBg};border:1px solid ${summaryBorder};border-radius:6px;padding:7px 10px;margin-bottom:8px">
                 <span style="font-size:11px;color:${summaryColor}">${conflictCount>0?'⚠️':agreeCount>0?'✅':'ℹ️'}</span>
                 <span class="ep-body" style="font-weight:700!important;color:${summaryColor}!important">Cross-validation: ${summaryText}</span>

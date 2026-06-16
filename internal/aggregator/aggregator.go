@@ -2,9 +2,11 @@ package aggregator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +17,24 @@ import (
 	"money-tracer/internal/blockstream"
 	"money-tracer/internal/intel"
 	"money-tracer/internal/mempool"
+)
+
+const (
+	mempoolGuideBase = "https://mempool.guide/api"
+)
+
+var entityTypeMap map[string]EntityType
+
+func init() {
+	entityTypeMap = make(map[string]EntityType)
+	for _, entry := range knownLabels {
+		entityTypeMap[entry.needle] = entry.entity
+	}
+}
+
+var (
+	whirlpoolPools     = map[int64]bool{100000: true, 1000000: true, 5000000: true, 50000000: true}
+	mempoolGuideClient = &http.Client{Timeout: 10 * time.Second}
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -129,14 +149,14 @@ type TransactionIO struct {
 
 type TxInput struct {
 	Address  string
-	Value    float64 // BTC
+	Value    int64 // Satoshis
 	Sequence uint32
 }
 
 type TxOutput struct {
 	Address    string
-	Value      float64 // BTC
-	ScriptType string  // p2pkh, p2wpkh, p2sh, p2wsh, p2tr, op_return
+	Value      int64  // Satoshis
+	ScriptType string // p2pkh, p2wpkh, p2sh, p2wsh, p2tr, op_return
 }
 
 // MixerResult holds the full analysis result for a transaction.
@@ -215,11 +235,10 @@ func convertBlockstreamTx(bstx *blockstream.Tx) *mempool.Tx {
 
 // convertBlockstreamTxs converts a slice of blockstream transactions to mempool format
 func convertBlockstreamTxs(bstxs []blockstream.Tx) []mempool.Tx {
-	result := make([]mempool.Tx, len(bstxs))
-	for i, tx := range bstxs {
-		converted := convertBlockstreamTx(&tx)
-		if converted != nil {
-			result[i] = *converted
+	var result []mempool.Tx
+	for _, tx := range bstxs {
+		if converted := convertBlockstreamTx(&tx); converted != nil {
+			result = append(result, *converted)
 		}
 	}
 	return result
@@ -246,9 +265,26 @@ func convertBlockstreamAddressInfo(bsinfo *blockstream.AddressInfo) *mempool.Add
 	}
 }
 
+// mempoolGuideFetch is a helper for hitting the mempool.guide fallback
+func mempoolGuideFetch(ctx context.Context, path string, target interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", mempoolGuideBase+path, nil)
+	if err != nil { // No need to wrap here, NewRequestWithContext returns a fresh error
+		return err
+	}
+	resp, err := mempoolGuideClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("mempool.guide HTTP %d", resp.StatusCode)
+	}
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
 // GetAddressTxsWithFallback attempts to fetch address transactions from mempool.space first,
 // falling back to blockstream.info if mempool fails or times out.
-func GetAddressTxsWithFallback(address string) ([]mempool.Tx, error) {
+func GetAddressTxsWithFallback(ctx context.Context, address string) ([]mempool.Tx, error) {
 	// Try mempool first
 	txs, err := mempool.GetAddressTxs(address)
 	if err == nil && txs != nil {
@@ -257,13 +293,21 @@ func GetAddressTxsWithFallback(address string) ([]mempool.Tx, error) {
 	}
 
 	// Log why mempool failed
-	log.Printf("⚠️  [MEMPOOL] Failed to fetch txs for %s: %v — attempting fallback to blockstream", address, err)
+	log.Printf("⚠️  [MEMPOOL] Failed to fetch txs for %s: %v — attempting fallback to mempool.guide", address, err)
+
+	// Fallback 1: Mempool.guide
+	var guideTxs []mempool.Tx
+	if err := mempoolGuideFetch(ctx, "/address/"+address+"/txs", &guideTxs); err == nil {
+		log.Printf("✅ [MEMPOOL.GUIDE] Fallback succeeded for %s", address)
+		return guideTxs, nil
+	}
+	log.Printf("⚠️  [MEMPOOL.GUIDE] Failed to fetch txs for %s — attempting fallback to blockstream", address)
 
 	// Fallback to blockstream
 	bsTxs, bsErr := blockstream.GetAddressTxs(address)
 	if bsErr != nil {
 		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch txs for %s: %v", address, bsErr)
-		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%v)", err, bsErr)
+		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%w)", err, bsErr)
 	}
 
 	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched %d transactions for %s", len(bsTxs), address)
@@ -272,7 +316,7 @@ func GetAddressTxsWithFallback(address string) ([]mempool.Tx, error) {
 
 // GetTxWithFallback attempts to fetch a transaction from mempool.space first,
 // falling back to blockstream.info if mempool fails or times out.
-func GetTxWithFallback(txid string) (*mempool.Tx, error) {
+func GetTxWithFallback(ctx context.Context, txid string) (*mempool.Tx, error) {
 	// Try mempool first
 	tx, err := mempool.GetTx(txid)
 	if err == nil && tx != nil {
@@ -281,13 +325,21 @@ func GetTxWithFallback(txid string) (*mempool.Tx, error) {
 	}
 
 	// Log why mempool failed
-	log.Printf("⚠️  [MEMPOOL] Failed to fetch tx %s: %v — attempting fallback to blockstream", txid, err)
+	log.Printf("⚠️  [MEMPOOL] Failed to fetch tx %s: %v — attempting fallback to mempool.guide", txid, err)
+
+	// Fallback 1: Mempool.guide
+	var guideTx mempool.Tx
+	if err := mempoolGuideFetch(ctx, "/tx/"+txid, &guideTx); err == nil {
+		log.Printf("✅ [MEMPOOL.GUIDE] Fallback succeeded for tx %s", txid[:16])
+		return &guideTx, nil
+	}
+	log.Printf("⚠️  [MEMPOOL.GUIDE] Failed to fetch tx %s — attempting fallback to blockstream", txid)
 
 	// Fallback to blockstream
 	bsTx, bsErr := blockstream.GetTx(txid)
 	if bsErr != nil {
 		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch tx %s: %v", txid, bsErr)
-		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%v)", err, bsErr)
+		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%w)", err, bsErr)
 	}
 
 	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched tx %s", txid[:16])
@@ -296,7 +348,7 @@ func GetTxWithFallback(txid string) (*mempool.Tx, error) {
 
 // GetAddressInfoWithFallback attempts to fetch address info from mempool.space first,
 // falling back to blockstream.info if mempool fails or times out.
-func GetAddressInfoWithFallback(address string) (*mempool.AddressInfo, error) {
+func GetAddressInfoWithFallback(ctx context.Context, address string) (*mempool.AddressInfo, error) {
 	// Try mempool first
 	info, err := mempool.GetAddressInfo(address)
 	if err == nil && info != nil {
@@ -305,13 +357,21 @@ func GetAddressInfoWithFallback(address string) (*mempool.AddressInfo, error) {
 	}
 
 	// Log why mempool failed
-	log.Printf("⚠️  [MEMPOOL] Failed to fetch address info for %s: %v — attempting fallback to blockstream", address, err)
+	log.Printf("⚠️  [MEMPOOL] Failed to fetch address info for %s: %v — attempting fallback to mempool.guide", address, err)
+
+	// Fallback 1: Mempool.guide
+	var guideInfo mempool.AddressInfo
+	if err := mempoolGuideFetch(ctx, "/address/"+address, &guideInfo); err == nil {
+		log.Printf("✅ [MEMPOOL.GUIDE] Fallback succeeded for %s", address)
+		return &guideInfo, nil
+	}
+	log.Printf("⚠️  [MEMPOOL.GUIDE] Failed to fetch address info for %s — attempting fallback to blockstream", address)
 
 	// Fallback to blockstream
 	bsInfo, bsErr := blockstream.GetAddressInfo(address)
 	if bsErr != nil {
 		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch address info for %s: %v", address, bsErr)
-		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%v)", err, bsErr)
+		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%w)", err, bsErr)
 	}
 
 	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched address info for %s", address)
@@ -354,30 +414,25 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 
 	// Pre-compute clean outputs (exclude dust and OP_RETURN)
 	// Wasabi 2.0 minimum output value is 5000 sat = 0.00005 BTC (Schnoering §2.4)
-	const dustThreshold = 0.00005
-	var cleanValues []float64
+	const dustThreshold int64 = 5000
+	var cleanValues []int64
 	for _, o := range outputs {
 		if o.Value >= dustThreshold && o.ScriptType != "op_return" {
 			cleanValues = append(cleanValues, o.Value)
 		}
 	}
-	if len(cleanValues) == 0 {
+	cleanCount := len(cleanValues)
+	if cleanCount == 0 {
 		result.Notes = append(result.Notes, "Only dust/OP_RETURN outputs")
 		return result
 	}
 
-	// Round to satoshi precision for denomination matching
-	rounded := make([]float64, len(cleanValues))
-	for i, a := range cleanValues {
-		rounded[i] = math.Round(a*1e8) / 1e8
-	}
-
 	// Find most-common output denomination
-	counts := make(map[float64]int)
-	for _, r := range rounded {
+	counts := make(map[int64]int)
+	for _, r := range cleanValues {
 		counts[r]++
 	}
-	var mostCommon float64
+	var mostCommon int64
 	var maxCount int
 	for val, c := range counts {
 		if c > maxCount || (c == maxCount && val > mostCommon) {
@@ -385,7 +440,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 			mostCommon = val
 		}
 	}
-	equalRatio := float64(maxCount) / float64(len(rounded))
+	equalRatio := float64(maxCount) / float64(cleanCount)
 
 	// Check distinct output scripts
 	// All CoinJoin protocols require distinct output scripts (Schnoering eq. 10, 15, 33, 43)
@@ -412,12 +467,11 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	// WHIRLPOOL DETECTION (Schnoering & Vazirgiannis, 2023, Section 2.5)
 	// A Whirlpool CoinJoin has EXACTLY 5 inputs from distinct scripts and
 	// EXACTLY 5 outputs with the pool denomination. Four pools exist:
-	//   0.001 BTC, 0.01 BTC, 0.05 BTC, 0.5 BTC
+	//   0.001 BTC, 0.01 BTC, 0.05 BTC, 0.5 BTC (defined in whirlpoolPools)
 	// Condition: |inputs| = n_scripts,in = n_scripts,out = |outputs| = 5
-	whirlpoolPools := map[float64]bool{0.001: true, 0.01: true, 0.05: true, 0.5: true}
 	if inputCount == 5 && outputCount == 5 && distinctOutputScripts {
 		poolDenomCount := 0
-		for _, v := range rounded {
+		for _, v := range cleanValues {
 			if whirlpoolPools[v] {
 				poolDenomCount++
 			}
@@ -425,7 +479,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		if poolDenomCount == 5 {
 			result.Breakdown["whirlpool_exact"] = 0.92
 			result.Notes = append(result.Notes, fmt.Sprintf(
-				"Whirlpool: 5x5 exact structure, pool denomination %.4f BTC", mostCommon))
+				"Whirlpool: 5x5 exact structure, pool denomination %.4f BTC", float64(mostCommon)/1e8))
 			result.Score = 0.92
 			result.Flagged = true
 			result.MixerType = MixerWhirlpool
@@ -450,14 +504,14 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 			spendableOutputCount++
 		}
 	}
-	var inputTotalValue float64
+	var inputTotalValue int64
 	for _, inp := range inputs {
 		inputTotalValue += inp.Value
 	}
 
-	if inputCount == 1 && spendableOutputCount == 2 && inputTotalValue > 1.0 {
-		var p2shVals []float64
-		var nonP2shVals []float64
+	if inputCount == 1 && spendableOutputCount == 2 && inputTotalValue > 100000000 {
+		var p2shVals []int64
+		var nonP2shVals []int64
 		for _, o := range outputs {
 			if o.ScriptType == "op_return" {
 				continue
@@ -472,11 +526,11 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		if len(p2shVals) >= 1 && len(nonP2shVals) >= 1 {
 			largeVal := p2shVals[0]
 			smallVal := nonP2shVals[0]
-			if largeVal > 0 && smallVal > 0 && largeVal/smallVal >= 5.0 {
+			if largeVal > 0 && smallVal > 0 && float64(largeVal)/float64(smallVal) >= 5.0 {
 				result.Breakdown["centralized_mixer"] = 0.88
 				result.Notes = append(result.Notes, fmt.Sprintf(
 					"Centralized mixer withdrawal: 1-in 2-out, P2SH %.6f BTC (%.1fx recipient %.6f BTC), input %.4f BTC",
-					largeVal, largeVal/smallVal, smallVal, inputTotalValue))
+					float64(largeVal)/1e8, float64(largeVal)/float64(smallVal), float64(smallVal)/1e8, float64(inputTotalValue)/1e8))
 				result.Score = 0.88
 				result.Flagged = true
 				result.MixerType = MixerCentralized
@@ -485,13 +539,13 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 		}
 		// Case 2: Both P2SH — use amount as criterion (Shojaeinasab Section 3.3.2)
 		if len(p2shVals) == 2 {
-			large := math.Max(p2shVals[0], p2shVals[1])
-			small := math.Min(p2shVals[0], p2shVals[1])
-			if small > 0 && large/small >= 5.0 {
+			large := max(p2shVals[0], p2shVals[1])
+			small := min(p2shVals[0], p2shVals[1])
+			if small > 0 && float64(large)/float64(small) >= 5.0 {
 				result.Breakdown["centralized_mixer"] = 0.82
 				result.Notes = append(result.Notes, fmt.Sprintf(
 					"Centralized mixer withdrawal (both P2SH): 1-in 2-out, %.1fx ratio, input %.4f BTC",
-					large/small, inputTotalValue))
+					float64(large)/float64(small), float64(inputTotalValue)/1e8))
 				result.Score = 0.82
 				result.Flagged = true
 				result.MixerType = MixerCentralized
@@ -511,7 +565,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	if equalRatio > 0.5 {
 		result.Breakdown["equal_outputs"] = 0.38 * equalRatio
 		result.Notes = append(result.Notes, fmt.Sprintf(
-			"%.1f%% of outputs share denomination %.8f BTC", equalRatio*100, mostCommon))
+			"%.1f%% of outputs share denomination %.8f BTC", equalRatio*100, float64(mostCommon)/1e8))
 	}
 
 	// RULE 2: Participant Scale (weight 0.15)
@@ -539,13 +593,14 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	// Wasabi 1.0/1.1 use denomination d close to 0.1 BTC (Schnoering §2.2, eq. 11):
 	//   0.1 - epsilon <= d <= 0.1 + epsilon, epsilon << 1
 	// Wasabi 1.1 adds mixing levels at 2^i * d (eq. 18).
-	const wasabi1Epsilon = 0.005
-	nearWasabi1Base := math.Abs(mostCommon-0.1) <= wasabi1Epsilon
+	const wasabi1Base int64 = 10000000
+	const wasabi1Epsilon int64 = 500000
+	nearWasabi1Base := intAbs(mostCommon-wasabi1Base) <= wasabi1Epsilon
 	nearWasabi1Multi := false
 	for i := 1; i <= 4; i++ {
-		level := math.Pow(2, float64(i)) * 0.1
-		eps := wasabi1Epsilon * math.Pow(2, float64(i))
-		if math.Abs(mostCommon-level) <= eps {
+		level := int64(math.Pow(2, float64(i)) * float64(wasabi1Base))
+		eps := wasabi1Epsilon * int64(math.Pow(2, float64(i)))
+		if intAbs(mostCommon-level) <= eps {
 			nearWasabi1Multi = true
 			break
 		}
@@ -553,11 +608,11 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	if nearWasabi1Base {
 		result.Breakdown["wasabi1_denom"] = 0.15
 		result.Notes = append(result.Notes, fmt.Sprintf(
-			"Wasabi 1.x denomination: %.6f BTC (within +-%.3f of 0.1 BTC)", mostCommon, wasabi1Epsilon))
+			"Wasabi 1.x denomination: %.6f BTC (within +-%.3f of 0.1 BTC)", float64(mostCommon)/1e8, float64(wasabi1Epsilon)/1e8))
 	} else if nearWasabi1Multi {
 		result.Breakdown["wasabi1_denom"] = 0.10
 		result.Notes = append(result.Notes, fmt.Sprintf(
-			"Wasabi 1.1 multi-level denomination: %.6f BTC (2^i x 0.1 BTC level)", mostCommon))
+			"Wasabi 1.1 multi-level denomination: %.6f BTC (2^i x 0.1 BTC level)", float64(mostCommon)/1e8))
 	}
 
 	// RULE 5: Wasabi 2.0 (WabiSabi) Pattern (weight 0.15)
@@ -567,32 +622,31 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	//     sum(1_{v in D}) >= (|outputs| - 1) / 2
 	//   - Minimum input value v_min = 5000 sat = 0.00005 BTC (eq. 32)
 	//   - All output scripts distinct (eq. 33)
-	wasabi2Denoms := map[float64]bool{
-		0.00005: true, 0.0001: true, 0.0002: true, 0.0005: true,
-		0.001: true, 0.002: true, 0.005: true, 0.01: true,
-		0.02: true, 0.05: true, 0.1: true, 0.2: true, 0.5: true,
+	wasabi2Denoms := map[int64]bool{
+		5000: true, 10000: true, 20000: true, 50000: true,
+		100000: true, 200000: true, 500000: true, 1000000: true,
+		2000000: true, 5000000: true, 10000000: true, 20000000: true, 50000000: true,
 	}
 	if inputCount >= 50 && distinctOutputScripts {
-		minInputVal := math.MaxFloat64
+		var minInputVal int64 = math.MaxInt64
 		for _, inp := range inputs {
 			if inp.Value < minInputVal {
 				minInputVal = inp.Value
 			}
 		}
 		denomMatchCount := 0
-		for _, v := range rounded {
-			r5 := math.Round(v*1e5) / 1e5
-			if wasabi2Denoms[r5] {
+		for _, v := range cleanValues {
+			if wasabi2Denoms[v] {
 				denomMatchCount++
 			}
 		}
-		required := float64(len(rounded)-1) / 2.0
-		if float64(denomMatchCount) >= required && minInputVal >= 0.00005 {
+		required := float64(cleanCount-1) / 2.0
+		if float64(denomMatchCount) >= required && minInputVal >= 5000 {
 			score := math.Min(float64(inputCount)/200.0, 1.0)
 			result.Breakdown["wasabi2_pattern"] = 0.15 * (0.5 + 0.5*score)
 			result.Notes = append(result.Notes, fmt.Sprintf(
 				"Wasabi 2.0 (WabiSabi): %d inputs, %d/%d outputs match fixed denomination set D",
-				inputCount, denomMatchCount, len(rounded)))
+				inputCount, denomMatchCount, cleanCount))
 		}
 	}
 
@@ -600,12 +654,12 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	// CoinJoin eliminates change outputs entirely. Wasabi ensures at least one
 	// participant has no change (Schnoering footnote 9).
 	oddCount := 0
-	for _, a := range rounded {
+	for _, a := range cleanValues {
 		if a != mostCommon {
 			oddCount++
 		}
 	}
-	oddRatio := float64(oddCount) / float64(len(rounded))
+	oddRatio := float64(oddCount) / float64(cleanCount)
 	switch {
 	case oddCount == 0:
 		result.Breakdown["no_change"] = 0.10
@@ -653,9 +707,9 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	// Each CoinJoin participant contributes funds from their own UTXO history,
 	// resulting in highly varied input amounts.
 	if inputCount >= 5 {
-		uniqueInputVals := make(map[float64]struct{})
+		uniqueInputVals := make(map[int64]struct{})
 		for _, inp := range inputs {
-			uniqueInputVals[math.Round(inp.Value*1e8)/1e8] = struct{}{}
+			uniqueInputVals[inp.Value] = struct{}{}
 		}
 		uniqueRatio := float64(len(uniqueInputVals)) / float64(inputCount)
 		if uniqueRatio > 0.8 {
@@ -678,7 +732,7 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 	}
 
 	// RULE 12: Output Value Entropy Bonus (weight 0.04)
-	entropy := shannonEntropy(rounded)
+	entropy := shannonEntropy(cleanValues)
 	if entropy > 3.0 && equalRatio > 0.6 {
 		result.Breakdown["high_entropy"] = 0.04
 	}
@@ -696,9 +750,8 @@ func IsCoinMixer(tx TransactionIO, threshold float64) MixerResult {
 
 // classifyMixer identifies the specific mixing protocol based on structural
 // fingerprints from Schnoering & Vazirgiannis (2023) and Shojaeinasab et al. (2023).
-func classifyMixer(denom float64, inputCount, outputCount int, distinctScripts bool, breakdown map[string]float64) MixerType {
+func classifyMixer(denom int64, inputCount, outputCount int, distinctScripts bool, breakdown map[string]float64) MixerType {
 	// Whirlpool: 5x5 exact structure + pool denomination
-	whirlpoolPools := map[float64]bool{0.001: true, 0.01: true, 0.05: true, 0.5: true}
 	if inputCount == 5 && outputCount == 5 && whirlpoolPools[denom] && distinctScripts {
 		return MixerWhirlpool
 	}
@@ -728,11 +781,11 @@ func classifyMixer(denom float64, inputCount, outputCount int, distinctScripts b
 	return MixerUnknown
 }
 
-func shannonEntropy(values []float64) float64 {
+func shannonEntropy(values []int64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
-	counts := make(map[float64]int)
+	counts := make(map[int64]int)
 	for _, v := range values {
 		counts[v]++
 	}
@@ -847,8 +900,7 @@ func IsExchangeAddress(txs []TransactionIO, threshold float64) ExchangeResult {
 	for _, tx := range txs {
 		for _, o := range tx.Outputs {
 			totalOuts++
-			scaled := o.Value * 100
-			if math.Abs(math.Round(scaled)-scaled) < 0.001 {
+			if o.Value > 0 && o.Value%1000000 == 0 {
 				roundCount++
 			}
 		}
@@ -898,7 +950,7 @@ func DetectPeelingChain(txs []TransactionIO) PeelingChainResult {
 		}
 		out0 := tx.Outputs[0].Value
 		out1 := tx.Outputs[1].Value
-		ratio := math.Min(out0, out1) / math.Max(out0, out1)
+		ratio := math.Min(float64(out0), float64(out1)) / math.Max(float64(out0), float64(out1))
 		if ratio < 0.3 {
 			peelCount++
 		}
@@ -942,9 +994,8 @@ func PropagateTaint(graph *UnifiedGraph, decayPerHop float64) {
 		queue = append(queue, id)
 	}
 
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
+	for i := 0; i < len(queue); i++ {
+		cur := queue[i]
 		curTaint := taint[cur] * (1 - decayPerHop)
 		if curTaint < 0.01 {
 			continue
@@ -1017,9 +1068,9 @@ var knownLabels = []struct {
 
 func ResolveEntityType(label string) EntityType {
 	lower := strings.ToLower(label)
-	for _, entry := range knownLabels {
-		if strings.Contains(lower, entry.needle) {
-			return entry.entity
+	for needle, entity := range entityTypeMap { // Use pre-built map for faster lookup
+		if strings.Contains(lower, needle) { // Still need Contains for partial matches
+			return entity
 		}
 	}
 	return EntityUnknown
@@ -1029,68 +1080,122 @@ func ResolveEntityType(label string) EntityType {
 // GRAPH BUILDER
 // ─────────────────────────────────────────────────────────────
 
-func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string) UnifiedGraph {
-	graph := UnifiedGraph{
-		Nodes: make(map[string]ProvenanceNode),
-		Edges: []ProvenanceEdge{},
+type intelResult struct {
+	label    string
+	riskData *intel.ChainAbuseRiskData
+}
+
+type graphBuilder struct {
+	graph          UnifiedGraph
+	edgeMap        map[string]ProvenanceEdge
+	nodeImportance map[string]int
+	blockPoolCache map[string]*mempool.PoolInfo
+	liveTxs        []mempool.Tx
+	bqResult       *bitquery.AddressTransactions
+	ir             intelResult
+	ctx            context.Context
+}
+
+func newGraphBuilder(ctx context.Context) *graphBuilder {
+	return &graphBuilder{
+		graph: UnifiedGraph{
+			Nodes: make(map[string]ProvenanceNode),
+			Edges: []ProvenanceEdge{},
+		},
+		nodeImportance: make(map[string]int),
+		edgeMap:        make(map[string]ProvenanceEdge),
+		blockPoolCache: make(map[string]*mempool.PoolInfo),
+		ctx:            ctx,
 	}
+}
 
-	nodeImportance := make(map[string]int)
-
-	addNode := func(nodeID, label, nType, source string, risk int) {
-		if n, ok := graph.Nodes[nodeID]; ok {
-			for _, s := range n.Sources {
-				if s == source {
-					return
-				}
-			}
+func (b *graphBuilder) addNode(nodeID, label, nType, source string, risk int) {
+	if n, ok := b.graph.Nodes[nodeID]; ok {
+		if !contains(n.Sources, source) { // Use helper to avoid O(N) appendIfMissing
 			n.Sources = append(n.Sources, source)
-			if risk > n.Risk {
-				n.Risk = risk
-			}
-			graph.Nodes[nodeID] = n
-		} else {
-			eType := ResolveEntityType(label)
-			graph.Nodes[nodeID] = ProvenanceNode{
-				ID:         nodeID,
-				Label:      label,
-				Type:       nType,
-				Sources:    []string{source},
-				Risk:       risk,
-				EntityType: eType,
-			}
 		}
-		score := risk*100 + len(graph.Nodes[nodeID].Sources)*10
-		if nodeImportance[nodeID] < score {
-			nodeImportance[nodeID] = score
+		if risk > n.Risk {
+			n.Risk = risk
+		}
+		b.graph.Nodes[nodeID] = n
+	} else {
+		eType := ResolveEntityType(label)
+		b.graph.Nodes[nodeID] = ProvenanceNode{
+			ID:         nodeID,
+			Label:      label,
+			Type:       nType,
+			Sources:    []string{source},
+			Risk:       risk,
+			EntityType: eType,
 		}
 	}
+	score := risk*100 + len(b.graph.Nodes[nodeID].Sources)*10
+	if b.nodeImportance[nodeID] < score {
+		b.nodeImportance[nodeID] = score
+	}
+}
 
-	edgeMap := make(map[string]ProvenanceEdge)
-
-	addEdge := func(src, tgt string, amt float64, source string, timestamp int64) {
-		key := fmt.Sprintf("%s|%s|%.8f", src, tgt, amt)
-		if e, ok := edgeMap[key]; ok {
-			for _, s := range e.Sources {
-				if s == source {
-					return
-				}
-			}
+func (b *graphBuilder) addEdge(src, tgt string, amt float64, source string, timestamp int64) {
+	key := fmt.Sprintf("%s|%s|%.8f", src, tgt, amt)
+	if e, ok := b.edgeMap[key]; ok {
+		if !contains(e.Sources, source) { // Use helper to avoid O(N) appendIfMissing
 			e.Sources = append(e.Sources, source)
-			edgeMap[key] = e
-		} else {
-			edgeMap[key] = ProvenanceEdge{
-				Source:    src,
-				Target:    tgt,
-				Amount:    amt,
-				Sources:   []string{source},
-				Timestamp: timestamp,
-			}
+		}
+		b.edgeMap[key] = e
+	} else {
+		b.edgeMap[key] = ProvenanceEdge{
+			Source:    src,
+			Target:    tgt,
+			Amount:    amt,
+			Sources:   []string{source},
+			Timestamp: timestamp,
 		}
 	}
+}
+
+func (b *graphBuilder) lookupBlockPool(blockHash string) *mempool.PoolInfo {
+	if blockHash == "" {
+		return nil
+	}
+	if p, found := b.blockPoolCache[blockHash]; found {
+		return p
+	}
+	pool, err := mempool.GetBlockPool(blockHash)
+	if err != nil {
+		log.Printf("⚠️  [BLOCK-POOL] %s: %v — attempting fallback to mempool.guide", blockHash[:min16(len(blockHash))], err)
+		var guideBlock struct {
+			Extras struct {
+				Pool *mempool.PoolInfo `json:"pool"`
+			} `json:"extras"`
+		}
+		if gErr := mempoolGuideFetch(b.ctx, "/v1/block/"+blockHash, &guideBlock); gErr == nil {
+			pool = guideBlock.Extras.Pool
+		} else {
+			b.blockPoolCache[blockHash] = nil
+			return nil
+		}
+	}
+	b.blockPoolCache[blockHash] = pool
+	if pool != nil {
+		log.Printf("⛏️  [BLOCK-POOL] block %s → %s (%s)", blockHash[:min16(len(blockHash))], pool.Name, pool.Slug)
+	}
+	return pool
+}
+
+func contains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string) UnifiedGraph {
+	builder := newGraphBuilder(ctx)
 
 	// 1. Initial target node
-	addNode(id, id, "Address", "Initial Query", 0)
+	builder.addNode(id, id, "Address", "Initial Query", 0)
 
 	// 2. Local Neo4j
 	neoToReal := make(map[string]string)
@@ -1100,24 +1205,20 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 			n := node.(map[string]interface{})
 			realID := n["label"].(string)
 			neoToReal[eid] = realID
-			addNode(realID, realID, n["type"].(string), "Local DB", 0)
+			builder.addNode(realID, realID, n["type"].(string), "Local DB", 0)
 		}
 		for _, edge := range history["edges"].([]interface{}) {
 			e := edge.(map[string]interface{})
 			src := neoToReal[e["source"].(string)]
 			tgt := neoToReal[e["target"].(string)]
 			if src != "" && tgt != "" {
-				addEdge(src, tgt, e["amount"].(float64), "Local DB", 0)
+				builder.addEdge(src, tgt, e["amount"].(float64), "Local DB", 0)
 			}
 		}
 	} else {
 		log.Printf("⚠️  [LOCAL-DB] Skipped (no local history for %s)", id)
 	}
 
-	var liveTxs []mempool.Tx
-	var bqResult *bitquery.AddressTransactions
-	var riskData *intel.ChainAbuseRiskData
-	var label string
 	var wg sync.WaitGroup
 
 	wg.Add(3)
@@ -1125,7 +1226,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	go func() {
 		defer wg.Done()
 		var err error
-		liveTxs, err = GetAddressTxsWithFallback(id)
+		builder.liveTxs, err = GetAddressTxsWithFallback(builder.ctx, id)
 		if err != nil {
 			log.Printf("⚠️  [FETCH-TX] %v", err)
 		}
@@ -1136,7 +1237,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		defer wg.Done()
 		if bqKey != "" {
 			var err error
-			bqResult, err = bitquery.GetAddressTransactions(id, bqKey, 200)
+			builder.bqResult, err = bitquery.GetAddressTransactions(builder.ctx, id, bqKey, 200)
 			if err != nil {
 				log.Printf("⚠️  [BITQUERY] %v", err)
 			}
@@ -1146,42 +1247,17 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// Parallel fetch: Intel
 	go func() {
 		defer wg.Done()
-		label = intel.GetLabel(id)
-		riskData = intel.GetChainAbuseRisk(id, caKey)
+		builder.ir = intelResult{
+			label:    intel.GetLabel(id), // intel.GetLabel does not take context
+			riskData: intel.GetChainAbuseRisk(id, caKey),
+		}
 	}()
 
 	wg.Wait()
 
-	txIOs := make([]TransactionIO, 0, len(liveTxs))
-
-	// Block-pool cache: blockHash → *mempool.PoolInfo
-	// Many transactions in a single graph share the same recent blocks, so
-	// caching here reduces the number of /v1/block/:hash API calls to O(unique blocks)
-	// rather than O(transactions). Nil entries mean "looked up, no pool data."
-	blockPoolCache := make(map[string]*mempool.PoolInfo)
-	lookupBlockPool := func(blockHash string) *mempool.PoolInfo {
-		if blockHash == "" {
-			return nil
-		}
-		if p, found := blockPoolCache[blockHash]; found {
-			return p // may be nil — that's a valid cached result
-		}
-		pool, err := mempool.GetBlockPool(blockHash)
-		if err != nil {
-			log.Printf("⚠️  [BLOCK-POOL] %s: %v", blockHash[:min16(len(blockHash))], err)
-			blockPoolCache[blockHash] = nil
-			return nil
-		}
-		blockPoolCache[blockHash] = pool
-		if pool != nil {
-			log.Printf("⛏️  [BLOCK-POOL] block %s → %s (%s)", blockHash[:min16(len(blockHash))], pool.Name, pool.Slug)
-		}
-		return pool
-	}
-
-	for _, tx := range liveTxs {
-		addNode(tx.Txid, tx.Txid, "Transaction", "Esplora API", 0)
-
+	txIOs := make([]TransactionIO, 0, len(builder.liveTxs))
+	for _, tx := range builder.liveTxs {
+		builder.addNode(tx.Txid, tx.Txid, "Transaction", "Esplora API", 0)
 		timestamp := int64(0)
 		if tx.Status.Confirmed && tx.Status.BlockTime > 0 {
 			timestamp = tx.Status.BlockTime
@@ -1201,11 +1277,11 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 			if vin.Prevout.ScriptPubKeyAddress != "" {
 				addr := vin.Prevout.ScriptPubKeyAddress
 				val := float64(vin.Prevout.Value) / 1e8
-				addNode(addr, addr, "Address", "Esplora API", 0)
-				addEdge(addr, tx.Txid, val, "Esplora API", timestamp)
+				builder.addNode(addr, addr, "Address", "Esplora API", 0)
+				builder.addEdge(addr, tx.Txid, val, "Esplora API", timestamp)
 				tio.Inputs = append(tio.Inputs, TxInput{
 					Address:  addr,
-					Value:    val,
+					Value:    vin.Prevout.Value,
 					Sequence: vin.Sequence,
 				})
 			}
@@ -1219,12 +1295,12 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		//   confirmed tx node — the same data mempool.space shows in its UI.
 		// - EntityType = EntityMining is set when the pool is identified; this drives
 		//   the amber colour, ⛏ label prefix, and the [HIDE MINING] filter.
-		if n, ok := graph.Nodes[tx.Txid]; ok {
+		if n, ok := builder.graph.Nodes[tx.Txid]; ok {
 			n.IsCoinbase = tio.HasCoinbase
 			n.InputCount = len(tx.Vin)
 
 			if tx.Status.Confirmed && tx.Status.BlockHash != "" {
-				poolInfo := lookupBlockPool(tx.Status.BlockHash)
+				poolInfo := builder.lookupBlockPool(tx.Status.BlockHash)
 				if poolInfo != nil {
 					n.MiningPoolInfo = poolInfo
 					n.EntityType = EntityMining
@@ -1244,18 +1320,18 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				n.Label = "Coinbase TX"
 			}
 
-			graph.Nodes[tx.Txid] = n
+			builder.graph.Nodes[tx.Txid] = n
 		}
 
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKeyAddress != "" {
 				addr := vout.ScriptPubKeyAddress
 				val := float64(vout.Value) / 1e8
-				addNode(addr, addr, "Address", "Esplora API", 0)
-				addEdge(tx.Txid, addr, val, "Esplora API", timestamp)
+				builder.addNode(addr, addr, "Address", "Esplora API", 0)
+				builder.addEdge(tx.Txid, addr, val, "Esplora API", timestamp)
 				tio.Outputs = append(tio.Outputs, TxOutput{
 					Address:    addr,
-					Value:      val,
+					Value:      vout.Value,
 					ScriptType: vout.ScriptPubKeyType,
 				})
 			}
@@ -1283,13 +1359,13 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 		}
 
 		if mr.Flagged {
-			if n, ok := graph.Nodes[tx.Txid]; ok {
+			if n, ok := builder.graph.Nodes[tx.Txid]; ok { // Access builder's graph
 				n.MixerInfo = &det
 				risk := det.Confidence
 				if risk > n.Risk {
 					n.Risk = risk
 				}
-				graph.Nodes[tx.Txid] = n
+				builder.graph.Nodes[tx.Txid] = n
 				log.Printf("🔀 [MIXER] %s — score=%.2f type=%s conf=%d",
 					tx.Txid, mr.Score, mr.MixerType, det.Confidence)
 			}
@@ -1297,25 +1373,25 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	}
 
 	// 4. Bitquery inflows + outflows
-	// Uses GetAddressTransactions (v2 API) which returns both FlowEdges for
+	// Uses GetAddressTransactions (v2 API) which returns both FlowEdges for // Access builder's bqResult
 	// graph construction AND fully-hydrated TxIO records that are merged into
 	// the behavioral detection pipeline alongside mempool.space data.
-	if bqResult != nil {
+	if builder.bqResult != nil {
 		// 4a. Add flow edges and nodes to the graph
-		for _, flow := range bqResult.Flows {
-			addNode(flow.FromAddr, flow.FromAddr, "Address", "Bitquery", 0)
-			addNode(flow.ToAddr, flow.ToAddr, "Address", "Bitquery", 0)
+		for _, flow := range builder.bqResult.Flows {
+			builder.addNode(flow.FromAddr, flow.FromAddr, "Address", "Bitquery", 0)
+			builder.addNode(flow.ToAddr, flow.ToAddr, "Address", "Bitquery", 0)
 			if flow.TxHash != "" {
-				addNode(flow.TxHash, flow.TxHash, "Transaction", "Bitquery", 0)
-				addEdge(flow.FromAddr, flow.TxHash, flow.ValueBTC, "Bitquery", flow.Timestamp)
-				addEdge(flow.TxHash, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
+				builder.addNode(flow.TxHash, flow.TxHash, "Transaction", "Bitquery", 0)
+				builder.addEdge(flow.FromAddr, flow.TxHash, flow.ValueBTC, "Bitquery", flow.Timestamp)
+				builder.addEdge(flow.TxHash, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
 			} else {
-				addEdge(flow.FromAddr, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
+				builder.addEdge(flow.FromAddr, flow.ToAddr, flow.ValueBTC, "Bitquery", flow.Timestamp)
 			}
 		}
 
 		// 4b. Convert Bitquery TxIOs into aggregator.TransactionIO
-		for _, btio := range bqResult.TxIOs {
+		for _, btio := range builder.bqResult.TxIOs {
 			alreadySeen := false
 			for _, existing := range txIOs {
 				if existing.Txid == btio.Txid {
@@ -1331,27 +1407,27 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 			for _, inp := range btio.Inputs {
 				tio.Inputs = append(tio.Inputs, TxInput{
 					Address: inp.Address,
-					Value:   inp.Value,
+					Value:   int64(math.Round(inp.Value * 1e8)),
 				})
 			}
 			for _, out := range btio.Outputs {
 				tio.Outputs = append(tio.Outputs, TxOutput{
 					Address:    out.Address,
-					Value:      out.Value,
+					Value:      int64(math.Round(out.Value * 1e8)),
 					ScriptType: "", // Bitquery v2 bitcoin endpoint does not expose script type
 				})
 			}
 			txIOs = append(txIOs, tio)
-			addNode(btio.Txid, btio.Txid, "Transaction", "Bitquery", 0)
+			builder.addNode(btio.Txid, btio.Txid, "Transaction", "Bitquery", 0)
 			// Mark Bitquery transaction with input count
-			if n, ok := graph.Nodes[btio.Txid]; ok {
+			if n, ok := builder.graph.Nodes[btio.Txid]; ok {
 				n.InputCount = len(btio.Inputs)
 				n.IsCoinbase = len(btio.Inputs) == 0
-				graph.Nodes[btio.Txid] = n
+				builder.graph.Nodes[btio.Txid] = n
 			}
 		}
-		log.Printf("📡 [BITQUERY] merged %d new txs into behavioral pipeline (total: %d)",
-			bqResult.TotalTxs, len(txIOs))
+		log.Printf("📡 [BITQUERY] merged %d new txs into behavioral pipeline (total: %d)", // Access builder's bqResult
+			builder.bqResult.TotalTxs, len(txIOs))
 	}
 
 	// ── Behavioral detection (runs on FULL txIOs: mempool.space + Bitquery) ────
@@ -1360,43 +1436,43 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 
 	// ── Exchange detection ─────────────────────────────────────
 	er := IsExchangeAddress(txIOs, defaultExchangeThreshold)
-	if er.Flagged {
-		if n, ok := graph.Nodes[id]; ok {
+	if er.Flagged { // Access builder's graph
+		if n, ok := builder.graph.Nodes[id]; ok {
 			n.EntityType = EntityExchange
 			n.ExchInfo = &er
 			log.Printf("🏦 [EXCHANGE] %s — score=%.2f", id, er.Score)
-			graph.Nodes[id] = n
+			builder.graph.Nodes[id] = n
 		}
 	}
 
 	// ── Gambling detection ────────────────────────────────────
 	gr := IsGamblingAddress(txIOs, defaultGamblingThreshold)
-	if gr.Flagged {
-		if n, ok := graph.Nodes[id]; ok {
+	if gr.Flagged { // Access builder's graph
+		if n, ok := builder.graph.Nodes[id]; ok {
 			n.EntityType = EntityGambling
 			n.GamblingInfo = &gr
 			log.Printf("🎰 [GAMBLING] %s — score=%.2f", id, gr.Score)
-			graph.Nodes[id] = n
+			builder.graph.Nodes[id] = n
 		}
 	}
 
 	// ── Mining pool detection ─────────────────────────────────
 	mr := IsMiningPoolAddress(txIOs, defaultMiningThreshold)
-	if mr.Flagged {
-		if n, ok := graph.Nodes[id]; ok {
+	if mr.Flagged { // Access builder's graph
+		if n, ok := builder.graph.Nodes[id]; ok {
 			n.EntityType = EntityMining
 			n.MiningInfo = &mr
 			log.Printf("⛏️  [MINING] %s — score=%.2f", id, mr.Score)
-			graph.Nodes[id] = n
+			builder.graph.Nodes[id] = n
 		}
 	}
 
 	// ── Peeling chain detection ───────────────────────────────
 	pc := DetectPeelingChain(txIOs)
-	if pc.IsPeeling {
-		if n, ok := graph.Nodes[id]; ok {
+	if pc.IsPeeling { // Access builder's graph
+		if n, ok := builder.graph.Nodes[id]; ok {
 			n.Risk = intMax(n.Risk, int(pc.Confidence*80))
-			graph.Nodes[id] = n
+			builder.graph.Nodes[id] = n
 		}
 		log.Printf("🔗 [PEEL CHAIN] %s — confidence=%.2f len=%d", id, pc.Confidence, pc.ChainLen)
 	}
@@ -1405,10 +1481,10 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	clusters := BuildClusters(txIOs)
 	for addr, cid := range clusters.AddrToCluster {
 		members := clusters.Clusters[cid]
-		if n, ok := graph.Nodes[addr]; ok && n.Type == "Address" {
+		if n, ok := builder.graph.Nodes[addr]; ok && n.Type == "Address" { // Access builder's graph
 			n.ClusterID = cid
 			n.ClusterSize = len(members)
-			graph.Nodes[addr] = n
+			builder.graph.Nodes[addr] = n
 		}
 	}
 	if len(clusters.Clusters) > 0 {
@@ -1430,8 +1506,8 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	}
 
 	// Flush edge map
-	for _, e := range edgeMap {
-		graph.Edges = append(graph.Edges, e)
+	for _, e := range builder.edgeMap {
+		builder.graph.Edges = append(builder.graph.Edges, e)
 	}
 
 	// 5. Intel enrichment (ChainAbuse + WalletExplorer)
@@ -1439,44 +1515,36 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// they returned data, so the frontend intelligence panel always shows them
 	// with their Verify and Open buttons, and the cross-validation engine can
 	// correctly report "queried but found nothing" rather than silently omitting.
-	label = intel.GetLabel(id)
-	riskData = intel.GetChainAbuseRisk(id, caKey)
-
-	if n, ok := graph.Nodes[id]; ok {
+	if n, ok := builder.graph.Nodes[id]; ok { // Access builder's graph
 		// Always add WalletExplorer — it is a public service with no key required.
 		n.Sources = appendIfMissing(n.Sources, "WalletExplorer")
-
-		// Always add ChainAbuse when a key is configured, even if no reports found.
 		if caKey != "" {
 			n.Sources = appendIfMissing(n.Sources, "ChainAbuse")
 		}
-
-		if riskData != nil {
-			riskScore := intel.CalculateRiskScore(riskData)
+		if builder.ir.riskData != nil { // Access builder's ir
+			riskScore := intel.CalculateRiskScore(builder.ir.riskData)
 			n.Risk = riskScore
-			n.RiskData = riskData
-			nodeImportance[id] += riskScore * 100
+			n.RiskData = builder.ir.riskData
+			builder.nodeImportance[id] += riskScore * 100
 		}
-
-		if label != "" {
-			n.Label = label
-			n.EntityType = ResolveEntityType(label)
+		if builder.ir.label != "" { // Access builder's ir
+			n.Label = builder.ir.label
+			n.EntityType = ResolveEntityType(builder.ir.label)
 		}
-
-		graph.Nodes[id] = n
+		builder.graph.Nodes[id] = n
 	}
 
 	// 6. Taint propagation
-	PropagateTaint(&graph, 0.5)
+	PropagateTaint(&builder.graph, 0.5)
 
 	// 7. Build summary
-	graph.Summary = buildSummary(graph)
+	builder.graph.Summary = buildSummary(builder.graph)
 
 	// Final diagnostic log
 	log.Printf("📊 [GRAPH] Final: %d nodes, %d edges | Node breakdown: %v",
-		len(graph.Nodes), len(graph.Edges), len(graph.Nodes))
+		len(builder.graph.Nodes), len(builder.graph.Edges), len(builder.graph.Nodes))
 
-	return graph
+	return builder.graph
 }
 
 // appendIfMissing appends s to slice only when it is not already present.
@@ -1535,10 +1603,14 @@ func intMax(a, b int) int {
 	return b
 }
 
+func intAbs(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 // min16 returns min(n, 16) — used to safely truncate txid/blockHash log strings.
 func min16(n int) int {
-	if n < 16 {
-		return n
-	}
-	return 16
+	return min(n, 16)
 }
