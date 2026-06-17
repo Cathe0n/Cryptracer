@@ -1,15 +1,90 @@
-#  Cryptrace – Bitcoin Transaction Forensics & Money Flow Analysis
+<p align="center">
+  <img width="200" height="200" alt="Cryptrace Logo" src="https://github.com/user-attachments/assets/1c1db906-b595-4fd0-959c-e45e3b3bd3bb" />
+</p>
 
-> **Advanced on-chain intelligence platform for Bitcoin transaction tracing, mixer detection, and money flow visualization.**
+<h1 align="center">Cryptrace</h1>
+<h3 align="center"><b>Bitcoin transaction forensics & money flow analysis dashboard</b></h3>
 
-![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go) ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?logo=javascript) ![Neo4j](https://img.shields.io/badge/Neo4j-Graph%20Database-008CC1?logo=neo4j) ![License](https://img.shields.io/badge/License-MIT-green)
+<p align="center">
+  <b>Advanced on-chain intelligence platform for automated transaction tracing, coin mixer fingerprinting, and interactive graph visualisations.</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.24-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go Engine" />
+  <img src="https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JS Frontend" />
+  <img src="https://img.shields.io/badge/Neo4j-Graph%20Database-008CC1?style=for-the-badge&logo=neo4j&logoColor=white" alt="Neo4j Layer" />
+  <img src="https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu&logoColor=white" alt="GPLv3 License" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/Cathe0n/Cryptrace/releases">
+    <img src="https://img.shields.io/github/v/release/Cathe0n/Cryptrace?style=for-the-badge&label=Download&color=success" alt="Download Latest Release" />
+  </a>
+</p>
 
 ---
-<img width="1920" height="951" alt="brave_bStgR9AnRg" src="https://github.com/user-attachments/assets/bb251e7d-397e-42ce-945f-768d3026f573" />
 
+<h3 align="center">Project Activity</h3>
 
+<div align="center">
+  <table align="center">
+    <thead>
+      <tr>
+        <th align="center">Development Status</th>
+        <th align="center">Last Code Commit</th>
+        <th align="center">Open Issues</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td align="center"><img src="https://img.shields.io/badge/Status-Active%20Development-rocket?style=flat-square&color=2ecc71" alt="Status" /></td>
+        <td align="center"><img src="https://img.shields.io/github/last-commit/Cathe0n/Cryptrace?style=flat-square&color=3498db" alt="Last Commit" /></td>
+        <td align="center"><img src="https://img.shields.io/github/issues/Cathe0n/Cryptrace?style=flat-square&color=e74c3c" alt="Issues" /></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
-## Overview
+---
+
+<p align="center">
+  <img width="100%" alt="Cryptrace Dashboard Overview" src="https://github.com/user-attachments/assets/bb251e7d-397e-42ce-945f-768d3026f573" />
+</p>
+
+---
+
+---
+
+<h3 align="center">Project Activity</h3>
+
+<div align="center">
+  <table align="center">
+    <thead>
+      <tr>
+        <th align="center">Development Status</th>
+        <th align="center">Last Code Commit</th>
+        <th align="center">Open Issues</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td align="center"><img src="https://img.shields.io/badge/Status-Active%20Development-rocket?style=flat-square&color=2ecc71" alt="Status" /></td>
+        <td align="center"><img src="https://img.shields.io/github/last-commit/Cathe0n/Cryptrace?style=flat-square&color=3498db" alt="Last Commit" /></td>
+        <td align="center"><img src="https://img.shields.io/github/issues/Cathe0n/Cryptrace?style=flat-square&color=e74c3c" alt="Issues" /></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+---
+
+<p align="center">
+  <img width="100%" alt="Cryptrace Dashboard Overview" src="https://github.com/user-attachments/assets/bb251e7d-397e-42ce-945f-768d3026f573" />
+</p>
+
+---
+
+## Overview | "Just a short decription hehe" (^.^)
 
 **Cryptrace** is a project designed for advanced Bitcoin transaction analysis. It reconstructs money flows on the blockchain by:
 
@@ -171,7 +246,7 @@ The application will:
 | **Zoom In/Out** | Scroll wheel or `+` / `-` buttons |
 | **Pan** | Click and drag workspace |
 | **Center Graph** | Click **Recenter** button |
-| **Toggle Labels** | Hide/Show Labels  | — "Simplicity" (‾◡‾)
+| **Toggle Labels** | Hide/Show Labels — "Simplicity" (‾◡‾)  | 
 | **Toggle Info** | Click **[INFO]** to show amount + time on edges |
 | **Freeze Layout** | Click **[FREEZE]** to lock/unlock node positions |
 | **Switch Layout** | Toggle between **Force** (physics) and **Tree** (hierarchy) |
@@ -206,7 +281,7 @@ The application will:
 - **Forensic Session Files**: Export your entire investigation including the graph layout, all custom labels, and trace results as a `.ctk` file to resume later or share with other investigators. "Very Useful!!" 'o'
 ---
 
-##  Data Import | "This is for offline analysis but you need to know which Bitcoin block you need to get, I use Blockchair as they have an extensive list!" ＼('_')／ 
+##  Data Import | "This is for offline analysis but you need to know which Bitcoin block you need to get, I use Blockchair as they have an extensive list!"＼('_')／ 
 
 Import pre-fetched blockchain data from TSV files into Neo4j for offline analysis.
 
@@ -246,8 +321,6 @@ index  tx_hash  vout/vin  scriptpubkey_type  value_btc  ...  address
 
 ---
 
-##  Technologies
-
 ### Backend
 
 | Technology | Version | Purpose |
@@ -258,10 +331,22 @@ index  tx_hash  vout/vin  scriptpubkey_type  value_btc  ...  address
 
 ---
 
-### Project Activity & Status
+<p align="center">
+  🌻 <b>Thank you for checking out Cryptracer!</b> 🌻
+  <br />
+  If you encounter any issues or have feature requests feel free to drop a DM!
+</p>
 
-| Status | Last Code Commit | Open Issues 
-| :---: | :---: | :---: |
-| ![Development Status](https://img.shields.io/badge/Status-Active%20Development-rocket?style=flat-square&color=2ecc71) | ![GitHub last commit](https://img.shields.io/github/last-commit/Cathe0n/Cryptrace?style=flat-square&color=3498db) | ![GitHub issues](https://img.shields.io/github/issues/Cathe0n/Cryptrace?style=flat-square&color=e74c3c) 
+<p align="center">
+  <a href="https://discord.com/users/604615480891670530">
+    <img src="https://img.shields.io/badge/Discord-DM%20%40cathe0n-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord Support" />
+  </a>
+</p>
 
----
+
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0** - see the [LICENSE](LICENSE) file for details.
+
+> **Open Source Protection:** You are completely free to copy, modify, and distribute this software. However, under the copyleft terms of the **GPLv3**, any derivative projects or closed-source commercial applications utilizing this engine **must** also open-source their entire codebase under the exact same license terms.
