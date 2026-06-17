@@ -2,7 +2,7 @@
   <img width="200" height="200" alt="Cryptrace Logo" src="https://github.com/user-attachments/assets/1c1db906-b595-4fd0-959c-e45e3b3bd3bb" />
 </p>
 
-<h1 align="center">Cryptrace</h1>
+<h1 align="center">Cryptracer</h1>
 <h3 align="center"><b>Bitcoin transaction forensics & money flow analysis dashboard</b></h3>
 
 <p align="center">
@@ -79,14 +79,14 @@
 ---
 
 <p align="center">
-  <img width="100%" alt="Cryptrace Dashboard Overview" src="https://github.com/user-attachments/assets/bb251e7d-397e-42ce-945f-768d3026f573" />
+  <img width="100%" alt="Cryptracer Dashboard Overview" src="https://github.com/user-attachments/assets/bb251e7d-397e-42ce-945f-768d3026f573" />
 </p>
 
 ---
 
 ## Overview | "Just a short decription hehe" (^.^)
 
-**Cryptrace** is a project designed for advanced Bitcoin transaction analysis. It reconstructs money flows on the blockchain by:
+**Cryptracer** is a project designed for advanced Bitcoin transaction analysis. It reconstructs money flows on the blockchain by:
 
 1. **Tracing forward transactions** using change-detection heuristics to identify real payments
 2. **Detecting coin mixers** through pattern recognition and behavioral analysis
@@ -182,8 +182,8 @@ This tool is intended for **forensic analysis** of Bitcoin transactions.
 ### 1. Clone the Repository
 
 ```bash
-git clone <https://github.com/Cathe0n/Cryptrace.git>
-cd Cryptrace
+git clone <https://github.com/Cathe0n/Cryptracer.git>
+cd Cryptracer
 ```
 
 ### 2. Install Go Dependencies | "I love Golang" :3
@@ -210,7 +210,7 @@ go run main.go
 ### 4. Access the Application | "Uhh use Waterfox...Or Something, Chrome is poopoo" q('.')q 
 
 - **Main Dashboard**: [http://localhost:8080/ui/index.html](http://localhost:8080/ui/index.html)
-- **Setup/Configuration**: [http://localhost:8080/ui/setup.html](http://localhost:8080/ui/setup.html) "This is where you configure your API keys, Cryptrace can still work but there'll be no reputation check for the Bitcoin address." <.<
+- **Setup/Configuration**: [http://localhost:8080/ui/setup.html](http://localhost:8080/ui/setup.html) "This is where you configure your API keys, Cryptracer can still work but there'll be no reputation check for the Bitcoin address." <.<
 
 ---
 
@@ -239,7 +239,7 @@ The application will:
 - Press **Enter** or click **Search**
 - The application reconstructs a transaction graph from live blockchain data
 
-#### 2. **Explore Cryptrace** "Should be easy...Right?" (｡-.-)
+#### 2. **Explore Cryptracer** "Should be easy...Right?" (｡-.-)
 
 | Action | Control |
 |--------|---------|
