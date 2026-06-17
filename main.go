@@ -858,7 +858,7 @@ func main() {
 
 	// ─── Boot banner ──────────────────────────────────────────────────────────
 	fmt.Println("\n" + strings.Repeat("=", 60)) // Separator line
-	fmt.Println(" CRYPTRACE – Bitcoin Flow Analysis Platform")
+	fmt.Println(" CRYPTRACER – Bitcoin Flow Analysis Platform")
 	fmt.Println("        Good luck! Stay vigilant o7")
 	fmt.Println(strings.Repeat("=", 60)) // Separator line
 

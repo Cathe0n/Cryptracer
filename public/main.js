@@ -4,7 +4,7 @@ import { closeEntityView, enrichFromMempool, enrichTxFromMempool, showEntityView
 import { runTracePath, closeTraceView } from './tracer.js';
 import { startPlayback, pausePlayback, resumePlayback, stopPlayback, togglePlayback, setPlaybackSpeed, increaseSpeed, decreaseSpeed, nextFrame, previousFrame, initPlayback, getPlaybackStats } from './playback.js';
 
-console.log('Cryptrace: D3 Renderer Loaded (Modular)');
+console.log('Cryptracer: D3 Renderer Loaded (Modular)');
 // Backend uses Blockstream API, Frontend uses Mempool.space for live enrichment.
 
 // =============================================================================
