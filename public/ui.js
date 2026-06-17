@@ -6,6 +6,18 @@ import { getAnnotation, setAnnotation, COLOR_PALETTE } from './annotations.js';
 // stub helpers in case graph.js isn't loaded first
 window.updateExpandBtn = window.updateExpandBtn || function() { /* fallback no-op */ };
 
+/**
+ * Export the current graph data to the clipboard as a JSON object.
+ * Useful for documentation or cross-tool analysis.
+ */
+window.exportGraphJSON = function() {
+    if (!state.fullGraphData) return;
+    const data = JSON.stringify(state.fullGraphData, null, 2);
+    navigator.clipboard.writeText(data).then(() => {
+        alert('Forensic graph data copied to clipboard in JSON format.');
+    });
+};
+
 // ─── Entity enrichment data ───────────────────────────────────────────────────
 /**
  * Known exchange identifiers mapped to display names and descriptions
@@ -595,11 +607,11 @@ export function showEntityView(nodeId) {
     <div class="ep-divider">
         <div class="ep-heading" style="margin-bottom:10px">📝 Your Annotations</div>
         <div style="margin-bottom:10px">
-            <span class="ep-label">Display Name</span>
+            <label class="ep-label" for="nodeName">Display Name</label>
             <input type="text" id="nodeName" placeholder="Custom display name..." class="ep-input" value="${customName}">
         </div>
         <div style="margin-bottom:10px">
-            <span class="ep-label">Notes</span>
+            <label class="ep-label" for="nodeNotes">Notes</label>
             <textarea id="nodeNotes" placeholder="Add personal notes about this node..." class="ep-input">${customNotes}</textarea>
         </div>
         <div style="margin-bottom:10px">
@@ -621,6 +633,7 @@ export function showEntityView(nodeId) {
             </div>
         </div>
         <button onclick="window.saveNodeAnnotation('${nodeId}')" class="ep-btn-primary">💾 Save Annotations</button>
+        <button onclick="window.exportGraphJSON()" class="ep-btn-primary" style="margin-top:8px!important;background:#475569!important">📋 Export Graph JSON</button>
     </div>`;
 
     // ── Live mempool enrichment block ────────────────────────────────────────
@@ -653,7 +666,7 @@ export function showEntityView(nodeId) {
         'WalletExplorer': {
             icon:'🏷️', label:'WalletExplorer',
             url:(id,isA)=>`https://www.walletexplorer.com/address/${id}`,
-            provides:'Deterministic attribution labels for known exchanges, pools & mixers.',
+            provides:'This isattribution database labels for known exchanges, pools & mixers.',
             caveat:'Label database frozen since 2016 — post-2016 services are unlisted.',
             keyNeeded: false,
             forTx: false,
@@ -661,7 +674,7 @@ export function showEntityView(nodeId) {
         'Esplora API':   {
             icon:'🔗', label:'Blockstream',
             url:(id,isA)=>isA?`https://blockstream.info/address/${id}`:`https://blockstream.info/tx/${id}`,
-            provides:'Ground-truth on-chain data: confirmed TXs, UTXOs, balance, script types.',
+            provides:'on-chain data: confirmed TXs, UTXOs, balance, script types.',
             caveat:'Only 50 most-recent TXs returned. Cannot identify the entity behind an address.',
             keyNeeded: false,
             forTx: true,

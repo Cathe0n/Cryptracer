@@ -1,13 +1,22 @@
 package mempool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 )
 
-const BaseURL = "https://mempool.space/api"
+var baseURLs = []string{
+	"https://mempool.space/api",
+	"https://mempool.emzy.de/api",
+	"https://mempool.guide/api",
+}
 
 // Status holds confirmation metadata for a transaction.
 // BlockHash is included so the aggregator can look up which pool
@@ -96,25 +105,83 @@ type blockSummary struct {
 	Extras blockExtras `json:"extras"`
 }
 
+// RecommendedFees represents the fee rates for different confirmation targets.
+type RecommendedFees struct {
+	FastestFee  int `json:"fastestFee"`
+	HalfHourFee int `json:"halfHourFee"`
+	HourFee     int `json:"hourFee"`
+	EconomyFee  int `json:"economyFee"`
+	MinimumFee  int `json:"minimumFee"`
+}
+
+// DifficultyAdjustment represents the current difficulty retarget status.
+type DifficultyAdjustment struct {
+	ProgressPercent       float64 `json:"progressPercent"`
+	DifficultyChange      float64 `json:"difficultyChange"`
+	EstimatedRetargetDate int64   `json:"estimatedRetargetDate"`
+	RemainingBlocks       int     `json:"remainingBlocks"`
+	RemainingTime         int64   `json:"remainingTime"`
+	PreviousRetarget      float64 `json:"previousRetarget"`
+	NextRetargetHeight    int     `json:"nextRetargetHeight"`
+	TimeAvg               int64   `json:"timeAvg"`
+}
+
 // ─── HTTP client ──────────────────────────────────────────────────────────────
 
 // client is a shared HTTP client with a reasonable timeout.
 var client = &http.Client{Timeout: 30 * time.Second}
 
 func get(path string, dst interface{}) error {
-	url := BaseURL + path
-	resp, err := client.Get(url)
-	if err != nil {
-		return fmt.Errorf("mempool.space GET %s: %w", path, err)
+	var lastErr error
+	for i, base := range baseURLs {
+		err := func() error {
+			// Use a shorter internal timeout per attempt to ensure quick takeover
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if i > 0 {
+				log.Printf("🔄 [MEMPOOL-FALLBACK] Provider failure (Previous: %v), trying %s", lastErr, base)
+			}
+
+			url := base + path
+			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+			if err != nil {
+				return err
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			// Explicitly catch rate limiting to trigger fallback immediately
+			if resp.StatusCode == 429 {
+				return fmt.Errorf("rate limited (429)")
+			}
+
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("HTTP %d", resp.StatusCode)
+			}
+
+			// Special handling for plain text responses (like tip height)
+			if _, ok := dst.(*int); ok {
+				body, _ := io.ReadAll(resp.Body)
+				val, err := strconv.Atoi(strings.TrimSpace(string(body)))
+				if err == nil {
+					*(dst.(*int)) = val
+					return nil
+				}
+			}
+
+			return json.NewDecoder(resp.Body).Decode(dst)
+		}()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 429 {
-		return fmt.Errorf("mempool.space rate limit reached for %s", path)
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("mempool.space HTTP %d for %s", resp.StatusCode, path)
-	}
-	return json.NewDecoder(resp.Body).Decode(dst)
+	return fmt.Errorf("all mempool providers failed: %v", lastErr)
 }
 
 // ─── Address endpoints ────────────────────────────────────────────────────────
@@ -153,6 +220,27 @@ func GetTx(txid string) (*Tx, error) {
 		return nil, err
 	}
 	return &tx, nil
+}
+
+// GetRecommendedFees returns current fee estimates.
+func GetRecommendedFees() (*RecommendedFees, error) {
+	var fees RecommendedFees
+	err := get("/v1/fees/recommended", &fees)
+	return &fees, err
+}
+
+// GetTipHeight returns the current block height.
+func GetTipHeight() (int, error) {
+	var height int
+	err := get("/blocks/tip/height", &height)
+	return height, err
+}
+
+// GetDifficultyAdjustment returns the difficulty retarget progress.
+func GetDifficultyAdjustment() (*DifficultyAdjustment, error) {
+	var da DifficultyAdjustment
+	err := get("/v1/difficulty-adjustment", &da)
+	return &da, err
 }
 
 // ─── Mining pool lookup ───────────────────────────────────────────────────────

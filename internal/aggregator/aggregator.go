@@ -19,9 +19,14 @@ import (
 	"money-tracer/internal/mempool"
 )
 
-const (
-	mempoolGuideBase = "https://mempool.guide/api"
-)
+// IsValidBitcoinAddress performs a basic structural check to ensure a string
+// resembles a valid Bitcoin address (Mainnet: Legacy, P2SH, or Bech32).
+func IsValidBitcoinAddress(addr string) bool {
+	if len(addr) < 26 || len(addr) > 90 {
+		return false
+	}
+	return strings.HasPrefix(addr, "1") || strings.HasPrefix(addr, "3") || strings.HasPrefix(addr, "bc1")
+}
 
 var entityTypeMap map[string]EntityType
 
@@ -33,7 +38,12 @@ func init() {
 }
 
 var (
-	whirlpoolPools     = map[int64]bool{100000: true, 1000000: true, 5000000: true, 50000000: true}
+	whirlpoolPools = map[int64]bool{100000: true, 1000000: true, 5000000: true, 50000000: true}
+	fallbackBases  = []string{
+		"https://mempool.guide/api",
+		"https://mempool.emzy.de/api",
+		"https://mempool.space/api",
+	}
 	mempoolGuideClient = &http.Client{Timeout: 10 * time.Second}
 )
 
@@ -267,19 +277,29 @@ func convertBlockstreamAddressInfo(bsinfo *blockstream.AddressInfo) *mempool.Add
 
 // mempoolGuideFetch is a helper for hitting the mempool.guide fallback
 func mempoolGuideFetch(ctx context.Context, path string, target interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", mempoolGuideBase+path, nil)
-	if err != nil { // No need to wrap here, NewRequestWithContext returns a fresh error
-		return err
+	var lastErr error
+	for _, base := range fallbackBases {
+		err := func() error {
+			req, err := http.NewRequestWithContext(ctx, "GET", base+path, nil)
+			if err != nil {
+				return err
+			}
+			resp, err := mempoolGuideClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("HTTP %d", resp.StatusCode)
+			}
+			return json.NewDecoder(resp.Body).Decode(target)
+		}()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
 	}
-	resp, err := mempoolGuideClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("mempool.guide HTTP %d", resp.StatusCode)
-	}
-	return json.NewDecoder(resp.Body).Decode(target)
+	return fmt.Errorf("all fallbacks failed: %v", lastErr)
 }
 
 // GetAddressTxsWithFallback attempts to fetch address transactions from mempool.space first,
@@ -1068,7 +1088,12 @@ var knownLabels = []struct {
 
 func ResolveEntityType(label string) EntityType {
 	lower := strings.ToLower(label)
-	for needle, entity := range entityTypeMap { // Use pre-built map for faster lookup
+	// Direct lookup first for exact matches (O(1))
+	if entity, ok := entityTypeMap[lower]; ok {
+		return entity
+	}
+	// Fallback to partial matches
+	for needle, entity := range entityTypeMap {
 		if strings.Contains(lower, needle) { // Still need Contains for partial matches
 			return entity
 		}
@@ -1193,6 +1218,11 @@ func contains(slice []string, s string) bool {
 
 func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string) UnifiedGraph {
 	builder := newGraphBuilder(ctx)
+
+	// Validate input before initiating heavy network requests
+	if !IsValidBitcoinAddress(id) && len(id) != 64 {
+		log.Printf("⚠️  [QUERY] Potential invalid identifier provided: %s", id)
+	}
 
 	// 1. Initial target node
 	builder.addNode(id, id, "Address", "Initial Query", 0)

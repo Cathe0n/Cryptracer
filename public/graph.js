@@ -1,7 +1,7 @@
 import { state } from './state.js';
-// D3.js Graph Renderer — Cryptracer
+// D3.js Graph Renderer — Cryptrace
 // Mempool.space API integrated for live on-chain enrichment
-console.log('Cryptracer: D3 Renderer Loaded');
+console.log('Cryptrace: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
 import { getNodeCustomColor, getNodeCustomName, getNodeCustomEdgeColor } from './annotations.js';
@@ -460,12 +460,17 @@ const setBusy = (isBusy, title = 'RECONSTRUCTING TIMELINE...', details = '') => 
 
 /** Fetch with 8s timeout and mempool.guide fallback */
 async function mempoolFetch(path) {
-    const apis = [MEMPOOL_API, "https://mempool.guide/api", "https://blockstream.info/api"];
+    const apis = [
+        MEMPOOL_API, 
+        "https://mempool.guide/api", 
+        "https://mempool.emzy.de/api",
+        "https://blockstream.info/api"
+    ];
     let lastErr;
 
     for (const api of apis) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        const timeout = setTimeout(() => controller.abort(), 5000); // Faster failover for takeover
         try {
             const res = await fetch(`${api}${path}`, { signal: controller.signal });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -484,9 +489,6 @@ const mempoolGetAddress    = addr  => mempoolFetch(`/address/${encodeURIComponen
 const mempoolGetUTXOs      = addr  => mempoolFetch(`/address/${encodeURIComponent(addr)}/utxo`);
 const mempoolGetTxs        = addr  => mempoolFetch(`/address/${encodeURIComponent(addr)}/txs`);
 const mempoolGetTx         = txid  => mempoolFetch(`/tx/${encodeURIComponent(txid)}`);
-const mempoolGetFees       = ()    => mempoolFetch('/v1/fees/recommended');
-const mempoolGetBlockHeight= ()    => mempoolFetch('/blocks/tip/height');
-
 /** Format satoshis → BTC string */
 function satsToBTC(sats) {
     return (sats / 1e8).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') || '0';
@@ -508,29 +510,36 @@ async function initNetworkStats() {
     if (!el) return;
     async function refresh() {
         try {
-            const [fees, height] = await Promise.all([mempoolGetFees(), mempoolGetBlockHeight()]);
+            const res = await fetch('/api/network-stats');
+            const data = await res.json();
+            
+            if (!data.fees || !data.height) {
+                el.innerHTML = `<span class="text-[10px] text-slate-600 italic">Stats partially available...</span>`;
+                if (!data.height) return;
+            }
+
+            const { fees, height, da } = data;
+
+            const daHtml = da ? `
+                <span class="text-slate-600">|</span>
+                <span class="text-slate-400 uppercase">Diff</span>
+                <span title="Next adjustment in ${da.remainingBlocks} blocks" class="text-violet-400 font-bold">${da.difficultyChange > 0 ? '+' : ''}${da.difficultyChange.toFixed(2)}%</span>
+            ` : '';
+
+            const feeHtml = fees ? `
+                <span class="text-slate-400 uppercase">Fees</span>
+                <span title="~10 min" class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-green-400"></span><span class="text-green-400 font-bold">${fees.fastestFee}</span></span>
+                <span title="~30 min" class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span><span class="text-yellow-400 font-bold">${fees.halfHourFee}</span></span>
+                <span title="~1 hr" class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span><span class="text-orange-400 font-bold">${fees.hourFee}</span></span>
+            ` : '';
+
             el.innerHTML = `
                 <div class="flex items-center gap-4 text-[10px] font-mono">
                     <span class="text-slate-400 uppercase tracking-wider">Block</span>
                     <span class="text-cyan-400 font-bold">#${height.toLocaleString()}</span>
                     <span class="text-slate-600">|</span>
-                    <span class="text-slate-400 uppercase">Fees (sat/vB)</span>
-                    <span title="~10 min" class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-                        <span class="text-green-400 font-bold">${fees.fastestFee}</span>
-                    </span>
-                    <span title="~30 min" class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
-                        <span class="text-yellow-400 font-bold">${fees.halfHourFee}</span>
-                    </span>
-                    <span title="~1 hr" class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
-                        <span class="text-orange-400 font-bold">${fees.hourFee}</span>
-                    </span>
-                    <span title="Economy" class="flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                        <span class="text-slate-400 font-bold">${fees.economyFee}</span>
-                    </span>
+                    ${feeHtml}
+                    ${daHtml}
                     <a href="https://mempool.space" target="_blank"
                        class="text-cyan-600 hover:text-cyan-400 transition underline underline-offset-2 ml-1 text-[9px]">
                        mempool.space ↗
@@ -987,6 +996,7 @@ function _renderGraphImpl(graphData, targetId) {
         updateNodeCountDisplay(nodes.length);
         document.getElementById('edgeCount').textContent = links.length.toLocaleString();
 
+        initNetworkStats(); // Ensure ticker is started
         initTimeline(links);
         initPlayback();  // Initialize time-travel animation with current graph timestamps
         setBusy(true, 'CALCULATING LAYOUT...', 'Running D3 force simulation');

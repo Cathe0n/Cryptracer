@@ -89,6 +89,21 @@ func loadEnv() {
 	}
 }
 
+func persistEnv(config Config) error {
+	// Prepare the map of variables to write
+	envData := map[string]string{
+		"NEO4J_URI":      config.Neo4jURI,
+		"NEO4J_USER":     config.Neo4jUser,
+		"NEO4J_PASS":     config.Neo4jPass,
+		"CHAINABUSE_KEY": config.ChainAbuseKey,
+		"BITQUERY_KEY":   config.BitqueryKey,
+	}
+
+	// Using godotenv.Write to save the file back to disk
+	// This ensures the config survives an application restart
+	return godotenv.Write(envData, ".env")
+}
+
 func updateConfig(config Config) (string, error) {
 	configMutex.Lock()
 	defer configMutex.Unlock()
@@ -104,6 +119,12 @@ func updateConfig(config Config) (string, error) {
 	currentConfig.Neo4jPass = config.Neo4jPass
 	currentConfig.ChainAbuseKey = config.ChainAbuseKey
 	currentConfig.BitqueryKey = config.BitqueryKey
+
+	// Attempt to persist to .env file
+	if err := persistEnv(config); err != nil {
+		log.Printf("⚠️  Failed to persist configuration to .env: %v", err)
+		// We don't return here because the in-memory update still worked
+	}
 
 	log.Printf("🔄 Connecting to Neo4j at %s...", config.Neo4jURI)
 
@@ -157,13 +178,24 @@ func main() {
 		if !dbInitialized {
 			log.Println("⚠️  Database not configured — DB writes will be skipped.")
 		}
-		fmt.Println("\n[SYSTEM] 🚀 Starting High-Speed Data Import...")
+		fmt.Println("\n[SYSTEM] Starting High-Speed Data Import...")
 		parser.ImportData("./data/Blockchair_bitcoin_inputs_20260130.tsv", true)
 		parser.ImportData("./data/Blockchair_bitcoin_outputs_20260130.tsv", false)
 		return
 	}
 
-	r := gin.Default()
+	// Set Gin mode based on the GIN_MODE environment variable
+	if os.Getenv("GIN_MODE") == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// gin.New() creates a clean engine without the default Logger and Recovery middleware
+	// this prevents double-logging since we use a custom logAPI middleware below.
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	// Explicitly disable trusting all proxies to improve security and suppress warnings
+	r.SetTrustedProxies(nil)
 
 	// ── Logging middleware ────────────────────────────────────────────────────
 	r.Use(func(c *gin.Context) {
@@ -199,6 +231,28 @@ func main() {
 
 	r.GET("/api/config", func(c *gin.Context) {
 		c.JSON(200, gin.H{"config": getConfig(), "initialized": dbInitialized})
+	})
+
+	// ── Network stats proxy ──────────────────────────────────────────────────
+	// Centralizes fallback logic to bypass CORS issues in the browser.
+	r.GET("/api/network-stats", func(c *gin.Context) {
+		fees, errF := mempool.GetRecommendedFees()
+		height, errH := mempool.GetTipHeight()
+		da, _ := mempool.GetDifficultyAdjustment()
+
+		if errF != nil || errH != nil {
+			log.Printf("❌ [STATS] Failure - Fees: %v, Height: %v", errF, errH)
+			c.JSON(200, gin.H{
+				"error":  "Some stats unavailable",
+				"height": height, // return what we have
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"fees":   fees,
+			"height": height,
+			"da":     da,
+		})
 	})
 
 	// ── Main forensic graph API ───────────────────────────────────────────────
@@ -804,7 +858,8 @@ func main() {
 
 	// ─── Boot banner ──────────────────────────────────────────────────────────
 	fmt.Println("\n" + strings.Repeat("=", 60)) // Separator line
-	fmt.Println(" CRYPTRACER – Money Flow Analysis Platform")
+	fmt.Println(" CRYPTRACE – Bitcoin Flow Analysis Platform")
+	fmt.Println("        Good luck! Stay vigilant o7")
 	fmt.Println(strings.Repeat("=", 60)) // Separator line
 
 	if dbInitialized {
@@ -828,7 +883,7 @@ func main() {
 
 	fmt.Println(strings.Repeat("-", 60))
 	fmt.Println("📡 Endpoints:")
-	fmt.Println("   GET /api/mixer-check/:txid         — mixer analysis")
+	fmt.Println("   GET /api/mixer-check/:txid        — mixer analysis")
 	fmt.Println("   GET /api/exchange-check/:address  — exchange analysis")
 	fmt.Println("   GET /api/gambling-check/:address  — gambling detection")
 	fmt.Println("   GET /api/mining-check/:address    — mining pool detection")
