@@ -48,38 +48,8 @@
 ---
 
 <p align="center">
-  <img width="100%" alt="Cryptrace Dashboard Overview" src="https://github.com/user-attachments/assets/bb251e7d-397e-42ce-945f-768d3026f573" />
-</p>
+  <img width="1920" height="951" alt="image" src="https://github.com/user-attachments/assets/fc8e7183-8d8a-4891-87b3-22d503c35355" />
 
----
-
----
-
-<h3 align="center">Project Activity</h3>
-
-<div align="center">
-  <table align="center">
-    <thead>
-      <tr>
-        <th align="center">Development Status</th>
-        <th align="center">Last Code Commit</th>
-        <th align="center">Open Issues</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td align="center"><img src="https://img.shields.io/badge/Status-Active%20Development-rocket?style=flat-square&color=2ecc71" alt="Status" /></td>
-        <td align="center"><img src="https://img.shields.io/github/last-commit/Cathe0n/Cryptrace?style=flat-square&color=3498db" alt="Last Commit" /></td>
-        <td align="center"><img src="https://img.shields.io/github/issues/Cathe0n/Cryptrace?style=flat-square&color=e74c3c" alt="Issues" /></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
----
-
-<p align="center">
-  <img width="100%" alt="Cryptracer Dashboard Overview" src="https://github.com/user-attachments/assets/bb251e7d-397e-42ce-945f-768d3026f573" />
 </p>
 
 ---
