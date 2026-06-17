@@ -54,7 +54,7 @@
 
 ---
 
-## Overview | "Just a short decription hehe" (^.^)
+## Overview | "Just a short description hehe" (^.^)
 
 **Cryptracer** is a project designed for advanced Bitcoin transaction analysis. It reconstructs money flows on the blockchain by:
 
