@@ -1,7 +1,7 @@
 import { state } from './state.js';
-// D3.js Graph Renderer — Cryptrace
+// D3.js Graph Renderer — Cryptracer
 // Mempool.space API integrated for live on-chain enrichment
-console.log('Cryptrace: D3 Renderer Loaded');
+console.log('Cryptracer: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
 import { getNodeCustomColor, getNodeCustomName, getNodeCustomEdgeColor } from './annotations.js';

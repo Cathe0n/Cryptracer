@@ -17,52 +17,52 @@
 2. **Detecting coin mixers** through pattern recognition and behavioral analysis
 3. **Identifying exchange behavior** using transaction volume and uniformity heuristics
 4. **Scoring risk** using the ChainAbuse API to flag illicit addresses
-5. **Visualizing relationships** in an interactive D3.js graph with live mempool enrichment
+5. **Visualising relationships** in an interactive D3.js graph with live mempool enrichment
 
-This tool is intended for **Bitcoin investigations**, and **forensic analysis** of Bitcoin transactions. 
+This tool is intended for **forensic analysis** of Bitcoin transactions.
 
 ---
 
 ##  Features
 
-###  Core Capabilities
-
-- **Forward Path Tracing**: Follow Bitcoin from a starting address through multiple hops using intelligent heuristics
+  **Forward Path Tracing**: Follow Bitcoin from a starting address through multiple hops using intelligent heuristics
   - Fresh address detection (addresses not seen in inputs)
   - Round amount identification (intentional payments vs. change)
   - Modern script type prioritization (Taproot > SegWit > P2PKH)
   - Cycle detection (prevents infinite loops)
 
-- **Mixer Detection**: Identifies coin mixing transactions with configurable thresholds
+  **Mixer Detection**: Identifies coin mixing transactions with configurable thresholds
   - Uniform outputs detection (same value outputs)
   - RBF-disabled flagging (Wasabi signature)
   - Script type mixing analysis
   - Confidence scoring (0-100)
 
-- **Exchange Detection**: Flags addresses exhibiting exchange-like behavior
+  **Exchange Detection**: Flags addresses exhibiting exchange-like behavior
   - High transaction volume analysis
   - Output uniformity patterns
   - Behavioral consistency scoring
 
-- **Rich Risk Scoring**: Integration with ChainAbuse API for verified threat intelligence
+  **Rich Risk Scoring**: Integration with ChainAbuse API for verified threat intelligence
   - Report count and verification status
   - Category classification (ransom, fraud, malware, etc.)
   - Confidence scores and historical data
 
-- **Interactive Visualization**: D3.js-powered graph with advanced controls
+  **Interactive Visualization**: D3.js-powered graph with advanced controls
   - Force-directed layout and hierarchical tree view
   - Zoom, pan, freeze, and recenter controls
   - Node search and history tracking
   - Edge tooltips with transaction amounts and timestamps
   - Dynamic expansion of address nodes in the graph
+    
+---
 
-### Data Integration
+## Data Sources
 
 - **Mempool.space API**: Primary source for live mempool state, block history, and mining pool identification.
-- **Blockstream (Esplora) API**: High-reliability fallback for address history and UTXO verification.
+- **Blockstream (Esplora) API**: Fallback for address history and UTXO verification.
 - **WalletExplorer API**: Entity attribution for historical identification of exchanges and services.
-- **Bitquery GraphQL**: Deep historical flow analysis and multi-hop transaction reconstruction.
-- **ChainAbuse API**: Real-time community threat intelligence and risk categorization.
+- **Bitquery GraphQL**: Historical flow analysis and multi-hop transaction reconstruction.
+- **ChainAbuse API**: Community threat intelligence and risk categorization.
 - **Neo4j Graph DB**: Persistent storage for investigation history and co-spend cluster computation.
 
 ---
@@ -81,28 +81,37 @@ This tool is intended for **Bitcoin investigations**, and **forensic analysis** 
 |---------|---------|-----------|-----------------|
 | **ChainAbuse** | Risk/abuse data |  Yes | [chainabuse.com](https://www.chainabuse.com) |
 | **Bitquery** | Extended transaction flows |  Limited | [bitquery.io](https://bitquery.io) |
+| **Blockstream** | Real-time blockchain data |  Unlimited | Free public API |
+| **Mempool.space** | Live fees & network stats |  Unlimited | Free public API |
+| **Mempool.guide** | Live data fallback | Unlimited | Free public API |
+| **WalletExplorer.com** | Entity Attribution and cross valifation |  Unlimited | Free public API |
 
 ### Database
 
-- **Neo4j Community Edition** or higher
-  - URI: `bolt://localhost:7687` (Or other localhost IP :3)
-  - Default credentials: `neo4j` / `password` "Change this!!" <-< 
+  - **Neo4j Community Edition** or higher
+  - URI: `bolt://localhost:7687` (adjust for your setup)
+  - Default credentials: `neo4j` / `password`
 
 ---
 
-##  Installation
+
+## Installation for Windows 11/10 | "Should be easy as I've compiled it for you" ^-^
+
+[![Download Latest Release](https://img.shields.io/github/v/release/Cathe0n/Cryptrace?style=for-the-badge&label=Download&color=success)](https://github.com/Cathe0n/Cryptrace/releases)
 
 
-##  Installation
+
+
+##  Installation from Source code | "Woah, I like you already" o.o
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/money-tracer.git
-cd money-tracer
+git clone <https://github.com/Cathe0n/Cryptrace.git>
+cd Cryptrace
 ```
 
-### 2. Install Go Dependencies
+### 2. Install Go Dependencies | "I love Golang" :3
 
 ```bash
 go mod download
@@ -112,44 +121,27 @@ go mod tidy
 ### 3. Build the Application
 
 ```bash
-go build -o money-tracer.exe main.go
+go build -o Cryptracer.exe
 ```
 
-Or run directly:
+Or "run directly...Terminals, yay... " '-'
 
 ```bash
 go run main.go
 ```
 
-### 4. Access the Application
+---
+
+### 4. Access the Application | "Uhh use Waterfox...Or Something, Chrome is poopoo" q('.')q 
 
 - **Main Dashboard**: [http://localhost:8080/ui/index.html](http://localhost:8080/ui/index.html)
-- **Setup/Configuration**: [http://localhost:8080/ui/setup.html](http://localhost:8080/ui/setup.html)
+- **Setup/Configuration**: [http://localhost:8080/ui/setup.html](http://localhost:8080/ui/setup.html) "This is where you configure your API keys, Cryptrace can still work but there'll be no reputation check for the Bitcoin address." <.<
 
 ---
 
-## Configuration
+### Runtime Configuration | "Neo4J integration is not fully optimised yet, if you wish to save your session do so with the save session feature" [!] ＼(o_ｏ)／ 
 
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# Neo4j Database
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASS=your_password_here
-
-# Third-party APIs (optional)
-CHAINABUSE_KEY=your_chainabuse_api_key
-BITQUERY_KEY=your_bitquery_api_key
-```
-
-### Runtime Configuration
-
-Alternatively, configure settings via the web UI:
-
-1. Visit [http://localhost:8080/ui/setup.html](http://localhost:8080/ui/setup.html)
+1. Open [http://localhost:8080/ui/setup.html](http://localhost:8080/ui/setup.html)
 2. Fill in your database connection and API keys
 3. Click **Save Configuration**
 
@@ -158,18 +150,6 @@ The application will:
 - Validate API keys
 - Enable/disable features based on available credentials
 - Store configuration in memory (persists while running)
-
-### Startup Messages
-
-```
-============================================================
- Cryptrace is READY
-============================================================
- Main App:        http://localhost:8080/ui/index.html
-
- Good luck! And stay vigilant :3
-============================================================
-```
 
 ---
 
@@ -184,14 +164,14 @@ The application will:
 - Press **Enter** or click **Search**
 - The application reconstructs a transaction graph from live blockchain data
 
-#### 2. **Explore the Graph**
+#### 2. **Explore Cryptrace** "Should be easy...Right?" (｡-.-)
 
 | Action | Control |
 |--------|---------|
 | **Zoom In/Out** | Scroll wheel or `+` / `-` buttons |
-| **Pan** | Click and drag workspace background |
+| **Pan** | Click and drag workspace |
 | **Center Graph** | Click **Recenter** button |
-| **Toggle Labels** | Hide/Show Labels — "Simplicity" (‾◡‾) |
+| **Toggle Labels** | Hide/Show Labels  | — "Simplicity" (‾◡‾)
 | **Toggle Info** | Click **[INFO]** to show amount + time on edges |
 | **Freeze Layout** | Click **[FREEZE]** to lock/unlock node positions |
 | **Switch Layout** | Toggle between **Force** (physics) and **Tree** (hierarchy) |
@@ -202,31 +182,31 @@ The application will:
 | **View Edge Details** | Hover over edges (Requires **[TOOLTIPS]** active) |
 | **Search & Jump** | Use search bar (Top Right) to find IDs, Labels, or Entities |
 | **Expand Graph** | Use **Expand neighbors** or **⚡ Expand All** |
-| **Save Session** | Click **Save Session** to export a `.ctk` forensic file |
 
-#### 3. **Inspect a Node & Entity Intelligence**
+"There's other features as well hehe" (‾◡‾)
 
-- **Forensic Panel**: Clicking any node opens a deep-dive panel showing balance, transaction counts, and risk classification.
-- **Cross-Validation**: Verify identities in real-time across **ChainAbuse** (abuse reports), **WalletExplorer** (historical service labels), **Bitquery** (flow volume), and **Mempool.space** (live UTXO state).
+#### 3. **Inspect a Node & Entity Intelligence** 
+
+- **Forensic Panel**: Clicking any node opens a panel showing balance, transaction counts, and risk classification.
+- **Cross-Validation**: Verify identities in real-time across all APIs
 - **Custom Annotations**: Add custom nicknames or change node colors directly in the panel to highlight key actors in your investigation.
-- **Sub-graph Expansion**: Use the "Expand" tools on any address to dynamically load its neighbors into the existing graph without a full reload.
+- **Domain Expansion**: Use the "Expand" tools on any address to dynamically load its neighbors into the existing graph without a full reload. "No, it's not a damn curse technique." '-' 
 
 #### 4. **Forward Trace & Peeling Heuristics**
 
 - **Peeling Chain Detection**: The tracer automatically identifies and follows "peeling" behavior (one small payment + one large change output) to find the primary stack of funds.
 - **Heuristic Scoring**: Each hop is evaluated based on script type priority (Taproot > SegWit), round amount identification, and address age.
-- **Automated Halting**: The trace intelligently stops when funds reach a **Mixer** (Wasabi, Whirlpool, JoinMarket), a **Known Service** (Exchange), or a high-risk flagged address.
+- **Automated Halting**: The trace stops when funds reach a **Mixer** (Wasabi, Whirlpool, JoinMarket), a **Known Service** (Exchange), or a high-risk flagged address.
 - **Interactive Timeline**: Traced paths are highlighted in orange with a glowing destination ring, and are fully integrated into the sidebar hop-by-hop breakdown.
 
 #### 5. **Investigation Management & Persistence**
 
-- **Global Search**: Instantly locate any address, transaction, or labeled entity (e.g., "Huobi") currently present in the graph using the top-right search tool.
+- **Global Search**: Instantly locate any address, transaction, or labeled entity (e.g., "Huobi") currently present in the graph using the top-left search tool.
 - **Persistent History**: The sidebar tracks all investigated targets in the current session, displaying their risk score and graph complexity for quick switching.
-- **Forensic Session Files**: Export your entire investigation—including the graph layout, all custom labels, and trace results—as a `.ctk` file to resume later or share with other investigators.
-
+- **Forensic Session Files**: Export your entire investigation including the graph layout, all custom labels, and trace results as a `.ctk` file to resume later or share with other investigators. "Very Useful!!" 'o'
 ---
 
-##  Data Import
+##  Data Import | "This is for offline analysis but you need to know which Bitcoin block you need to get, I use Blockchair as they have an extensive list!" ＼('_')／ 
 
 Import pre-fetched blockchain data from TSV files into Neo4j for offline analysis.
 
@@ -258,11 +238,11 @@ index  tx_hash  vout/vin  scriptpubkey_type  value_btc  ...  address
 | **aggregator** | Core engine for graph construction and behavioral forensics (Mixer, Exchange, Gambling, Mining, and Peeling Chains). |
 | **mempool** | Primary data client for Mempool.space (address/tx info, fees, and block-level pool metadata). |
 | **blockstream** | Fallback client for Esplora API ensuring data consistency during network outages. |
-| **bitquery** | GraphQL implementation for high-volume historical flow analysis. |
-| **intel** | Centralized intelligence hub for ChainAbuse risk and WalletExplorer labels. |
+| **bitquery** | GraphQL implementation for historical flow analysis. |
+| **intel** | Centralised intelligence hub for ChainAbuse risk and WalletExplorer labels. |
 | **tracer** | Forward pathfinder using heuristic scoring and change-output detection. |
 | **db** | Neo4j driver wrapper for persistence and co-spend wallet clustering. |
-| **parser** | Optimized TSV ingestor for importing massive offline forensic datasets. |
+| **parser** | TSV ingestor for importing massive offline forensic datasets. |
 
 ---
 
@@ -275,22 +255,13 @@ index  tx_hash  vout/vin  scriptpubkey_type  value_btc  ...  address
 | **Go** | 1.24.0+ | Core language |
 | **Gin** | 1.11.0 | HTTP framework |
 | **Neo4j Go Driver** | 5.28.4 | Graph database client |
-| **godotenv** | 1.5.1 | Environment variable loading |
-
-
-### Data Sources
-
-| Source | Data Type |
-|---|---|
-| **Mempool.space** | Live mempool, fees, block mining pool attribution, and pending TXs. |
-| **Blockstream (Esplora)** | Redundant address history, confirmed balances, and script validation. |
-| **Bitquery** | Historical transaction volume, deep multi-hop flows, and historical entity scoring. |
-| **ChainAbuse** | Scam reports, ransomware flagging, and community-verified threat intelligence. |
-| **WalletExplorer** | Historical attribution database for exchanges, mixers, and mining pools. |
-| **Neo4j** | Local graph persistence, pattern matching, and entity clustering. |
 
 ---
 
+### Project Activity & Status
 
-**Last Updated:** March 2, 2026  
-**Status:** Active Development 🚀
+| Status | Last Code Commit | Open Issues 
+| :---: | :---: | :---: |
+| ![Development Status](https://img.shields.io/badge/Status-Active%20Development-rocket?style=flat-square&color=2ecc71) | ![GitHub last commit](https://img.shields.io/github/last-commit/Cathe0n/Cryptrace?style=flat-square&color=3498db) | ![GitHub issues](https://img.shields.io/github/issues/Cathe0n/Cryptrace?style=flat-square&color=e74c3c) 
+
+---
