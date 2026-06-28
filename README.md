@@ -14,6 +14,8 @@
   <img src="https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JS Frontend" />
   <img src="https://img.shields.io/badge/Neo4j-Graph%20Database-008CC1?style=for-the-badge&logo=neo4j&logoColor=white" alt="Neo4j Layer" />
   <img src="https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu&logoColor=white" alt="GPLv3 License" />
+  <a href="https://discord.com/users/604615480891670530">
+    <img src="https://img.shields.io/badge/Discord-DM%20%40cathe0n-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord Support" />
 </p>
 
 <p align="center">
