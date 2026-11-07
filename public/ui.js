@@ -6,10 +6,7 @@ import { getAnnotation, setAnnotation, COLOR_PALETTE } from './annotations.js';
 // stub helpers in case graph.js isn't loaded first
 window.updateExpandBtn = window.updateExpandBtn || function() { /* fallback no-op */ };
 
-/**
- * Export the current graph data to the clipboard as a JSON object.
- * Useful for documentation or cross-tool analysis.
- */
+
 window.exportGraphJSON = function() {
     if (!state.fullGraphData) return;
     const data = JSON.stringify(state.fullGraphData, null, 2);
@@ -644,7 +641,7 @@ export function showEntityView(nodeId) {
     html += `
     <div class="ep-divider">
         <div class="ep-row" style="margin-bottom:10px">
-            <div class="ep-heading">🌐 Live On-Chain Data</div>
+            <div class="ep-heading">Live On-Chain Data</div>
             <button id="btnFetchMempool" onclick="${enrichFn}" class="ep-btn-primary" style="width:auto!important;padding:5px 12px!important">⬇ Fetch</button>
         </div>
         <div id="mempoolEnrichContent" class="ep-body-sm" style="font-style:italic">
@@ -656,7 +653,7 @@ export function showEntityView(nodeId) {
     // Source definitions — what each provider contributes and its limitations.
     const SRC_DEF = {
         'ChainAbuse':    {
-            icon:'🚨', label:'ChainAbuse',
+            icon:'', label:'ChainAbuse',
             url:(id,isA)=>`https://www.chainabuse.com/address/${id}`,
             provides:'Community abuse reports: scams, ransomware, phishing, darknet.',
             caveat:'Crowdsourced — absence of a report ≠ clean address.',
