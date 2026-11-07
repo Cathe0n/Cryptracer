@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"money-tracer/db"
@@ -12,8 +14,11 @@ import (
 	"money-tracer/internal/mempool"
 	"money-tracer/internal/tracer"
 	"money-tracer/parser"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,6 +168,62 @@ func getConfig() Config {
 	}
 }
 
+// ─── Browser launch ───────────────────────────────────────────────────────────
+
+// openBrowser hands rawURL to the operating system's default browser.
+// It is deliberately best-effort: a headless or locked-down machine must still
+// get a working server, so a failure is logged and the server keeps running.
+func openBrowser(rawURL string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		// rundll32 invokes the registered URL handler without flashing a console
+		// window the way "cmd /c start" would.
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL)
+	case "darwin":
+		cmd = exec.Command("open", rawURL)
+	default:
+		cmd = exec.Command("xdg-open", rawURL)
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("⚠️  Could not open the browser automatically (%v) — open %s manually.", err, rawURL)
+		return
+	}
+	// Reap the launcher in the background: some browsers only exit when their
+	// window closes, and startup must never wait on that.
+	go func() { _ = cmd.Wait() }()
+}
+
+// isCryptracerRunning reports whether something answering Cryptrace's own
+// /api/config endpoint is already listening at baseURL.
+func isCryptracerRunning(baseURL string) bool {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(baseURL + "/api/config")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return err == nil && bytes.Contains(body, []byte(`"initialized"`))
+}
+
+// launchBrowser opens rawURL in the default browser unless CRYPTRACER_NO_BROWSER
+// is set, which keeps servers, containers and automated runs headless.
+func launchBrowser(rawURL string) {
+	if os.Getenv("CRYPTRACER_NO_BROWSER") != "" {
+		log.Printf("🌐 Browser auto-open disabled (CRYPTRACER_NO_BROWSER) — open %s manually.", rawURL)
+		return
+	}
+	fmt.Printf("🌐 Opening %s in your default browser...\n", rawURL)
+	// Start() only spawns the launcher, so this returns immediately; waiting is
+	// left to the background goroutine inside openBrowser.
+	openBrowser(rawURL)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
@@ -236,9 +297,23 @@ func main() {
 	// ── Network stats proxy ──────────────────────────────────────────────────
 	// Centralizes fallback logic to bypass CORS issues in the browser.
 	r.GET("/api/network-stats", func(c *gin.Context) {
-		fees, errF := mempool.GetRecommendedFees()
-		height, errH := mempool.GetTipHeight()
-		da, _ := mempool.GetDifficultyAdjustment()
+		// Reset API status for each new request to network stats to try primary first
+		aggregator.ResetMempoolAPIStatus()
+
+		// The three stats are independent upstream queries — run them in
+		// parallel so the poll takes the slowest single call, not the sum.
+		var (
+			fees       map[string]int
+			height     int
+			da         *mempool.DifficultyAdjustment
+			errF, errH error
+			wg         sync.WaitGroup
+		)
+		wg.Add(3)
+		go func() { defer wg.Done(); fees, errF = aggregator.GetRecommendedFeesWithFallback(c.Request.Context()) }()
+		go func() { defer wg.Done(); height, errH = aggregator.GetTipHeightWithFallback(c.Request.Context()) }()
+		go func() { defer wg.Done(); da, _ = aggregator.GetDifficultyAdjustmentWithFallback(c.Request.Context()) }()
+		wg.Wait()
 
 		if errF != nil || errH != nil {
 			log.Printf("❌ [STATS] Failure - Fees: %v, Height: %v", errF, errH)
@@ -261,6 +336,9 @@ func main() {
 		start := time.Now()
 		id := c.Param("id")
 
+		// Reset API status for each new investigation
+		aggregator.ResetMempoolAPIStatus()
+
 		if !dbInitialized {
 			log.Printf("⚠️  Database not configured — local DB queries will be skipped for %s", id)
 		}
@@ -278,6 +356,60 @@ func main() {
 			len(graph.Nodes), len(graph.Edges), time.Since(start))
 
 		c.JSON(200, gin.H{"graph": graph})
+	})
+
+	// ── Batch forensic graph API ─────────────────────────────────────────────
+	// POST /api/trace-batch   body: {"ids": ["addr1", "addr2", ...]}
+	//
+	// Builds graphs for several identifiers with bounded server-side
+	// concurrency. Used by the frontend "Expand All" so it no longer pays a
+	// serial full-cost round-trip per node. Results are keyed by id; ids that
+	// fail are simply absent from the map.
+	r.POST("/api/trace-batch", func(c *gin.Context) {
+		start := time.Now()
+
+		var body struct {
+			IDs []string `json:"ids" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request — expected {\"ids\": [...]}"})
+			return
+		}
+		if len(body.IDs) == 0 {
+			c.JSON(400, gin.H{"error": "ids must not be empty"})
+			return
+		}
+		if len(body.IDs) > 50 {
+			c.JSON(400, gin.H{"error": "Too many ids — max 50 per batch"})
+			return
+		}
+
+		configMutex.RLock()
+		caKey := currentConfig.ChainAbuseKey
+		bqKey := currentConfig.BitqueryKey
+		configMutex.RUnlock()
+
+		graphs := make(map[string]aggregator.UnifiedGraph, len(body.IDs))
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, 4) // bound concurrent upstream work
+
+		for _, target := range body.IDs {
+			wg.Add(1)
+			go func(id string) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				g := aggregator.BuildVerifiedFTM(c.Request.Context(), id, caKey, bqKey)
+				mu.Lock()
+				graphs[id] = g
+				mu.Unlock()
+			}(target)
+		}
+		wg.Wait()
+
+		log.Printf("✅ [BATCH] Built %d/%d graph(s) in %v", len(graphs), len(body.IDs), time.Since(start))
+		c.JSON(200, gin.H{"graphs": graphs})
 	})
 
 	// ── Live history ──────────────────────────────────────────────────────────
@@ -622,6 +754,9 @@ func main() {
 		source := c.Query("source")
 		isAddr := c.Query("is_address") != "false"
 
+		// Reset API status for each new verification request
+		aggregator.ResetMempoolAPIStatus()
+
 		configMutex.RLock()
 		caKey := currentConfig.ChainAbuseKey
 		bqKey := currentConfig.BitqueryKey
@@ -635,7 +770,7 @@ func main() {
 					"error": "ChainAbuse API key not configured."})
 				return
 			}
-			riskData := intel.GetChainAbuseRisk(address, caKey)
+			riskData := intel.GetChainAbuseRiskLive(address, caKey)
 			if riskData == nil {
 				c.JSON(200, gin.H{"source": "chainabuse", "ok": true,
 					"found": false, "report_count": 0,
@@ -661,7 +796,7 @@ func main() {
 			})
 
 		case "walletexplorer":
-			label := intel.GetLabel(address)
+			label := intel.GetLabelLive(address)
 			if label == "" {
 				c.JSON(200, gin.H{"source": "walletexplorer", "ok": true,
 					"found": false, "label": "",
@@ -864,11 +999,11 @@ func main() {
 
 	if dbInitialized {
 		fmt.Println("✅ Database:        Connected")
-		fmt.Println("🌐 Main App:        http://localhost:8080/ui/index.html")
 	} else {
 		fmt.Println("⚠️  Database:        Not Configured")
 		fmt.Println("🔧 Setup:           http://localhost:8080/ui/setup.html")
 	}
+	fmt.Println("🌐 Main App:        http://localhost:8080/ui/index.html")
 
 	if currentConfig.ChainAbuseKey != "" {
 		fmt.Println("🛡️  ChainAbuse:      Enabled")
@@ -890,5 +1025,31 @@ func main() {
 	fmt.Println("   GET /api/cluster/:address         — co-spend wallet cluster")
 	fmt.Println(strings.Repeat("=", 60) + "\n")
 
-	r.Run(":8080")
+	// Always open the dashboard; setup remains available from its settings link.
+	uiURL := "http://localhost:8080/ui/index.html"
+
+	// Bind the port before announcing the URL so the browser never races a
+	// server that has not started yet.
+	ln, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		// Clicking the exe twice is the common case, so a busy port usually just
+		// means an earlier instance is still up: reuse it instead of dying with a
+		// raw "address already in use" error.
+		if isCryptracerRunning("http://localhost:8080") {
+			fmt.Println("⚠️  Cryptrace is already running — opening the existing instance.")
+			launchBrowser(uiURL)
+			return
+		}
+		log.Printf("❌ Port 8080 is already in use by another program: %v", err)
+		return
+	}
+	defer ln.Close()
+
+	fmt.Println("🚀 Server listening on http://localhost:8080")
+	launchBrowser(uiURL)
+
+	srv := &http.Server{Handler: r}
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("❌ Server error: %v", err)
+	}
 }

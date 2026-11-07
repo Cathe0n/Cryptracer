@@ -15,8 +15,66 @@ import (
 	"money-tracer/db"
 	"money-tracer/internal/bitquery"
 	"money-tracer/internal/blockstream"
+	"money-tracer/internal/cache"
 	"money-tracer/internal/intel"
 	"money-tracer/internal/mempool"
+)
+
+var entityTypeMap map[string]EntityType
+
+func init() {
+	entityTypeMap = make(map[string]EntityType)
+	for _, entry := range knownLabels {
+		entityTypeMap[entry.needle] = entry.entity
+	}
+	currentMempoolProvider = ProviderMempoolSpace // Initialize to primary
+}
+
+// MempoolAPIProvider represents the currently active API provider for mempool-like data.
+type MempoolAPIProvider int
+
+const (
+	ProviderMempoolSpace MempoolAPIProvider = iota // Primary: mempool.space
+	ProviderMempoolGuide                           // Fallback 1: mempool.guide
+	ProviderBlockstream                            // Fallback 2: blockstream.info
+)
+
+var (
+	whirlpoolPools = map[int64]bool{100000: true, 1000000: true, 5000000: true, 50000000: true}
+	fallbackBases  = []string{ // Moved to package level
+		"https://mempool.guide/api",
+		"https://mempool.emzy.de/api",
+		"https://mempool.space/api",
+	}
+	mempoolGuideClient = &http.Client{Timeout: 10 * time.Second}
+
+	mempoolAPILock         sync.RWMutex       // Global lock
+	currentMempoolProvider MempoolAPIProvider // Global provider state
+)
+
+// ─────────────────────────────────────────────────────────────
+// RESULT CACHES
+// Cross-request caches so repeat views of the same address (search → node
+// click → expansion → history panel) do not re-query every upstream API.
+// cache.Fetch also collapses concurrent identical fetches into one call.
+// ─────────────────────────────────────────────────────────────
+
+var (
+	txsCache   = cache.New(4096)  // address → transaction history
+	infoCache  = cache.New(2048)  // address → chain/mempool stats
+	txCache    = cache.New(2048)  // txid → single transaction
+	statsCache = cache.New(64)    // fees / tip height / difficulty
+	blockPools = cache.New(16384) // block hash → mining pool
+)
+
+const (
+	addrTxTTL   = 30 * time.Second
+	addrInfoTTL = 30 * time.Second
+	txTTL       = 30 * time.Second
+	statsTTL    = 30 * time.Second
+	// Block metadata is immutable once mined — pool attribution never
+	// changes, so a long TTL is safe and every later graph reuses it.
+	blockPoolTTL = 30 * 24 * time.Hour
 )
 
 // IsValidBitcoinAddress performs a basic structural check to ensure a string
@@ -27,25 +85,6 @@ func IsValidBitcoinAddress(addr string) bool {
 	}
 	return strings.HasPrefix(addr, "1") || strings.HasPrefix(addr, "3") || strings.HasPrefix(addr, "bc1")
 }
-
-var entityTypeMap map[string]EntityType
-
-func init() {
-	entityTypeMap = make(map[string]EntityType)
-	for _, entry := range knownLabels {
-		entityTypeMap[entry.needle] = entry.entity
-	}
-}
-
-var (
-	whirlpoolPools = map[int64]bool{100000: true, 1000000: true, 5000000: true, 50000000: true}
-	fallbackBases  = []string{
-		"https://mempool.guide/api",
-		"https://mempool.emzy.de/api",
-		"https://mempool.space/api",
-	}
-	mempoolGuideClient = &http.Client{Timeout: 10 * time.Second}
-)
 
 // ─────────────────────────────────────────────────────────────
 // GRAPH TYPES
@@ -275,10 +314,38 @@ func convertBlockstreamAddressInfo(bsinfo *blockstream.AddressInfo) *mempool.Add
 	}
 }
 
+func init() {
+	currentMempoolProvider = ProviderMempoolSpace // Initialize to primary
+}
+
+// ResetMempoolAPIStatus resets the active mempool API provider to the primary one.
+func ResetMempoolAPIStatus() {
+	mempoolAPILock.Lock()
+	defer mempoolAPILock.Unlock()
+	currentMempoolProvider = ProviderMempoolSpace
+	log.Println("🔄 Mempool API provider status reset to primary: mempool.space")
+}
+
+// guideCandidateBases filters the guide fallback list down to providers not
+// on cooldown (see mempool.MarkBaseResult), returning the full list when
+// everything is cooling so requests still get a chance.
+func guideCandidateBases() []string {
+	var active []string
+	for _, b := range fallbackBases {
+		if !mempool.BaseCooling(b) {
+			active = append(active, b)
+		}
+	}
+	if len(active) == 0 {
+		return fallbackBases
+	}
+	return active
+}
+
 // mempoolGuideFetch is a helper for hitting the mempool.guide fallback
 func mempoolGuideFetch(ctx context.Context, path string, target interface{}) error {
 	var lastErr error
-	for _, base := range fallbackBases {
+	for _, base := range guideCandidateBases() {
 		err := func() error {
 			req, err := http.NewRequestWithContext(ctx, "GET", base+path, nil)
 			if err != nil {
@@ -290,10 +357,11 @@ func mempoolGuideFetch(ctx context.Context, path string, target interface{}) err
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode != 200 {
-				return fmt.Errorf("HTTP %d", resp.StatusCode)
+				return mempool.HTTPStatusError{Code: resp.StatusCode}
 			}
 			return json.NewDecoder(resp.Body).Decode(target)
 		}()
+		mempool.MarkBaseResult(base, err)
 		if err == nil {
 			return nil
 		}
@@ -302,100 +370,207 @@ func mempoolGuideFetch(ctx context.Context, path string, target interface{}) err
 	return fmt.Errorf("all fallbacks failed: %v", lastErr)
 }
 
+// providerOrderFor returns the provider preference order starting at initial.
+// The last-known-good provider leads so a dead primary stops costing a
+// timeout on every request.
+func providerOrderFor(initial MempoolAPIProvider) []MempoolAPIProvider {
+	switch initial {
+	case ProviderMempoolGuide:
+		return []MempoolAPIProvider{ProviderMempoolGuide, ProviderBlockstream, ProviderMempoolSpace}
+	case ProviderBlockstream:
+		return []MempoolAPIProvider{ProviderBlockstream, ProviderMempoolSpace, ProviderMempoolGuide}
+	default:
+		return []MempoolAPIProvider{ProviderMempoolSpace, ProviderMempoolGuide, ProviderBlockstream}
+	}
+}
+
+// tryMempoolAPI attempts to execute a fetch function for a given provider.
+// If it fails, it tries the next available provider and updates currentMempoolProvider.
+// It returns the result of the first successful fetch, or the error from the last failed attempt.
+func tryMempoolAPI[T any](logPrefix string,
+	fetchPrimary func() (T, error),
+	fetchFallback1 func() (T, error), // mempool.guide
+	fetchFallback2 func() (any, error), // blockstream.info (returns any for conversion)
+	converterFallback2 func(any) T, // converter for blockstream.info results
+) (T, error) {
+	var result T
+	var lastErr error
+
+	mempoolAPILock.RLock()
+	initialProvider := currentMempoolProvider
+	mempoolAPILock.RUnlock()
+
+	// Try providers starting from the last-known-good one
+	providerOrder := providerOrderFor(initialProvider)
+
+	for _, p := range providerOrder {
+		var currentResult T
+		var currentErr error
+		var providerName string
+
+		switch p {
+		case ProviderMempoolSpace:
+			providerName = "mempool.space"
+			currentResult, currentErr = fetchPrimary()
+		case ProviderMempoolGuide:
+			providerName = "mempool.guide"
+			currentResult, currentErr = fetchFallback1()
+		case ProviderBlockstream:
+			providerName = "blockstream.info"
+			// Blockstream returns different types, so we need to handle conversion
+			var bsRawResult any
+			if fetchFallback2 != nil { // Check if blockstream fallback is provided
+				bsRawResult, currentErr = fetchFallback2()
+				if currentErr == nil && converterFallback2 != nil {
+					currentResult = converterFallback2(bsRawResult)
+				}
+			} else {
+				currentErr = fmt.Errorf("blockstream.info fallback not implemented for this call")
+			}
+		}
+
+		if currentErr == nil {
+			mempoolAPILock.Lock()
+			currentMempoolProvider = p
+			mempoolAPILock.Unlock()
+			log.Printf("✅ [%s] Successfully fetched from %s. Provider switched to %s.", logPrefix, providerName, providerName)
+			return currentResult, nil
+		}
+		log.Printf("⚠️  [%s] Failed to fetch from %s: %v", logPrefix, providerName, currentErr)
+		lastErr = currentErr
+	}
+
+	return result, fmt.Errorf("all configured providers failed for %s: %w", logPrefix, lastErr)
+}
+
 // GetAddressTxsWithFallback attempts to fetch address transactions from mempool.space first,
 // falling back to blockstream.info if mempool fails or times out.
+// Results are cached briefly so repeat views of the same address (history
+// panel, re-search, expansion) do not re-query the network.
 func GetAddressTxsWithFallback(ctx context.Context, address string) ([]mempool.Tx, error) {
-	// Try mempool first
-	txs, err := mempool.GetAddressTxs(address)
-	if err == nil && txs != nil {
-		log.Printf("✅ [MEMPOOL] Successfully fetched transactions for %s", address)
-		return txs, nil
-	}
+	return cache.Fetch(txsCache, address, addrTxTTL, func() ([]mempool.Tx, error) {
+		return fetchAddressTxs(ctx, address)
+	})
+}
 
-	// Log why mempool failed
-	log.Printf("⚠️  [MEMPOOL] Failed to fetch txs for %s: %v — attempting fallback to mempool.guide", address, err)
-
-	// Fallback 1: Mempool.guide
-	var guideTxs []mempool.Tx
-	if err := mempoolGuideFetch(ctx, "/address/"+address+"/txs", &guideTxs); err == nil {
-		log.Printf("✅ [MEMPOOL.GUIDE] Fallback succeeded for %s", address)
-		return guideTxs, nil
-	}
-	log.Printf("⚠️  [MEMPOOL.GUIDE] Failed to fetch txs for %s — attempting fallback to blockstream", address)
-
-	// Fallback to blockstream
-	bsTxs, bsErr := blockstream.GetAddressTxs(address)
-	if bsErr != nil {
-		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch txs for %s: %v", address, bsErr)
-		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%w)", err, bsErr)
-	}
-
-	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched %d transactions for %s", len(bsTxs), address)
-	return convertBlockstreamTxs(bsTxs), nil
+func fetchAddressTxs(ctx context.Context, address string) ([]mempool.Tx, error) {
+	return tryMempoolAPI(
+		"HISTORY",
+		func() ([]mempool.Tx, error) { return mempool.GetAddressTxs(address) },
+		func() ([]mempool.Tx, error) {
+			var guideTxs []mempool.Tx
+			err := mempoolGuideFetch(ctx, "/address/"+address+"/txs", &guideTxs)
+			return guideTxs, err
+		},
+		func() (any, error) { return blockstream.GetAddressTxs(address) },
+		func(bsTxs any) []mempool.Tx { return convertBlockstreamTxs(bsTxs.([]blockstream.Tx)) },
+	)
 }
 
 // GetTxWithFallback attempts to fetch a transaction from mempool.space first,
 // falling back to blockstream.info if mempool fails or times out.
 func GetTxWithFallback(ctx context.Context, txid string) (*mempool.Tx, error) {
-	// Try mempool first
-	tx, err := mempool.GetTx(txid)
-	if err == nil && tx != nil {
-		log.Printf("✅ [MEMPOOL] Successfully fetched tx %s", txid[:16])
-		return tx, nil
-	}
+	return cache.Fetch(txCache, txid, txTTL, func() (*mempool.Tx, error) {
+		return fetchTx(ctx, txid)
+	})
+}
 
-	// Log why mempool failed
-	log.Printf("⚠️  [MEMPOOL] Failed to fetch tx %s: %v — attempting fallback to mempool.guide", txid, err)
-
-	// Fallback 1: Mempool.guide
-	var guideTx mempool.Tx
-	if err := mempoolGuideFetch(ctx, "/tx/"+txid, &guideTx); err == nil {
-		log.Printf("✅ [MEMPOOL.GUIDE] Fallback succeeded for tx %s", txid[:16])
-		return &guideTx, nil
-	}
-	log.Printf("⚠️  [MEMPOOL.GUIDE] Failed to fetch tx %s — attempting fallback to blockstream", txid)
-
-	// Fallback to blockstream
-	bsTx, bsErr := blockstream.GetTx(txid)
-	if bsErr != nil {
-		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch tx %s: %v", txid, bsErr)
-		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%w)", err, bsErr)
-	}
-
-	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched tx %s", txid[:16])
-	return convertBlockstreamTx(bsTx), nil
+func fetchTx(ctx context.Context, txid string) (*mempool.Tx, error) {
+	return tryMempoolAPI(
+		"FETCH_TX",
+		func() (*mempool.Tx, error) { return mempool.GetTx(txid) },
+		func() (*mempool.Tx, error) {
+			var guideTx mempool.Tx
+			err := mempoolGuideFetch(ctx, "/tx/"+txid, &guideTx)
+			return &guideTx, err
+		},
+		func() (any, error) { return blockstream.GetTx(txid) },
+		func(bsTx any) *mempool.Tx { return convertBlockstreamTx(bsTx.(*blockstream.Tx)) },
+	)
 }
 
 // GetAddressInfoWithFallback attempts to fetch address info from mempool.space first,
 // falling back to blockstream.info if mempool fails or times out.
 func GetAddressInfoWithFallback(ctx context.Context, address string) (*mempool.AddressInfo, error) {
-	// Try mempool first
-	info, err := mempool.GetAddressInfo(address)
-	if err == nil && info != nil {
-		log.Printf("✅ [MEMPOOL] Successfully fetched address info for %s", address)
-		return info, nil
-	}
+	return cache.Fetch(infoCache, address, addrInfoTTL, func() (*mempool.AddressInfo, error) {
+		return fetchAddressInfo(ctx, address)
+	})
+}
 
-	// Log why mempool failed
-	log.Printf("⚠️  [MEMPOOL] Failed to fetch address info for %s: %v — attempting fallback to mempool.guide", address, err)
+func fetchAddressInfo(ctx context.Context, address string) (*mempool.AddressInfo, error) {
+	return tryMempoolAPI(
+		"ADDRESS_INFO",
+		func() (*mempool.AddressInfo, error) { return mempool.GetAddressInfo(address) },
+		func() (*mempool.AddressInfo, error) {
+			var guideInfo mempool.AddressInfo
+			err := mempoolGuideFetch(ctx, "/address/"+address, &guideInfo)
+			return &guideInfo, err
+		},
+		func() (any, error) { return blockstream.GetAddressInfo(address) },
+		func(bsInfo any) *mempool.AddressInfo {
+			return convertBlockstreamAddressInfo(bsInfo.(*blockstream.AddressInfo))
+		},
+	)
+}
 
-	// Fallback 1: Mempool.guide
-	var guideInfo mempool.AddressInfo
-	if err := mempoolGuideFetch(ctx, "/address/"+address, &guideInfo); err == nil {
-		log.Printf("✅ [MEMPOOL.GUIDE] Fallback succeeded for %s", address)
-		return &guideInfo, nil
-	}
-	log.Printf("⚠️  [MEMPOOL.GUIDE] Failed to fetch address info for %s — attempting fallback to blockstream", address)
+// GetRecommendedFeesWithFallback fetches recommended fees using the fallback mechanism.
+// Cached briefly — the dashboard polls this every minute.
+func GetRecommendedFeesWithFallback(ctx context.Context) (map[string]int, error) {
+	return cache.Fetch(statsCache, "fees", statsTTL, func() (map[string]int, error) {
+		return tryMempoolAPI(
+			"FEES",
+			func() (map[string]int, error) {
+				fees, err := mempool.GetRecommendedFees()
+				if err != nil {
+					return nil, err
+				}
+				return map[string]int{
+					"fastestFee": fees.FastestFee, "halfHourFee": fees.HalfHourFee, "hourFee": fees.HourFee, "economyFee": fees.EconomyFee, "minimumFee": fees.MinimumFee,
+				}, nil
+			},
+			func() (map[string]int, error) {
+				var fees map[string]int
+				err := mempoolGuideFetch(ctx, "/v1/fees/recommended", &fees)
+				return fees, err
+			},
+			nil, // Blockstream.info does not provide recommended fees
+			nil, // No conversion needed
+		)
+	})
+}
 
-	// Fallback to blockstream
-	bsInfo, bsErr := blockstream.GetAddressInfo(address)
-	if bsErr != nil {
-		log.Printf("⚠️  [BLOCKSTREAM] Also failed to fetch address info for %s: %v", address, bsErr)
-		return nil, fmt.Errorf("both mempool and blockstream failed: mempool(%v), blockstream(%w)", err, bsErr)
-	}
+// GetTipHeightWithFallback fetches the tip height using the fallback mechanism.
+func GetTipHeightWithFallback(ctx context.Context) (int, error) {
+	return cache.Fetch(statsCache, "tip", statsTTL, func() (int, error) {
+		return tryMempoolAPI(
+			"TIP_HEIGHT",
+			func() (int, error) { return mempool.GetTipHeight() },
+			func() (int, error) {
+				var height int
+				err := mempoolGuideFetch(ctx, "/blocks/tip/height", &height)
+				return height, err
+			},
+			nil, // Blockstream.info fallback for GetTipHeight is not implemented in blockstream package
+			nil, // No conversion needed if fallback is nil
+		)
+	})
+}
 
-	log.Printf("✅ [BLOCKSTREAM] Fallback succeeded — fetched address info for %s", address)
-	return convertBlockstreamAddressInfo(bsInfo), nil
+// GetDifficultyAdjustmentWithFallback fetches difficulty adjustment info using the fallback mechanism.
+func GetDifficultyAdjustmentWithFallback(ctx context.Context) (*mempool.DifficultyAdjustment, error) {
+	return cache.Fetch(statsCache, "diffadj", statsTTL, func() (*mempool.DifficultyAdjustment, error) {
+		return tryMempoolAPI(
+			"DIFF_ADJ",
+			func() (*mempool.DifficultyAdjustment, error) { return mempool.GetDifficultyAdjustment() },
+			func() (*mempool.DifficultyAdjustment, error) {
+				var da mempool.DifficultyAdjustment
+				err := mempoolGuideFetch(ctx, "/v1/difficulty-adjustment", &da)
+				return &da, err
+			},
+			nil, // Blockstream.info does not provide difficulty adjustment info
+			nil, // No conversion needed
+		)
+	})
 }
 
 // IsCoinMixer performs multi-rule heuristic analysis to detect mixing transactions.
@@ -1114,7 +1289,6 @@ type graphBuilder struct {
 	graph          UnifiedGraph
 	edgeMap        map[string]ProvenanceEdge
 	nodeImportance map[string]int
-	blockPoolCache map[string]*mempool.PoolInfo
 	liveTxs        []mempool.Tx
 	bqResult       *bitquery.AddressTransactions
 	ir             intelResult
@@ -1129,7 +1303,6 @@ func newGraphBuilder(ctx context.Context) *graphBuilder {
 		},
 		nodeImportance: make(map[string]int),
 		edgeMap:        make(map[string]ProvenanceEdge),
-		blockPoolCache: make(map[string]*mempool.PoolInfo),
 		ctx:            ctx,
 	}
 }
@@ -1178,32 +1351,112 @@ func (b *graphBuilder) addEdge(src, tgt string, amt float64, source string, time
 	}
 }
 
+// lookupBlockPool returns the mining pool for a block via the global
+// blockPools cache. Pool attribution is immutable, so entries live
+// effectively forever and are shared across all investigations.
 func (b *graphBuilder) lookupBlockPool(blockHash string) *mempool.PoolInfo {
+	return lookupBlockPoolCached(b.ctx, blockHash)
+}
+
+func fetchBlockPool(ctx context.Context, blockHash string) (*mempool.PoolInfo, error) {
+	mempoolAPILock.RLock()
+	initialProvider := currentMempoolProvider
+	mempoolAPILock.RUnlock()
+
+	var lastErr error
+	for _, p := range providerOrderFor(initialProvider) {
+		var currentErr error
+		var providerName string
+		var fetchedPool *mempool.PoolInfo
+
+		switch p {
+		case ProviderMempoolSpace:
+			providerName = "mempool.space"
+			fetchedPool, currentErr = mempool.GetBlockPool(blockHash)
+		case ProviderMempoolGuide:
+			providerName = "mempool.guide"
+			var guideBlock struct {
+				Extras struct {
+					Pool *mempool.PoolInfo `json:"pool"`
+				} `json:"extras"`
+			}
+			currentErr = mempoolGuideFetch(ctx, "/v1/block/"+blockHash, &guideBlock)
+			if currentErr == nil {
+				fetchedPool = guideBlock.Extras.Pool
+			}
+		case ProviderBlockstream:
+			// Blockstream.info does not provide mining pool info directly in its block API.
+			// So, we skip it for this specific lookup.
+			continue
+		}
+
+		if currentErr == nil && fetchedPool != nil {
+			mempoolAPILock.Lock()
+			currentMempoolProvider = p
+			mempoolAPILock.Unlock()
+			log.Printf("✅ [BLOCK-POOL] Successfully fetched from %s. Provider switched to %s.", providerName, providerName)
+			log.Printf("⛏️  [BLOCK-POOL] block %s → %s (%s)", blockHash[:min16(len(blockHash))], fetchedPool.Name, fetchedPool.Slug)
+			return fetchedPool, nil
+		}
+		if currentErr != nil {
+			log.Printf("⚠️  [BLOCK-POOL] Failed to fetch from %s: %v", providerName, currentErr)
+			lastErr = currentErr
+		}
+	}
+
+	log.Printf("❌ [BLOCK-POOL] All providers failed for block %s: %v", blockHash[:min16(len(blockHash))], lastErr)
+	return nil, fmt.Errorf("all providers failed for block %s: %v", blockHash[:min16(len(blockHash))], lastErr)
+}
+
+// prewarmBlockPools fetches pool attribution for many blocks concurrently,
+// deduplicating hashes first. This turns what used to be up to ~50 serial
+// HTTP round-trips inside the graph loop into one bounded parallel batch —
+// the single largest latency win when building a graph. Results land in the
+// global blockPools cache, so the later per-transaction lookups are hits.
+// Failures are silent here; the serial lookup path already logs them.
+func prewarmBlockPools(ctx context.Context, blockHashes []string) {
+	seen := make(map[string]struct{}, len(blockHashes))
+	unique := make([]string, 0, len(blockHashes))
+	for _, h := range blockHashes {
+		if h == "" {
+			continue
+		}
+		if _, ok := seen[h]; !ok {
+			seen[h] = struct{}{}
+			unique = append(unique, h)
+		}
+	}
+	if len(unique) == 0 {
+		return
+	}
+
+	const workers = 8
+	sem := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+	start := time.Now()
+	for _, hash := range unique {
+		wg.Add(1)
+		go func(h string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			lookupBlockPoolCached(ctx, h)
+		}(hash)
+	}
+	wg.Wait()
+	log.Printf("⛏️  [BLOCK-POOL] Prewarmed %d unique block(s) in %v", len(unique), time.Since(start))
+}
+
+// lookupBlockPoolCached is the cache-only entry point used by the prewarm
+// workers; it exists separately from the builder method so prewarming does
+// not need a builder instance.
+func lookupBlockPoolCached(ctx context.Context, blockHash string) *mempool.PoolInfo {
 	if blockHash == "" {
 		return nil
 	}
-	if p, found := b.blockPoolCache[blockHash]; found {
-		return p
-	}
-	pool, err := mempool.GetBlockPool(blockHash)
-	if err != nil {
-		log.Printf("⚠️  [BLOCK-POOL] %s: %v — attempting fallback to mempool.guide", blockHash[:min16(len(blockHash))], err)
-		var guideBlock struct {
-			Extras struct {
-				Pool *mempool.PoolInfo `json:"pool"`
-			} `json:"extras"`
-		}
-		if gErr := mempoolGuideFetch(b.ctx, "/v1/block/"+blockHash, &guideBlock); gErr == nil {
-			pool = guideBlock.Extras.Pool
-		} else {
-			b.blockPoolCache[blockHash] = nil
-			return nil
-		}
-	}
-	b.blockPoolCache[blockHash] = pool
-	if pool != nil {
-		log.Printf("⛏️  [BLOCK-POOL] block %s → %s (%s)", blockHash[:min16(len(blockHash))], pool.Name, pool.Slug)
-	}
+	pool, _ := cache.Fetch(blockPools, blockHash, blockPoolTTL, func() (*mempool.PoolInfo, error) {
+		return fetchBlockPool(ctx, blockHash)
+	})
 	return pool
 }
 
@@ -1227,10 +1480,23 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	// 1. Initial target node
 	builder.addNode(id, id, "Address", "Initial Query", 0)
 
-	// 2. Local Neo4j
-	neoToReal := make(map[string]string)
-	if history, err := db.GetMoneyFlow(ctx, id); err == nil && history != nil {
+	// 2. Parallel fetch fan-out: local Neo4j history, mempool/blockstream
+	// transactions, Bitquery flows, and intel. Only the Neo4j goroutine
+	// touches the graph maps below while main blocks on wg.Wait(), so no
+	// extra locking is needed.
+	var wg sync.WaitGroup
+
+	wg.Add(4)
+	// Parallel fetch: Neo4j money-flow history
+	go func() {
+		defer wg.Done()
+		history, err := db.GetMoneyFlow(ctx, id)
+		if err != nil || history == nil {
+			log.Printf("⚠️  [LOCAL-DB] Skipped (no local history for %s)", id)
+			return
+		}
 		log.Printf("✅ [LOCAL-DB] Retrieved money flow for %s", id)
+		neoToReal := make(map[string]string)
 		for eid, node := range history["nodes"].(map[string]interface{}) {
 			n := node.(map[string]interface{})
 			realID := n["label"].(string)
@@ -1245,13 +1511,7 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 				builder.addEdge(src, tgt, e["amount"].(float64), "Local DB", 0)
 			}
 		}
-	} else {
-		log.Printf("⚠️  [LOCAL-DB] Skipped (no local history for %s)", id)
-	}
-
-	var wg sync.WaitGroup
-
-	wg.Add(3)
+	}()
 	// Parallel fetch: Mempool/Blockstream
 	go func() {
 		defer wg.Done()
@@ -1284,6 +1544,18 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 	}()
 
 	wg.Wait()
+
+	// Prewarm mining-pool attribution for every confirmed block in one
+	// bounded parallel batch. Without this, the loop below pays up to ~50
+	// serial HTTP round-trips. After prewarming every lookupBlockPool call
+	// in the loop is a cache hit.
+	blockHashes := make([]string, 0, len(builder.liveTxs))
+	for _, tx := range builder.liveTxs {
+		if tx.Status.Confirmed {
+			blockHashes = append(blockHashes, tx.Status.BlockHash)
+		}
+	}
+	prewarmBlockPools(builder.ctx, blockHashes)
 
 	txIOs := make([]TransactionIO, 0, len(builder.liveTxs))
 	for _, tx := range builder.liveTxs {
@@ -1530,7 +1802,9 @@ func BuildVerifiedFTM(ctx context.Context, id string, caKey string, bqKey string
 			}
 		}
 		if len(clusterData) > 0 {
-			db.SaveCluster(clusterData)
+			// Fire-and-forget: the response does not depend on the write
+			// landing, so it must not block graph delivery.
+			go db.SaveCluster(clusterData)
 			log.Printf("🔗 [CLUSTER] %d multi-address wallet clusters for %s", len(clusters.Clusters), id)
 		}
 	}

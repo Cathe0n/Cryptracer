@@ -6,6 +6,27 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"money-tracer/internal/cache"
+)
+
+// Shared package-level clients: building a client per call prevented any
+// timeout/transport tuning and left pooling to chance.
+var (
+	labelClient = &http.Client{Timeout: 5 * time.Second}
+	riskClient  = &http.Client{Timeout: 10 * time.Second}
+
+	labelCache = cache.New(8192)
+	riskCache  = cache.New(4096)
+)
+
+const (
+	// WalletExplorer attributions are historical and effectively static.
+	labelTTL = 6 * time.Hour
+	// ChainAbuse reports change slowly; a few minutes keeps repeat views of
+	// the same address (tracing hops, node clicks, expansions) from
+	// re-querying while staying reasonably fresh.
+	riskTTL = 5 * time.Minute
 )
 
 type WalletLabel struct {
@@ -55,10 +76,24 @@ type ChainAbuseV0Report struct {
 	CreatedAt    string `json:"createdAt"`
 }
 
+// GetLabel returns the WalletExplorer attribution for addr, cached.
+// Empty results are cached too — an unknown address stays unknown.
 func GetLabel(addr string) string {
+	v, _ := cache.Fetch(labelCache, addr, labelTTL, func() (string, error) {
+		return fetchLabel(addr), nil
+	})
+	return v
+}
+
+// GetLabelLive bypasses the cache. Used by the Verify panel, which promises
+// a fresh live query against the source.
+func GetLabelLive(addr string) string {
+	return fetchLabel(addr)
+}
+
+func fetchLabel(addr string) string {
 	url := fmt.Sprintf("http://www.walletexplorer.com/api/1/address-lookup?address=%s&caller=research-tool", addr)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := labelClient.Get(url)
 	if err != nil {
 		return ""
 	}
@@ -78,13 +113,29 @@ func GetAbuseScore(addr string, apiKey string) int {
 	return riskData.ReportCount
 }
 
-// Enhanced function - returns full risk data
+// Enhanced function - returns full risk data, cached. A nil result (no
+// reports found) is cached like any other so repeated lookups of the same
+// address do not re-query ChainAbuse.
 func GetChainAbuseRisk(addr string, apiKey string) *ChainAbuseRiskData {
 	if apiKey == "" {
 		return nil
 	}
+	v, _ := cache.Fetch(riskCache, addr, riskTTL, func() (*ChainAbuseRiskData, error) {
+		return fetchChainAbuseRisk(addr, apiKey), nil
+	})
+	return v
+}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+// GetChainAbuseRiskLive bypasses the cache. Used by the Verify panel, which
+// promises a fresh live query against the source.
+func GetChainAbuseRiskLive(addr string, apiKey string) *ChainAbuseRiskData {
+	if apiKey == "" {
+		return nil
+	}
+	return fetchChainAbuseRisk(addr, apiKey)
+}
+
+func fetchChainAbuseRisk(addr string, apiKey string) *ChainAbuseRiskData {
 	// The v1 endpoint appears to be missing some reports. Using v0 which has better data coverage for some addresses.
 	url := fmt.Sprintf("https://api.chainabuse.com/v0/reports?address=%s", addr)
 
@@ -95,7 +146,7 @@ func GetChainAbuseRisk(addr string, apiKey string) *ChainAbuseRiskData {
 	// The v0 API also accepts the v1 API key for authentication.
 	req.SetBasicAuth(apiKey, "")
 
-	resp, err := client.Do(req)
+	resp, err := riskClient.Do(req)
 	if err != nil {
 		return nil
 	}

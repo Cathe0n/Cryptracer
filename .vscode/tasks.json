@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build: Cryptracer.exe",
+      "detail": "go build -o Cryptracer.exe .",
+      "type": "shell",
+      "command": "go",
+      "args": ["build", "-o", "Cryptracer.exe", "."],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "run: app (opens browser)",
+      "detail": "go run . - starts the server and opens your default browser",
+      "type": "shell",
+      "command": "go",
+      "args": ["run", "."],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "run: app (no browser tab)",
+      "detail": "go run . with CRYPTRACER_NO_BROWSER=1",
+      "type": "shell",
+      "command": "go",
+      "args": ["run", "."],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "CRYPTRACER_NO_BROWSER": "1"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "vet: go vet ./...",
+      "detail": "Static checks across every package",
+      "type": "shell",
+      "command": "go",
+      "args": ["vet", "./..."],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "test: go test ./...",
+      "detail": "Run the test suite",
+      "type": "shell",
+      "command": "go",
+      "args": ["test", "./..."],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": ["$go"]
+    }
+  ]
+}

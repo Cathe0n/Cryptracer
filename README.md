@@ -225,7 +225,7 @@ The application will:
 | **Wallet View** | Toggle **[WALLET VIEW]** to collapse co-spend clusters |
 | **Mining Filter** | Toggle **[MINING]** to isolate/hide mining pool noise |
 | **Flow Filters** | Toggle **Incoming** or **Outgoing** for directionality |
-| **Timeline Control** | Use time slider or **Calendar** to filter by date |
+| **Timeline Replay** | Play transactions chronologically, drag the slider to seek, or step through frames; playback starts from the selected date and restarts from the beginning at the end |
 | **View Edge Details** | Hover over edges (Requires **[TOOLTIPS]** active) |
 | **Search & Jump** | Use search bar (Top Right) to find IDs, Labels, or Entities |
 | **Expand Graph** | Use **Expand neighbors** or **⚡ Expand All** |
@@ -250,6 +250,7 @@ The application will:
 
 - **Global Search**: Instantly locate any address, transaction, or labeled entity (e.g., "Huobi") currently present in the graph using the top-left search tool.
 - **Persistent History**: The sidebar tracks all investigated targets in the current session, displaying their risk score and graph complexity for quick switching.
+- **Reload Recovery**: The current graph and expanded nodes are restored when the page is reloaded in the same browser tab. Use **Clear** to discard it.
 - **Forensic Session Files**: Export your entire investigation including the graph layout, all custom labels, and trace results as a `.ctk` file to resume later or share with other investigators. "Very Useful!!" 'o'
 ---
 

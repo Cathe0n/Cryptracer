@@ -1,8 +1,8 @@
-import { runSleuth, renderGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, updateGraphEdgeColors, toggleWalletView, expandNode, expandSelected, expandAll, saveSession, restoreSession, checkPendingSession, toggleMiningFilter, toggleIncomingFilter, toggleOutgoingFilter, updateNodeCountDisplay } from './graph.js';
+import { runSleuth, renderGraph, clearGraph, toggleFreeze, toggleLayout, toggleLabels, toggleTimestamps, zoomIn, zoomOut, recenterGraph, fitGraphToScreen, toggleCalendar, toggleEdgeTooltips, updateGraphNodeColor, updateGraphNodeLabel, updateGraphEdgeColors, toggleWalletView, expandNode, expandSelected, expandAll, saveSession, restoreSession, checkPendingSession, toggleMiningFilter, toggleIncomingFilter, toggleOutgoingFilter, updateNodeCountDisplay } from './graph.js';
 import { initNetworkStats } from './api.js';
 import { closeEntityView, enrichFromMempool, enrichTxFromMempool, showEntityView } from './ui.js';
 import { runTracePath, closeTraceView } from './tracer.js';
-import { startPlayback, pausePlayback, resumePlayback, stopPlayback, togglePlayback, setPlaybackSpeed, increaseSpeed, decreaseSpeed, nextFrame, previousFrame, initPlayback, getPlaybackStats } from './playback.js';
+import { startPlayback, pausePlayback, resumePlayback, stopPlayback, togglePlayback, setPlaybackSpeed, increaseSpeed, decreaseSpeed, nextFrame, previousFrame, initPlayback, getPlaybackStats, seekToTimestamp } from './playback.js';
 
 console.log('Cryptracer: D3 Renderer Loaded (Modular)');
 // Backend uses Blockstream API, Frontend uses Mempool.space for live enrichment.
@@ -12,6 +12,7 @@ console.log('Cryptracer: D3 Renderer Loaded (Modular)');
 // =============================================================================
 window.runSleuth        = runSleuth;
 window.renderGraph      = renderGraph;
+window.clearGraph       = clearGraph;
 window.toggleFreeze     = toggleFreeze;
 window.toggleLayout     = toggleLayout;
 window.toggleLabels     = toggleLabels;
@@ -57,9 +58,18 @@ window.nextFrame      = nextFrame;
 window.previousFrame  = previousFrame;
 window.initPlayback   = initPlayback;
 window.getPlaybackStats = getPlaybackStats;
+window.seekPlaybackToTimestamp = seekToTimestamp;
 
 // Boot network stats ticker and restore any pending session
 window.addEventListener('DOMContentLoaded', () => {
     initNetworkStats();
     checkPendingSession();
+
+    const targetInput = document.getElementById('targetId');
+    targetInput?.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && !event.isComposing) {
+            event.preventDefault();
+            runSleuth();
+        }
+    });
 });

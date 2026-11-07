@@ -128,18 +128,47 @@ type DifficultyAdjustment struct {
 
 // ─── HTTP client ──────────────────────────────────────────────────────────────
 
+// tunedTransport clones the default transport with a larger per-host idle
+// connection pool. The default of 2 idle connections per host silently caps
+// parallel fan-out requests (e.g. concurrent block-pool lookups); 16 lets
+// them actually run in parallel over reused sockets.
+func tunedTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConns = 64
+	t.MaxIdleConnsPerHost = 16
+	return t
+}
+
 // client is a shared HTTP client with a reasonable timeout.
-var client = &http.Client{Timeout: 30 * time.Second}
+var client = &http.Client{Timeout: 30 * time.Second, Transport: tunedTransport()}
+
+// candidateBases returns the provider base URLs, skipping any recently
+// failed by the breaker. If every base is cooling down the full list is
+// returned so requests still have a chance instead of failing outright.
+func candidateBases() []string {
+	var active []string
+	for _, b := range baseURLs {
+		if !BaseCooling(b) {
+			active = append(active, b)
+		}
+	}
+	if len(active) == 0 {
+		return baseURLs
+	}
+	return active
+}
 
 func get(path string, dst interface{}) error {
 	var lastErr error
-	for i, base := range baseURLs {
+	attempt := 0
+	for _, base := range candidateBases() {
+		attempt++
 		err := func() error {
 			// Use a shorter internal timeout per attempt to ensure quick takeover
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			if i > 0 {
+			if attempt > 1 {
 				log.Printf("🔄 [MEMPOOL-FALLBACK] Provider failure (Previous: %v), trying %s", lastErr, base)
 			}
 
@@ -157,11 +186,11 @@ func get(path string, dst interface{}) error {
 
 			// Explicitly catch rate limiting to trigger fallback immediately
 			if resp.StatusCode == 429 {
-				return fmt.Errorf("rate limited (429)")
+				return HTTPStatusError{Code: 429}
 			}
 
 			if resp.StatusCode != 200 {
-				return fmt.Errorf("HTTP %d", resp.StatusCode)
+				return HTTPStatusError{Code: resp.StatusCode}
 			}
 
 			// Special handling for plain text responses (like tip height)
@@ -176,6 +205,7 @@ func get(path string, dst interface{}) error {
 
 			return json.NewDecoder(resp.Body).Decode(dst)
 		}()
+		MarkBaseResult(base, err)
 		if err == nil {
 			return nil
 		}

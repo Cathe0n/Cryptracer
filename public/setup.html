@@ -6,76 +6,138 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-        body { font-family: 'JetBrains Mono', monospace; background: #ffffff; color: #1e293b; }
+        :root {
+            color-scheme: light;
+            --setup-ink: #0f172a;
+            --setup-muted: #64748b;
+            --setup-line: #dbe4ee;
+            --setup-cyan: #0891b2;
+        }
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background:
+                radial-gradient(circle at 15% 0%, rgba(34, 211, 238, 0.13), transparent 28rem),
+                linear-gradient(135deg, #f8fafc 0%, #eef6f8 100%);
+            color: var(--setup-ink);
+        }
+        .setup-shell { max-width: 46rem; }
+        .setup-card {
+            border-color: var(--setup-line);
+            border-radius: 1.25rem;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+        }
+        .setup-header {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1.25rem;
+        }
+        .setup-back {
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            background: #fff;
+        }
+        .setup-back:hover {
+            border-color: #67e8f9;
+            color: #0e7490;
+            background: #ecfeff;
+        }
+        .setup-section {
+            border-color: var(--setup-line);
+            background: rgba(248, 250, 252, 0.82);
+        }
+        .setup-section h3 { color: var(--setup-cyan); }
+        .setup-label { color: #475569; }
+        .setup-input {
+            border-color: #cbd5e1;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .setup-input:focus {
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.14);
+        }
+        @media (max-width: 640px) {
+            .setup-card { padding: 1.25rem; }
+            .setup-header { align-items: flex-start; }
+            .setup-actions { flex-direction: column; }
+            .setup-actions > * { width: 100%; }
+        }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4 bg-white">
-    <div class="w-full max-w-2xl">
-        <div class="bg-white border border-slate-200 rounded-xl p-8 shadow-lg">
+    <div class="w-full setup-shell">
+        <div class="bg-white border setup-card p-8">
             <!-- Header -->
-            <div class="flex items-center gap-3 mb-8">
-                <img src="/ui/logo.png" alt="Cryptrace Logo" class="w-10 h-10 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">
-                <h1 class="font-bold text-slate-900 text-xl tracking-[0.3em] uppercase">Cryptracer</h1>
+            <div class="setup-header flex items-center justify-between gap-4 mb-7">
+                <a href="index.html" class="setup-back inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition" aria-label="Back to main dashboard">
+                    <span aria-hidden="true">←</span>
+                    Dashboard
+                </a>
+                <div class="flex items-center gap-3">
+                    <img src="/ui/logo.png" alt="Cryptrace Logo" class="w-10 h-10 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">
+                    <h1 class="font-bold text-slate-900 text-xl tracking-[0.3em] uppercase">Cryptracer</h1>
+                </div>
             </div>
             
-            <h2 class="text-lg font-bold text-slate-700 mb-2">Configuration Setup</h2>
-            <p class="text-sm text-slate-400 mb-6">Configure your database and API credentials to start investigating.</p>
+            <div class="mb-6">
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-600 mb-2">Workspace configuration</p>
+                <h2 class="text-2xl font-bold text-slate-800 mb-2">Configuration Setup</h2>
+                <p class="text-sm leading-6 text-slate-500">Connect your data sources and optional enrichment services before starting an investigation.</p>
+            </div>
             
             <form id="configForm" class="space-y-6">
                 <!-- Neo4j Configuration -->
-                <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                <div class="setup-section border rounded-lg p-5">
                     <h3 class="text-sm font-bold text-cyan-600 mb-4 uppercase tracking-wider">Neo4j Database</h3>
                     
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">URI</label>
+                            <label class="setup-label block text-xs mb-2 font-bold uppercase">URI</label>
                             <input type="text" id="neo4j_uri" name="neo4j_uri" 
                                    placeholder="neo4j://localhost:7687"
-                                   class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400"
+                                   class="setup-input w-full bg-white border rounded px-4 py-2 text-sm font-mono outline-none text-slate-900 placeholder-slate-400"
                                    required>
                             <p class="text-xs text-slate-400 mt-1">Example: neo4j://127.0.0.1:7687 or bolt://localhost:7687</p>
                         </div>
                         
                         <div>
-                            <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">Username</label>
+                            <label class="setup-label block text-xs mb-2 font-bold uppercase">Username</label>
                             <input type="text" id="neo4j_user" name="neo4j_user" 
                                    placeholder="neo4j"
-                                   class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400"
+                                   class="setup-input w-full bg-white border rounded px-4 py-2 text-sm font-mono outline-none text-slate-900 placeholder-slate-400"
                                    required>
                         </div>
                         
                         <div>
-                            <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">Password</label>
+                            <label class="setup-label block text-xs mb-2 font-bold uppercase">Password</label>
                             <input type="password" id="neo4j_pass" name="neo4j_pass" 
                                    placeholder="••••••••"
-                                   class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900"
+                                   class="setup-input w-full bg-white border rounded px-4 py-2 text-sm font-mono outline-none text-slate-900"
                                    required>
                         </div>
                     </div>
                 </div>
                 
                 <!-- ChainAbuse API -->
-                <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                <div class="setup-section border rounded-lg p-5">
                     <h3 class="text-sm font-bold text-cyan-600 mb-4 uppercase tracking-wider">ChainAbuse API (Optional)</h3>
                     
                     <div>
-                        <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">API Key</label>
+                        <label class="setup-label block text-xs mb-2 font-bold uppercase">API Key</label>
                         <input type="text" id="chainabuse_key" name="chainabuse_key" 
                                placeholder="ca_..."
-                               class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400">
+                               class="setup-input w-full bg-white border rounded px-4 py-2 text-sm font-mono outline-none text-slate-900 placeholder-slate-400">
                         <p class="text-xs text-slate-400 mt-1">Leave blank to skip risk scoring. Get your key at <a href="https://www.chainabuse.com/api" target="_blank" class="text-cyan-500 hover:underline">chainabuse.com/api</a></p>
                     </div>
                 </div>
 
                 <!-- Bitquery API -->
-                <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                <div class="setup-section border rounded-lg p-5">
                     <h3 class="text-sm font-bold text-cyan-600 mb-4 uppercase tracking-wider">Bitquery API (Optional)</h3>
                     
                     <div>
-                        <label class="block text-xs text-slate-500 mb-2 font-bold uppercase">API Key</label>
+                        <label class="setup-label block text-xs mb-2 font-bold uppercase">API Key</label>
                         <input type="text" id="bitquery_key" name="bitquery_key" 
                                placeholder="BQY..."
-                               class="w-full bg-white border border-slate-300 rounded px-4 py-2 text-sm font-mono focus:border-cyan-500 outline-none text-slate-900 placeholder-slate-400">
+                               class="setup-input w-full bg-white border rounded px-4 py-2 text-sm font-mono outline-none text-slate-900 placeholder-slate-400">
                         <p class="text-xs text-slate-400 mt-1">
                             Enables inflow/outflow graph enrichment. Get your key at 
                             <a href="https://graphql.bitquery.io" target="_blank" class="text-cyan-500 hover:underline">graphql.bitquery.io</a>
@@ -87,14 +149,14 @@
                 <div id="statusMessage" class="hidden rounded-lg p-4 text-sm"></div>
                 
                 <!-- Action Buttons -->
-                <div class="flex gap-3 pt-4">
+                <div class="setup-actions flex gap-3 pt-4">
                     <button type="submit" 
                             class="flex-1 flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-md text-sm font-bold transition text-white uppercase tracking-widest">
-                        <span>💾</span> Save &amp; Test Connection
+                        Save &amp; Test Connection
                     </button>
                     <button type="button" onclick="loadSaved()" 
                             class="flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md text-sm font-bold text-slate-600 uppercase">
-                        <span>📥</span> Load Saved
+                        Load Saved
                     </button>
                 </div>
             </form>
@@ -113,14 +175,14 @@
                      ondragover="event.preventDefault(); this.classList.add('border-amber-500','bg-amber-100/50')"
                      ondragleave="this.classList.remove('border-amber-500','bg-amber-100/50')"
                      ondrop="handleSessionDrop(event)">
-                    <div class="text-3xl mb-2">📂</div>
+                    <div class="text-3xl mb-2" aria-hidden="true">+</div>
                     <div class="text-sm font-bold text-amber-700">Click to browse or drag &amp; drop a .ctk file</div>
-                    <div class="text-xs text-amber-500 mt-1">Session files are generated by the 💾 Save Session button in the main app</div>
+                    <div class="text-xs text-amber-500 mt-1">Session files are generated by the Save Session button in the main app</div>
                 </div>
                 <input type="file" id="sessionFileInput" accept=".ctk,.json" class="hidden" onchange="handleSessionFile(this.files[0])">
 
                 <div id="sessionPreview" class="hidden mt-4 p-4 rounded-lg bg-white border border-amber-200 space-y-2 text-xs font-mono">
-                    <div class="font-bold text-amber-700 mb-1">📋 Session Preview</div>
+                    <div class="font-bold text-amber-700 mb-1">Session Preview</div>
                     <div class="text-slate-500">Target: <span id="prevTarget" class="text-slate-800"></span></div>
                     <div class="text-slate-500">Saved:  <span id="prevDate" class="text-slate-800"></span></div>
                     <div class="text-slate-500">Nodes:  <span id="prevNodes" class="text-slate-800"></span></div>
@@ -128,7 +190,7 @@
                     <div class="text-slate-500">Annotations: <span id="prevAnnot" class="text-slate-800"></span></div>
                     <button id="loadSessionBtn" onclick="launchSession()"
                         class="mt-3 w-full bg-amber-500 hover:bg-amber-400 text-white font-bold py-2.5 rounded uppercase tracking-widest text-xs transition">
-                        🚀 Launch Investigation
+                        Launch Investigation
                     </button>
                 </div>
 
@@ -137,7 +199,7 @@
 
             <!-- Instructions -->
             <div class="mt-8 p-4 rounded-lg border border-slate-200 bg-slate-50">
-                <h4 class="text-xs font-bold text-slate-500 uppercase mb-3">📋 Instructions</h4>
+                <h4 class="text-xs font-bold text-slate-500 uppercase mb-3">Instructions</h4>
                 <ul class="space-y-2 text-xs text-slate-400">
                     <li>• Make sure Neo4j is running on your machine</li>
                     <li>• Default Neo4j credentials are usually <code class="text-cyan-600">neo4j</code> / <code class="text-cyan-600">neo4j</code> (change on first login)</li>
@@ -148,12 +210,6 @@
                 </ul>
             </div>
             
-            <!-- Link to Main App -->
-            <div class="mt-6 text-center">
-                <a href="/ui/index.html" id="mainAppLink" class="text-sm text-slate-400 hover:text-cyan-500 transition">
-                    Already configured? Go to main app →
-                </a>
-            </div>
         </div>
     </div>
     
@@ -184,17 +240,17 @@
                 if (result.success) {
                     localStorage.setItem('forensic_config', JSON.stringify(config));
                     if (result.message && result.message.toLowerCase().includes('neo4j not connected')) {
-                        showStatus('⚠️ ' + result.message + ' You can still use online APIs.', 'error');
+                        showStatus('Warning: ' + result.message + ' You can still use online APIs.', 'error');
                         setTimeout(() => { window.location.href = '/ui/index.html'; }, 1800);
                     } else {
-                        showStatus('✅ Configuration saved successfully! Redirecting...', 'success');
+                        showStatus('Configuration saved successfully. Redirecting...', 'success');
                         setTimeout(() => { window.location.href = '/ui/index.html'; }, 1500);
                     }
                 } else {
-                    showStatus('❌ Connection failed: ' + (result.error || 'Unknown error'), 'error');
+                    showStatus('Connection failed: ' + (result.error || 'Unknown error'), 'error');
                 }
             } catch (err) {
-                showStatus('❌ Error: ' + err.message, 'error');
+                showStatus('Error: ' + err.message, 'error');
             }
         });
         
@@ -209,12 +265,12 @@
                     document.getElementById('neo4j_pass').value     = config.neo4j_pass     || '';
                     document.getElementById('chainabuse_key').value = config.chainabuse_key || '';
                     document.getElementById('bitquery_key').value   = config.bitquery_key   || '';
-                    showStatus('✅ Loaded saved configuration', 'success');
+                    showStatus('Loaded saved configuration', 'success');
                 } catch (e) {
-                    showStatus('⚠️ Could not load saved configuration', 'error');
+                    showStatus('Could not load saved configuration', 'error');
                 }
             } else {
-                showStatus('⚠️ No saved configuration found', 'error');
+                showStatus('No saved configuration found', 'error');
             }
         }
         
@@ -275,7 +331,7 @@
                     document.getElementById('prevAnnot').textContent    = Object.keys(session.annotations || {}).length + ' labeled';
                     document.getElementById('sessionPreview').classList.remove('hidden');
                 } catch (err) {
-                    errEl.textContent = '❌ ' + err.message;
+                    errEl.textContent = 'Error: ' + err.message;
                     errEl.classList.remove('hidden');
                     document.getElementById('sessionPreview').classList.add('hidden');
                 }
@@ -286,7 +342,7 @@
         function launchSession() {
             if (!_pendingSession) return;
             // Store in sessionStorage so main app picks it up on load
-            sessionStorage.setItem('cryptracer_pending_session', JSON.stringify(_pendingSession));
+            sessionStorage.setItem('cryptrace_pending_session', JSON.stringify(_pendingSession));
             window.location.href = '/ui/index.html';
         }
     </script>

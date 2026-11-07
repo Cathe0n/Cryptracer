@@ -6,6 +6,7 @@ import (
 	"money-tracer/internal/intel"
 	"money-tracer/internal/mempool"
 	"sort"
+	"sync"
 )
 
 const DefaultMaxHops = 10
@@ -282,8 +283,9 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 		default:
 		}
 
-		// 1. Fetch live transactions for the current address
-		txs, err := mempool.GetAddressTxs(currentAddr)
+		// 1. Fetch live transactions for the current address (cached via the
+		// aggregator, so hops revisiting a known address are free)
+		txs, err := aggregator.GetAddressTxsWithFallback(ctx, currentAddr)
 		if err != nil || len(txs) == 0 {
 			path.StopReason = "no_outgoing_tx"
 			break
@@ -352,13 +354,27 @@ func TraceForward(ctx context.Context, startAddr string, caKey string, maxHops i
 			ts = sendingTx.Status.BlockTime
 		}
 
-		// 6. Enrich with label and optional risk scoring
-		label := intel.GetLabel(nextAddr)
-		var risk int
-		if caKey != "" {
-			riskData := intel.GetChainAbuseRisk(nextAddr, caKey)
-			risk = intel.CalculateRiskScore(riskData)
-		}
+		// 6. Enrich with label and optional risk scoring — both sources are
+		// independent, so query them in parallel (each hop otherwise pays
+		// both round-trips serially).
+		var (
+			label string
+			risk  int
+			wg    sync.WaitGroup
+		)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			label = intel.GetLabel(nextAddr)
+		}()
+		go func() {
+			defer wg.Done()
+			if caKey != "" {
+				riskData := intel.GetChainAbuseRisk(nextAddr, caKey)
+				risk = intel.CalculateRiskScore(riskData)
+			}
+		}()
+		wg.Wait()
 
 		hop := Hop{
 			HopIndex:       i + 1,

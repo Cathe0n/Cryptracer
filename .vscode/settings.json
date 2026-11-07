@@ -1,0 +1,16 @@
+{
+  "files.eol": "\r\n",
+  "go.formatTool": "gofmt",
+  "go.toolsManagement.autoUpdate": true,
+  "search.exclude": {
+    "**/.venv": true,
+    "**/data": true,
+    "**/db": true,
+    "**/*.exe": true
+  },
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/data/**": true,
+    "**/*.exe": true
+  }
+}

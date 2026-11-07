@@ -19,8 +19,7 @@ let playbackState = {
     currentIndex: 0,  // index into allTimestamps
     animationFrameId: null,
     lastFrameTime: null,
-    startIndex: 0,  // where playback started (for scrubbing)
-    direction: 1  // 1 for forward, -1 for backward
+    isComplete: false
 };
 
 /**
@@ -32,9 +31,8 @@ export function getUniqueTimestamps() {
     const timestamps = new Set();
     
     globalRawLinks.forEach(link => {
-        if (link.timestamp && link.timestamp > 0) {
-            timestamps.add(link.timestamp);
-        }
+        const timestamp = Number(link.timestamp ?? link.ts);
+        if (Number.isFinite(timestamp) && timestamp > 0) timestamps.add(timestamp);
     });
     
     return Array.from(timestamps).sort((a, b) => a - b);
@@ -52,21 +50,33 @@ export function getCurrentTimestamp() {
  * Set playback to a specific timestamp
  */
 export function seekToTimestamp(timestamp) {
-    const idx = playbackState.allTimestamps.indexOf(timestamp);
-    if (idx !== -1) {
-        playbackState.currentIndex = idx;
-        updateTimeSlider();
+    const timestamps = playbackState.allTimestamps;
+    if (!timestamps.length || !Number.isFinite(Number(timestamp))) return;
+
+    const target = Number(timestamp);
+    let low = 0;
+    let high = timestamps.length;
+    while (low < high) {
+        const mid = (low + high) >>> 1;
+        if (timestamps[mid] <= target) low = mid + 1;
+        else high = mid;
     }
+    playbackState.currentIndex = Math.max(0, low - 1);
+    playbackState.isComplete = false;
+    updatePlaybackDisplay();
+    return timestamps[playbackState.currentIndex];
 }
 
 /**
  * Set playback to a specific frame index
  */
 export function seekToFrame(frameIndex) {
-    if (frameIndex >= 0 && frameIndex < playbackState.allTimestamps.length) {
-        playbackState.currentIndex = frameIndex;
-        updateTimeSlider();
-    }
+    const total = playbackState.allTimestamps.length;
+    if (!total || !Number.isFinite(frameIndex)) return;
+    playbackState.currentIndex = Math.max(0, Math.min(total - 1, Math.floor(frameIndex)));
+    playbackState.isComplete = false;
+    updateTimeSlider();
+    updatePlaybackDisplay();
 }
 
 /**
@@ -95,21 +105,31 @@ function updatePlaybackDisplay() {
     if (!progressEl || !statusEl) return;
     
     const total = playbackState.allTimestamps.length;
-    const current = playbackState.currentIndex + 1;
-    
-    let statusText = '';
-    if (playbackState.isPlaying && !playbackState.isPaused) {
-        statusText = `▶ Playing (${playbackState.speed}x)`;
-    } else if (playbackState.isPaused) {
-        statusText = `⏸ Paused`;
-    } else if (playbackState.isPlaying) {
-        statusText = `▶ Playing (${playbackState.speed}x)`;
-    } else {
-        statusText = `Stopped`;
-    }
+    const current = total ? playbackState.currentIndex + 1 : 0;
+    const statusText = playbackState.isPlaying
+        ? playbackState.isPaused ? '⏸ Paused' : `▶ Playing (${playbackState.speed}x)`
+        : playbackState.isComplete ? '✓ Complete' : total ? 'Ready' : 'No dated transactions';
     
     statusEl.textContent = statusText;
     progressEl.textContent = `Frame ${current} / ${total}`;
+
+    const playButton = document.getElementById('playPauseBtn');
+    if (playButton) {
+        playButton.textContent = playbackState.isPlaying && !playbackState.isPaused ? '⏸' : '▶';
+        playButton.title = playbackState.isPlaying && !playbackState.isPaused ? 'Pause playback' : 'Play from the selected date';
+        playButton.setAttribute('aria-label', playButton.title);
+        playButton.disabled = total === 0;
+    }
+    const stopButton = document.getElementById('playbackStopBtn');
+    if (stopButton) stopButton.disabled = total === 0 || (!playbackState.isPlaying && playbackState.currentIndex === 0);
+    const previousButton = document.getElementById('previousFrameBtn');
+    if (previousButton) previousButton.disabled = total === 0 || playbackState.currentIndex === 0;
+    const nextButton = document.getElementById('nextFrameBtn');
+    if (nextButton) nextButton.disabled = total === 0 || playbackState.currentIndex >= total - 1;
+    const slowerButton = document.getElementById('decreaseSpeedBtn');
+    if (slowerButton) slowerButton.disabled = playbackState.speed <= 0.5;
+    const fasterButton = document.getElementById('increaseSpeedBtn');
+    if (fasterButton) fasterButton.disabled = playbackState.speed >= 4;
 }
 
 /**
@@ -123,11 +143,16 @@ export function startPlayback() {
             return;
         }
     }
+
+    if (playbackState.currentIndex >= playbackState.allTimestamps.length - 1) {
+        playbackState.currentIndex = 0;
+        updateTimeSlider();
+    }
     
     playbackState.isPlaying = true;
     playbackState.isPaused = false;
+    playbackState.isComplete = false;
     playbackState.lastFrameTime = null;
-    playbackState.startIndex = playbackState.currentIndex;
     
     updatePlaybackDisplay();
     animatePlayback();
@@ -139,7 +164,7 @@ export function startPlayback() {
 export function pausePlayback() {
     if (!playbackState.isPlaying) return;
     playbackState.isPaused = true;
-    if (playbackState.animationFrameId) {
+    if (playbackState.animationFrameId !== null) {
         cancelAnimationFrame(playbackState.animationFrameId);
         playbackState.animationFrameId = null;
     }
@@ -163,9 +188,11 @@ export function resumePlayback() {
 export function stopPlayback() {
     playbackState.isPlaying = false;
     playbackState.isPaused = false;
-    playbackState.currentIndex = playbackState.startIndex;
+    playbackState.isComplete = false;
+    playbackState.currentIndex = 0;
+    playbackState.lastFrameTime = null;
     
-    if (playbackState.animationFrameId) {
+    if (playbackState.animationFrameId !== null) {
         cancelAnimationFrame(playbackState.animationFrameId);
         playbackState.animationFrameId = null;
     }
@@ -193,18 +220,14 @@ export function setPlaybackSpeed(speed) {
  * Increase playback speed
  */
 export function increaseSpeed() {
-    let newSpeed = playbackState.speed + 0.5;
-    if (newSpeed > 4) newSpeed = 0.5;  // wrap around
-    setPlaybackSpeed(newSpeed);
+    setPlaybackSpeed(Math.min(4, playbackState.speed + 0.5));
 }
 
 /**
  * Decrease playback speed
  */
 export function decreaseSpeed() {
-    let newSpeed = playbackState.speed - 0.5;
-    if (newSpeed < 0.5) newSpeed = 4;  // wrap around
-    setPlaybackSpeed(newSpeed);
+    setPlaybackSpeed(Math.max(0.5, playbackState.speed - 0.5));
 }
 
 /**
@@ -221,7 +244,6 @@ function animatePlayback() {
         }
         
         const elapsed = currentTime - playbackState.lastFrameTime;
-        playbackState.lastFrameTime = currentTime;
         
         // Calculate frames to advance based on speed
         // Assume ~60fps target; each frame is ~16.67ms
@@ -231,13 +253,18 @@ function animatePlayback() {
         
         if (framesToAdvance > 0) {
             playbackState.currentIndex += framesToAdvance;
-            playbackState.lastFrameTime = currentTime;
+            playbackState.lastFrameTime += framesToAdvance * msPerFrame;
             
             // Check bounds
             if (playbackState.currentIndex >= playbackState.allTimestamps.length) {
-                // Playback complete
                 playbackState.currentIndex = playbackState.allTimestamps.length - 1;
-                stopPlayback();
+                playbackState.isPlaying = false;
+                playbackState.isPaused = false;
+                playbackState.animationFrameId = null;
+                playbackState.lastFrameTime = null;
+                updateTimeSlider();
+                playbackState.isComplete = true;
+                updatePlaybackDisplay();
                 return;
             }
             
@@ -269,22 +296,14 @@ export function togglePlayback() {
  * Advance one frame forward
  */
 export function nextFrame() {
-    if (playbackState.currentIndex < playbackState.allTimestamps.length - 1) {
-        playbackState.currentIndex++;
-        updateTimeSlider();
-        updatePlaybackDisplay();
-    }
+    seekToFrame(playbackState.currentIndex + 1);
 }
 
 /**
  * Go back one frame
  */
 export function previousFrame() {
-    if (playbackState.currentIndex > 0) {
-        playbackState.currentIndex--;
-        updateTimeSlider();
-        updatePlaybackDisplay();
-    }
+    seekToFrame(playbackState.currentIndex - 1);
 }
 
 /**
@@ -297,10 +316,11 @@ export function getPlaybackStats() {
         speed: playbackState.speed,
         currentIndex: playbackState.currentIndex,
         currentTimestamp: getCurrentTimestamp(),
+        isComplete: playbackState.isComplete,
         totalFrames: playbackState.allTimestamps.length,
-        progress: playbackState.allTimestamps.length > 0 
-            ? (playbackState.currentIndex / (playbackState.allTimestamps.length - 1)) * 100 
-            : 0
+        progress: playbackState.allTimestamps.length > 1
+            ? (playbackState.currentIndex / (playbackState.allTimestamps.length - 1)) * 100
+            : playbackState.allTimestamps.length === 1 ? 100 : 0
     };
 }
 
@@ -310,7 +330,15 @@ export function getPlaybackStats() {
  */
 export function initPlayback() {
     playbackState.allTimestamps = getUniqueTimestamps();
-    playbackState.currentIndex = 0;
+    playbackState.currentIndex = Math.max(0, playbackState.allTimestamps.length - 1);
+    playbackState.isPlaying = false;
+    playbackState.isPaused = false;
+    playbackState.isComplete = false;
+    playbackState.lastFrameTime = null;
+    if (playbackState.animationFrameId !== null) {
+        cancelAnimationFrame(playbackState.animationFrameId);
+        playbackState.animationFrameId = null;
+    }
     updatePlaybackDisplay();
 }
 

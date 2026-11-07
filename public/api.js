@@ -18,7 +18,7 @@ async function mempoolFetch(path) {
             return await res.json();
         } catch (err) {
             lastErr = err;
-            console.warn(`⚠️ [API Fallback] ${api} failed, trying next...`, err);
+            console.warn(` [API Fallback] ${api} failed, trying next...`, err);
             continue; // Try next API in the chain
         } finally {
             clearTimeout(timeout);

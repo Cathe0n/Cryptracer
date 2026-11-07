@@ -9,12 +9,24 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"money-tracer/internal/cache"
 )
 
 // Bitquery v2 uses OAuth2 bearer tokens, not the old X-API-KEY header.
 const (
 	tokenEndpoint = "https://oauth2.bitquery.io/oauth2/token"
 	gqlEndpoint   = "https://streaming.bitquery.io/graphql"
+)
+
+// Shared client for token and GraphQL requests.
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
+// Short-lived cache so a search immediately followed by a Verify of the same
+// address does not re-run the GraphQL query.
+var (
+	flowCache = cache.New(512)
+	flowTTL   = 60 * time.Second
 )
 
 // FlowEdge is kept for backward compatibility with aggregator/main callers.
@@ -67,8 +79,7 @@ func getBearer(apiKey string) (string, error) {
 	req, _ := http.NewRequest("POST", tokenEndpoint, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	cl := &http.Client{Timeout: 15 * time.Second}
-	resp, err := cl.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		// Fall back to using key as bearer directly (v1 API keys work this way)
 		log.Printf("⚠️  [BITQUERY] OAuth failed, using key as bearer: %v", err)
@@ -124,8 +135,7 @@ func gqlQuery(ctx context.Context, apiKey, query string, variables map[string]in
 	req.Header.Set("Authorization", "Bearer "+bearer)
 	req.Header.Set("X-API-KEY", apiKey) // fallback for v1-style keys
 
-	cl := &http.Client{Timeout: 30 * time.Second}
-	resp, err := cl.Do(req.WithContext(ctx)) // Use context for request timeout/cancellation
+	resp, err := httpClient.Do(req.WithContext(ctx)) // Use context for request timeout/cancellation
 	if err != nil {
 		return nil, fmt.Errorf("bitquery request: %w", err)
 	}
@@ -162,10 +172,24 @@ func gqlQuery(ctx context.Context, apiKey, query string, variables map[string]in
 // GetAddressTransactions fetches up to limit inflows and outflows for a Bitcoin
 // address using the Bitquery v2 Bitcoin endpoint. Returns both flat FlowEdges
 // (for graph edges) and fully-hydrated TxIO records (for behavioral detection).
+// Results are cached briefly (see flowCache) since the free tier is heavily
+// rate-limited and repeat views of the same address are common.
 func GetAddressTransactions(ctx context.Context, address, apiKey string, limit int) (*AddressTransactions, error) {
 	if limit <= 0 {
 		limit = 200
 	}
+
+	key := fmt.Sprintf("%s:%d", address, limit)
+	res, err := cache.Fetch(flowCache, key, flowTTL, func() (*AddressTransactions, error) {
+		return fetchAddressTransactions(ctx, address, apiKey, limit)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func fetchAddressTransactions(ctx context.Context, address, apiKey string, limit int) (*AddressTransactions, error) {
 
 	query := `
 	query($address: String!, $limit: Int!) {

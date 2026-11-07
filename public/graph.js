@@ -4,145 +4,17 @@ import { state } from './state.js';
 console.log('Cryptracer: D3 Renderer Loaded');
 
 import { MEMPOOL_API } from './state.js';
-import { getNodeCustomColor, getNodeCustomName, getNodeCustomEdgeColor } from './annotations.js';
+import { getNodeCustomColor, getNodeCustomName } from './annotations.js';
 import { showEntityView, getEnrichedEntityInfo } from './ui.js';
-import { showToast } from './utils.js';
+import { setBusy, showToast } from './utils.js';
 import { initPlayback } from './playback.js';
-// ─── Constants ────────────────────────────────────────────────────────────────
+import { getEdgeColor as getGraphEdgeColor } from './graph-colors.js';
+import {
+    buildWalletGraph as buildWalletGraphModule,
+    getWalletId as getWalletIdModule,
+} from './graph-wallet.js';
 
-// ─── Color Utility Functions ───────────────────────────────────────────────────
-
-/**
- * Desaturate a hex color by reducing saturation by a specified percentage
- * @param {string} hexColor - Hex color (#rrggbb)
- * @param {number} desatPercent - Desaturation percentage (0-100), default 30
- * @returns {string} Desaturated hex color
- */
-function desaturateColor(hexColor, desatPercent = 30) {
-    if (!hexColor || !hexColor.startsWith('#')) return hexColor;
-    
-    // Convert hex to RGB
-    const r = parseInt(hexColor.slice(1, 3), 16);
-    const g = parseInt(hexColor.slice(3, 5), 16);
-    const b = parseInt(hexColor.slice(5, 7), 16);
-    
-    // Convert RGB to HSL
-    const rn = r / 255, gn = g / 255, bn = b / 255;
-    const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
-    let h, s, l = (max + min) / 2;
-    
-    if (max === min) {
-        h = s = 0;
-    } else {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-            case rn: h = (gn - bn) / d + (gn < bn ? 6 : 0); break;
-            case gn: h = (bn - rn) / d + 2; break;
-            case bn: h = (rn - gn) / d + 4; break;
-        }
-        h /= 6;
-    }
-    
-    // Reduce saturation
-    s = Math.max(0, s * (1 - desatPercent / 100));
-    
-    // Convert HSL back to RGB
-    const hue2rgb = (p, q, t) => {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1/6) return p + (q - p) * 6 * t;
-        if (t < 1/2) return q;
-        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-        return p;
-    };
-    
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    const rn2 = hue2rgb(p, q, h + 1/3);
-    const gn2 = hue2rgb(p, q, h);
-    const bn2 = hue2rgb(p, q, h - 1/3);
-    
-    const toHex = x => {
-        const hex = Math.round(x * 255).toString(16);
-        return hex.length === 1 ? '0' + hex : hex;
-    };
-    
-    return '#' + toHex(rn2) + toHex(gn2) + toHex(bn2);
-}
-
-/**
- * Check if a node is "tainted" (has risk but no direct reports)
- * @param {Object} nodeData - Node object with risk and risk_data properties
- * @returns {boolean} True if node is tainted
- */
-function isNodeTainted(nodeData) {
-    if (!nodeData || !nodeData.risk || nodeData.risk === 0) return false;
-    const rd = nodeData.risk_data;
-    const hasReports = rd && rd.report_count > 0;
-    const hasError = rd && rd.error;
-    return !hasReports && !hasError;
-}
-
-/**
- * Calculate the color for an edge based on its target node properties and annotations
- * @param {Object} d - D3 link data object
- * @returns {string} Hex color
- */
-function getEdgeColor(d) {
-    const tid = d.target?.id || d.target;
-    const tn = fullGraphData?.nodes[tid];
-    
-    // Check if user set a custom edge color
-    const customEdgeColor = getNodeCustomEdgeColor(tid);
-    if (customEdgeColor) return customEdgeColor;
-    
-    // Use target node's color
-    let nodeColor = '#64748b'; // default
-    if (tn) {
-        const customColor = getNodeCustomColor(tn.id);
-        if (customColor) {
-            nodeColor = customColor;
-        } else if (tn.isTarget) {
-            nodeColor = '#fbbf24';
-        } else if (tn.mixer_info && tn.mixer_info.is_mixer) {
-            const MIXER_NODE_COLORS = {
-                'Wasabi Wallet 1.x (CoinJoin)': '#7c3aed',
-                'Wasabi Wallet 2.0 (WabiSabi)': '#6d28d9',
-                'JoinMarket': '#0891b2',
-                'Whirlpool (Samourai)': '#0e7490',
-                'Centralized Mixer': '#b45309',
-                'Generic CoinJoin': '#4f46e5',
-            };
-            nodeColor = MIXER_NODE_COLORS[tn.mixer_info.raw?.mixer_type] || '#7c3aed';
-        } else if (tn.entity_type === 'mixer') nodeColor = '#7c3aed';
-        else if (tn.entity_type === 'exchange') nodeColor = '#0284c7';
-        else if (tn.entity_type === 'darknet') nodeColor = '#be123c';
-        else if (tn.entity_type === 'mining' || detectMiningPool(tn)) nodeColor = '#facc15';
-        else if (tn.member_count > 1) {
-            if (tn.risk >= 70) nodeColor = '#ef4444';
-            else if (tn.risk >= 40) nodeColor = '#f97316';
-            else if (tn.risk >= 10) nodeColor = '#f59e0b';
-            else nodeColor = '#10b981';
-        } else if (tn.risk) {
-            if (tn.risk >= 70) nodeColor = '#ef4444';
-            else if (tn.risk >= 40) nodeColor = '#f97316';
-            else if (tn.risk >= 10) nodeColor = '#f59e0b';
-            else nodeColor = '#06b6d4';
-        } else if (tn.type === 'Transaction') {
-            nodeColor = '#6366f1';
-        } else {
-            nodeColor = '#0ea5e9';
-        }
-    }
-    
-    // Apply desaturation if node is tainted
-    if (tn && isNodeTainted(tn)) {
-        return desaturateColor(nodeColor, 30);
-    }
-    
-    return nodeColor;
-}
+const getEdgeColor = edge => getGraphEdgeColor(edge, fullGraphData, detectMiningPool);
 
 /**
  * Update node count display in both DOM and state
@@ -199,9 +71,9 @@ function updateMixerDetectionDisplay(mixerNodes) {
     
     // Update status
     if (mixerNodes.length === 1) {
-        statusEl.textContent = '⚠️ 1 Mixer Found';
+        statusEl.textContent = ' 1 Mixer Found';
     } else {
-        statusEl.textContent = `⚠️ ${mixerNodes.length} Mixers Found`;
+        statusEl.textContent = ` ${mixerNodes.length} Mixers Found`;
     }
     
     // Build details
@@ -243,10 +115,11 @@ let currentEdgeHover = null;
 let currentTargetId = null;
 let fullGraphData = null;
 let labelsVisible = true;
-let timestampsVisible = true;
+let timestampsVisible = false;
 let edgeTooltipsVisible = false; // show amount+timestamp tooltips on hover when true
 let isFrozen = false;
 let currentLayout = 'force';  // 'force' | 'tree'
+let layoutSettleTimeout = null;
 let miningFilterActive = false; // true when hiding mining pool nodes
 let incomingFilterActive = false; // true when showing only incoming transactions
 let outgoingFilterActive = false; // true when showing only outgoing transactions
@@ -254,6 +127,7 @@ let rawNodes = [];
 let rawLinks = [];
 let calendarTxDates = {};
 let calendarViewDate = new Date();
+let timelineCollapsed = false;
 let expandedNodes   = new Set(); // tracks which address nodes have been expanded
 window._expandedNodes = expandedNodes;  // expose for ui.js button state
 let selectedNodeId  = null;   // currently-selected node (used by toolbar button)
@@ -268,6 +142,9 @@ let _targetIdBak      = null;    // stash of original targetId before collapse
 let traceFinalAddr    = null;  // final destination address of current trace
 let tracePathNodeIds  = null;  // Set<id> of nodes in active trace path
 let tracePathEdgeKeys = null;  // Set<"s|t"> of edges in active trace path
+let traceRequestGeneration = 0;
+let renderWarmupTimeout = null;
+let lastGraphRenderAt = 0;
 
 // ── Arrow marker management ──────────────────────────────────────────────────
 let defs = null;  // SVG <defs> element for markers
@@ -284,11 +161,12 @@ function getArrowMarkerId(color) {
         const markerId = `arrowhead-${color.slice(1)}`;
         arrowMarkerCache.set(color, markerId);
         defs.append("marker")
-            .attr("id", markerId).attr("viewBox", "0 -5 10 10")
-            .attr("refX", 10).attr("refY", 0)
-            .attr("markerWidth", 6).attr("markerHeight", 6)
+            .attr("id", markerId).attr("viewBox", "0 -6 12 12")
+            .attr("refX", 11).attr("refY", 0)
+            .attr("markerWidth", 9).attr("markerHeight", 9)
+            .attr("markerUnits", "userSpaceOnUse")
             .attr("orient", "auto")
-            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
+            .append("path").attr("d", "M0,-6L12,0L0,6Z").attr("fill", color);
     }
     return `url(#${arrowMarkerCache.get(color)})`;
 }
@@ -444,16 +322,6 @@ function expandSelected() {
 // Each entry: { id, label, risk, nodeCount, edgeCount, ts }
 let searchHistory = [];
 
-// ─── Loader ───────────────────────────────────────────────────────────────────
-const loader = document.getElementById('loader');
-const setBusy = (isBusy, title = 'RECONSTRUCTING TIMELINE...', details = '') => {
-    loader.style.display = isBusy ? 'flex' : 'none';
-    if (isBusy) {
-        document.getElementById('loaderTitle').textContent = title;
-        document.getElementById('loaderDetails').textContent = details;
-    }
-};
-
 // =============================================================================
 // MEMPOOL.SPACE API HELPERS
 // =============================================================================
@@ -498,6 +366,33 @@ function satsToBTC(sats) {
 function formatBTC(btc) {
     if (typeof btc !== 'number') return '0';
     return btc.toFixed(8).replace(/0+$/, '').replace(/\.$/, '') || '0';
+}
+
+function edgeLabelText(d) {
+    const amount = typeof d.amount !== 'undefined' ? `${formatBTC(d.amount)} BTC` : '';
+    const timestamp = d.timestamp || d.ts || 0;
+    if (!amount || !timestamp || !timestampsVisible || !selectedNodeId) return amount;
+
+    try {
+        const date = new Date(Number(timestamp) * 1000);
+        if (!Number.isFinite(date.getTime())) return amount;
+        return `${amount} • ${date.toISOString().replace('T', ' ').split('.')[0]} UTC`;
+    } catch {
+        return amount;
+    }
+}
+
+function positionVisibleEdgeLabels() {
+    if (!edgeLabel || !link) return;
+    edgeLabel.filter(function() { return this.style.display !== 'none'; })
+        .each(function(d) {
+            const position = linkLabelPosition(d);
+            d3.select(this).attr('x', position.x).attr('y', position.y);
+        });
+}
+
+function updateEdgeLabelText() {
+    if (edgeLabel) edgeLabel.text(edgeLabelText);
 }
 
 // =============================================================================
@@ -578,7 +473,7 @@ function renderSearchHistory() {
             <div class="flex items-center justify-between gap-2">
                 <div class="flex items-center gap-2 text-[8px]">
                     <span class="text-slate-500">${entry.nodeCount}N / ${entry.edgeCount}E</span>
-                    ${entry.risk > 0 ? `<span class="font-bold ${riskColor}">⚠ ${entry.risk}</span>` : '<span class="text-emerald-600">✓ clean</span>'}
+                    ${entry.risk > 0 ? `<span class="font-bold ${riskColor}"> ${entry.risk}</span>` : '<span class="text-emerald-600">✓ clean</span>'}
                 </div>
                 ${!isActive ? `<button onclick="window.investigateNode('${entry.id}')"
                     class="text-[8px] font-bold text-cyan-500 hover:text-cyan-300 uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -630,6 +525,7 @@ export async function runSleuth(forcedId) {
     const id = forcedId || document.getElementById('targetId').value.trim();
     if (!id) return;
     if (typeof d3 === 'undefined') { alert('D3.js library not loaded.'); return; }
+    const requestGeneration = ++traceRequestGeneration;
 
     // Keep the input in sync when called programmatically
     if (forcedId) document.getElementById('targetId').value = forcedId;
@@ -640,8 +536,12 @@ export async function runSleuth(forcedId) {
 
     try {
         setBusy(true, 'FETCHING NETWORK DATA...', 'Querying blockchain graph database...');
-        const res  = await fetch(`/api/trace/${id}`);
-        const data = await res.json();
+        // The graph and the history panel are independent — fire both
+        // requests together instead of paying two serial round-trips.
+        const tracePromise   = fetch(`/api/trace/${id}`).then(r => r.json());
+        const historyPromise = fetch(`/api/history/${id}`).then(r => r.json());
+        const data = await tracePromise;
+        if (requestGeneration !== traceRequestGeneration) return;
 
         if (!data.graph || !data.graph.nodes) {
             setBusy(false); alert('No graph data returned.'); return;
@@ -652,14 +552,14 @@ export async function runSleuth(forcedId) {
         console.log(`Received ${nodeCount} nodes, ${edgeCount} edges`);
 
         setBusy(true, 'PROCESSING GRAPH DATA...', `Found ${nodeCount} entities and ${edgeCount} transactions`);
-        
+
         // Show mixer detection is active
         showToast(
-            '🌀 Advanced Mixer Detection Engine Active — Analyzing transaction patterns...',
+            ' Advanced Mixer Detection Engine Active — Analyzing transaction patterns...',
             'info',
             3000
         );
-        
+
         document.getElementById('intelBox').classList.remove('hidden');
         document.getElementById('riskCount').innerText     = data.graph.nodes[id]?.risk  || 0;
         document.getElementById('identityLabel').innerText = data.graph.nodes[id]?.label || id;
@@ -668,8 +568,8 @@ export async function runSleuth(forcedId) {
         addToHistory(id, data.graph);
 
         setBusy(true, 'LOADING TRANSACTION HISTORY...', 'Retrieving activity logs...');
-        const hRes = await fetch(`/api/history/${id}`);
-        const txs  = await hRes.json();
+        const txs = await historyPromise;
+        if (requestGeneration !== traceRequestGeneration) return;
 
         document.getElementById('historyList').innerHTML = (txs || []).slice(0, 10).map(tx => `
             <div class="p-3 rounded-md bg-slate-800/60 border border-slate-700">
@@ -682,6 +582,7 @@ export async function runSleuth(forcedId) {
         setBusy(true, 'CONSTRUCTING GRAPH...', `Preparing ${nodeCount} nodes for D3.js rendering`);
         renderGraph(data.graph, id);
     } catch (err) {
+        if (requestGeneration !== traceRequestGeneration) return;
         console.error('runSleuth error:', err);
         setBusy(false);
         alert('Error loading data: ' + err.message);
@@ -695,11 +596,95 @@ export function renderGraph(graphData, targetId) {
     return _renderGraphImpl(graphData, targetId);
 }
 
+export function clearGraph() {
+    traceRequestGeneration++;
+    clearTimeout(renderWarmupTimeout);
+    renderWarmupTimeout = null;
+    clearTimeout(layoutSettleTimeout);
+    layoutSettleTimeout = null;
+    sessionStorage.removeItem(RELOAD_SESSION_KEY);
+    setBusy(false);
+    simulation?.stop();
+    simulation = null;
+    window.stopPlayback?.();
+    window.clearTrace?.();
+    window.closeEntityView?.();
+
+    const graphContainer = document.getElementById('graph-container');
+    if (graphContainer) graphContainer.innerHTML = '';
+    const targetInput = document.getElementById('targetId');
+    if (targetInput) targetInput.value = '';
+    const graphSearchInput = document.getElementById('graphSearchInput');
+    if (graphSearchInput) graphSearchInput.value = '';
+    const graphSearchResults = document.getElementById('graphSearchResults');
+    if (graphSearchResults) graphSearchResults.innerHTML = '';
+
+    document.getElementById('intelBox')?.classList.add('hidden');
+    const riskCount = document.getElementById('riskCount');
+    if (riskCount) riskCount.textContent = '0';
+    const identityLabel = document.getElementById('identityLabel');
+    if (identityLabel) identityLabel.textContent = 'Unknown';
+    const historyList = document.getElementById('historyList');
+    if (historyList) historyList.innerHTML = 'No history found.';
+    document.getElementById('timelineUI')?.classList.add('hidden');
+
+    edgeTooltipDiv?.remove();
+    edgeTooltipDiv = null;
+    currentEdgeHover = null;
+    currentTargetId = null;
+    fullGraphData = null;
+    currentLayout = 'force';
+    rawNodes = [];
+    rawLinks = [];
+    expandedNodes.clear();
+    selectedNodeId = null;
+    walletViewActive = false;
+    walletGraphData = null;
+    _fullGraphDataBak = null;
+    _targetIdBak = null;
+    traceFinalAddr = null;
+    tracePathNodeIds = null;
+    tracePathEdgeKeys = null;
+    calendarTxDates = {};
+    svg = null;
+    zoom = null;
+    container = null;
+    g = null;
+    link = null;
+    node = null;
+    label = null;
+    edgeLabel = null;
+
+    state.simulation = null;
+    state.svg = null;
+    state.zoom = null;
+    state.container = null;
+    state.g = null;
+    state.link = null;
+    state.node = null;
+    state.label = null;
+    state.currentTargetId = null;
+    state.fullGraphData = null;
+    state.nodeCount = 0;
+    window._rawLinks = [];
+    updateNodeCountDisplay(0);
+    const edgeCount = document.getElementById('edgeCount');
+    if (edgeCount) edgeCount.textContent = '0';
+    updateExpandBtn();
+    updateLayoutButton();
+}
+
 function _renderGraphImpl(graphData, targetId) {
     try {
+        clearTimeout(renderWarmupTimeout);
+        renderWarmupTimeout = null;
+        clearTimeout(layoutSettleTimeout);
+        layoutSettleTimeout = null;
+        simulation?.stop();
         fullGraphData = graphData;
         state.fullGraphData = graphData;
         currentLayout = 'force';
+        updateLayoutButton();
         rawNodes = [];
         rawLinks = [];
         expandedNodes.clear();  // fresh search resets expansion state
@@ -712,12 +697,33 @@ function _renderGraphImpl(graphData, targetId) {
         fetchMiningPools().catch(err => {
             console.warn('Failed to fetch mining pools, falling back to entity_type detection:', err);
         });
+        const nodeBalances = new Map();
+        for (const edge of graphData.edges || []) {
+            const amountSats = Math.round(Number(edge.amount) * 1e8);
+            if (!Number.isFinite(amountSats)) continue;
+            nodeBalances.set(edge.source, (nodeBalances.get(edge.source) || 0) - amountSats);
+            nodeBalances.set(edge.target, (nodeBalances.get(edge.target) || 0) + amountSats);
+        }
         const nodes = Object.entries(graphData.nodes).map(([id, n]) => ({
             id, ...n, label: n.label || id, isTarget: id === targetId
         }));
+        nodes.forEach(n => {
+            if (n.type !== 'Address') return;
+            n._graphBalanceSats = nodeBalances.get(n.id) || 0;
+            n._negativeBalance = n._graphBalanceSats < 0;
+        });
+        const negativeBalanceCount = nodes.filter(n => n._negativeBalance).length;
+        if (negativeBalanceCount) {
+            showToast(
+                `${negativeBalanceCount} address node(s) have a negative graph balance. This indicates an incomplete trace; expand the node to load more of its history.`,
+                'warning',
+                9000
+            );
+        }
         const links = graphData.edges.map(e => ({ ...e, source: e.source, target: e.target }));
         rawNodes = nodes;
         rawLinks = links;
+        markOppositeDirectionEdges(rawLinks);
         window._rawLinks = rawLinks;  // Expose to playback module
 
         // ─── Analyze Mixer Detection Results ───────────────────────────────────
@@ -728,7 +734,7 @@ function _renderGraphImpl(graphData, targetId) {
         
         if (mixerDetections.length > 0) {
             showToast(
-                `🌀 Advanced Mixer Detection: Found ${mixerDetections.length} mixing transaction(s)`,
+                ` Advanced Mixer Detection: Found ${mixerDetections.length} mixing transaction(s)`,
                 'mixer',
                 7000
             );
@@ -797,11 +803,12 @@ function _renderGraphImpl(graphData, targetId) {
 
         // Create default markers upfront
         const mkArrow = (id, color) => defs.append("marker")
-            .attr("id", id).attr("viewBox", "0 -5 10 10")
-            .attr("refX", 10).attr("refY", 0)
-            .attr("markerWidth", 6).attr("markerHeight", 6)
+            .attr("id", id).attr("viewBox", "0 -6 12 12")
+            .attr("refX", 11).attr("refY", 0)
+            .attr("markerWidth", 9).attr("markerHeight", 9)
+            .attr("markerUnits", "userSpaceOnUse")
             .attr("orient", "auto")
-            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", color);
+            .append("path").attr("d", "M0,-6L12,0L0,6Z").attr("fill", color);
 
         mkArrow("arrowhead-default",   "#64748b");
         mkArrow("arrowhead-highlight", "#0ea5e9");
@@ -866,8 +873,9 @@ function _renderGraphImpl(graphData, targetId) {
             .on("tick", ticked);
 
         link = g.append("g").attr("class", "links")
-            .selectAll("line").data(links).enter().append("line")
+            .selectAll("path").data(links).enter().append("path")
             .attr("class", "link")
+            .attr("fill", "none")
             .style("stroke", d => getEdgeColor(d))
             .attr("stroke-opacity", 0.85)
             .attr("stroke-width", d => Math.max(2.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 8)))
@@ -900,6 +908,7 @@ function _renderGraphImpl(graphData, targetId) {
             .attr("fill", d => defaultNodeFill(d))
             .attr("stroke", d => {
                 if (d.isTarget) return '#fbbf24';
+                if (d._negativeBalance) return '#dc2626';
                 if (d.is_coinbase || d.entity_type === 'mining' || detectMiningPool(d)) return '#d97706';
                 if (d.risk >= 70) return '#dc2626';
                 if (d.risk >= 40) return '#ea580c';
@@ -907,8 +916,16 @@ function _renderGraphImpl(graphData, targetId) {
                 if (d.type === 'Transaction') return '#4338ca';
                 return 'none';
             })
-            .attr("stroke-width", d => (d.isTarget || d.risk >= 40 || d.is_coinbase) ? 2 : 1)
+            .attr("stroke-width", d => d._negativeBalance ? 3 : (d.isTarget || d.risk >= 40 || d.is_coinbase) ? 2 : 1)
             .attr("stroke-opacity", 0.6)
+            .attr("title", d => d._negativeBalance
+                ? `Negative graph balance (${formatBTC(d._graphBalanceSats / 1e8)} BTC). This node's trace is incomplete; expand it to load more history.`
+                : (d.label || d.id))
+            .each(function(d) {
+                d3.select(this).append("title").text(d._negativeBalance
+                    ? `Negative graph balance (${formatBTC(d._graphBalanceSats / 1e8)} BTC). This node's trace is incomplete; expand it to load more history.`
+                    : (d.label || d.id));
+            })
             .on("click", (ev, d) => { ev.stopPropagation(); showEntityView(d.id); highlightNode(d.id); })
             .on("mouseover", (ev, d) => highlightNeighbors(d, true))
             .on("mouseout",  (ev, d) => highlightNeighbors(d, false))
@@ -920,30 +937,27 @@ function _renderGraphImpl(graphData, targetId) {
             .attr("class", "node-label")
             .text(d => {
                 const base = getEnrichedNodeName(d.id, d);
+                let display = base;
                 // ── Mining badge ─────────────────────────────────────────────
                 if (d.is_coinbase || d.entity_type === 'mining' || detectMiningPool(d)) {
                     const pi = detectMiningPool(d);
                     const poolName = pi?.name && pi.name !== 'Mining Reward Tx' ? pi.name
                         : (d.is_coinbase ? 'Coinbase TX' : null);
-                    if (poolName && poolName !== base) return `⛏ ${poolName}`;
-                    return `⛏ ${base}`;
-                }
-                // ── Address truncation ───────────────────────────────────────
-                // Show first 8 + last 6 chars for raw addresses/txids to keep
-                // the graph readable at default zoom. Meaningful labels (pool names,
-                // service names set by WalletExplorer) are shown in full.
-                if (base.length > 18 && base === d.id) {
-                    return base.slice(0, 8) + '…' + base.slice(-6);
-                }
-                // If node has a label that isn't the ID (Huobi, Binance, etc), show "Label (ID)"
-                if (base !== d.id) {
+                    display = poolName && poolName !== base ? ` ${poolName}` : ` ${base}`;
+                } else if (base.length > 18 && base === d.id) {
+                    // Keep raw addresses and transaction IDs compact at default zoom.
+                    display = base.slice(0, 8) + '…' + base.slice(-6);
+                } else if (base !== d.id) {
                     const shortId = d.id.slice(0, 4) + '…' + d.id.slice(-4);
-                    return `${base} (${shortId})`;
+                    display = `${base} (${shortId})`;
+                } else if (base.length > 24) {
+                    display = base.slice(0, 20) + '…';
                 }
-                if (base.length > 24) return base.slice(0, 20) + '…';
-                return base;
+                return d._negativeBalance ? ` ${display}` : display;
             })
-            .attr("title", d => d.label || d.id)
+            .attr("title", d => d._negativeBalance
+                ? `Negative graph balance (${formatBTC(d._graphBalanceSats / 1e8)} BTC). This node's trace is incomplete; expand it to load more history.`
+                : (d.label || d.id))
             .attr("dx", 10).attr("dy", ".35em")
             .attr("fill", "#1e293b") // Dark slate text for white background
             .attr("font-size", d => {
@@ -957,6 +971,7 @@ function _renderGraphImpl(graphData, targetId) {
             .style("display", d => {
                 if (!labelsVisible) return "none";
                 if (d.isTarget) return null;
+                if (d._negativeBalance) return null;
                 if (d.risk >= 40) return null;
                 if (d.entity_type === 'mining' || d.is_coinbase) return null;
                 if (d.entity_type === 'exchange' || d.entity_type === 'mixer') return null;
@@ -971,7 +986,11 @@ function _renderGraphImpl(graphData, targetId) {
             .selectAll("text").data(links).enter().append("text")
             .attr("class", "edge-label")
             .attr("text-anchor", "middle")
-            .attr("fill", "#0f172a").attr("font-size", "10px").attr("font-weight", "500");
+            .attr("fill", "#0f172a").attr("font-size", "10px").attr("font-weight", "500")
+            .attr("paint-order", "stroke")
+            .attr("stroke", "#ffffff").attr("stroke-width", "5px").attr("stroke-linejoin", "round")
+            .style("display", "none")
+            .text(edgeLabelText);
 
         zoom = d3.zoom().scaleExtent([0.1, 8])
             .on("zoom", ev => {
@@ -997,12 +1016,19 @@ function _renderGraphImpl(graphData, targetId) {
         document.getElementById('edgeCount').textContent = links.length.toLocaleString();
 
         initNetworkStats(); // Ensure ticker is started
+        initPlayback();  // Initialize playback before timeline scrubbing is wired.
         initTimeline(links);
-        initPlayback();  // Initialize time-travel animation with current graph timestamps
         setBusy(true, 'CALCULATING LAYOUT...', 'Running D3 force simulation');
         // Extended warmup: 5s for large graphs (≥100 nodes), 3s otherwise
         const warmupMs = nodes.length >= 100 ? 5000 : 3000;
-        setTimeout(() => { simulation.stop(); recenterGraph(); updateExpandRings(); setBusy(false); }, warmupMs);
+        renderWarmupTimeout = setTimeout(() => {
+            if (!simulation) return;
+            simulation.stop();
+            recenterGraph();
+            updateExpandRings();
+            setBusy(false);
+            renderWarmupTimeout = null;
+        }, warmupMs);
 
     } catch (err) {
         console.error('renderGraph error:', err);
@@ -1026,24 +1052,95 @@ function nodeRadius(d) {
     return 6 + Math.min(bonus, 4);
 }
 
+function markOppositeDirectionEdges(edges) {
+    const directions = new Set();
+    const parallelGroups = new Map();
+    for (const edge of edges) {
+        const source = edge.source?.id || edge.source;
+        const target = edge.target?.id || edge.target;
+        directions.add(JSON.stringify([source, target]));
+        const groupKey = [String(source), String(target)].sort().join('|');
+        if (!parallelGroups.has(groupKey)) parallelGroups.set(groupKey, []);
+        parallelGroups.get(groupKey).push(edge);
+    }
+
+    for (const edge of edges) {
+        const source = edge.source?.id || edge.source;
+        const target = edge.target?.id || edge.target;
+        edge._hasReverseEdge = directions.has(JSON.stringify([target, source]));
+        const groupKey = [String(source), String(target)].sort().join('|');
+        const group = parallelGroups.get(groupKey);
+        const laneIndex = group.indexOf(edge);
+        edge._laneOffset = (laneIndex - (group.length - 1) / 2) * 22;
+    }
+}
+
+function linkCoordinates(d) {
+    const sx = Number.isFinite(d.source?.x) ? d.source.x : 0;
+    const sy = Number.isFinite(d.source?.y) ? d.source.y : 0;
+    const tx = Number.isFinite(d.target?.x) ? d.target.x : 0;
+    const ty = Number.isFinite(d.target?.y) ? d.target.y : 0;
+    const dx = tx - sx, dy = ty - sy;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const ux = dx / dist, uy = dy / dist;
+    const sr = nodeRadius(d.source);
+    const tr = nodeRadius(d.target);
+    const laneOffset = d._laneOffset || 0;
+    const sourceLane = Math.max(-sr + 1, Math.min(sr - 1, laneOffset));
+    const targetLane = Math.max(-tr + 1, Math.min(tr - 1, laneOffset));
+    const sourceAlong = Math.sqrt(Math.max(0, sr * sr - sourceLane * sourceLane));
+    const targetAlong = Math.sqrt(Math.max(0, tr * tr - targetLane * targetLane));
+    return {
+        x1: sx + ux * sourceAlong - uy * sourceLane,
+        y1: sy + uy * sourceAlong + ux * sourceLane,
+        x2: tx - ux * targetAlong - uy * targetLane,
+        y2: ty - uy * targetAlong + ux * targetLane
+    };
+}
+
+function linkPath(d) {
+    const coords = linkCoordinates(d);
+    const sourceX = Number.isFinite(d.source?.x) ? d.source.x : 0;
+    const sourceY = Number.isFinite(d.source?.y) ? d.source.y : 0;
+    const targetX = Number.isFinite(d.target?.x) ? d.target.x : 0;
+    const targetY = Number.isFinite(d.target?.y) ? d.target.y : 0;
+    const dx = targetX - sourceX;
+    const dy = targetY - sourceY;
+    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+    const laneOffset = d._laneOffset || 0;
+    const curveOffset = laneOffset * 3;
+    const controlX = (sourceX + targetX) / 2 - (dy / distance) * curveOffset;
+    const controlY = (sourceY + targetY) / 2 + (dx / distance) * curveOffset;
+
+    return `M${coords.x1},${coords.y1} Q${controlX},${controlY} ${coords.x2},${coords.y2}`;
+}
+
+function linkLabelPosition(d) {
+    const sourceX = Number.isFinite(d.source?.x) ? d.source.x : 0;
+    const sourceY = Number.isFinite(d.source?.y) ? d.source.y : 0;
+    const targetX = Number.isFinite(d.target?.x) ? d.target.x : 0;
+    const targetY = Number.isFinite(d.target?.y) ? d.target.y : 0;
+    const dx = targetX - sourceX;
+    const dy = targetY - sourceY;
+    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+    const laneOffset = d._laneOffset || 0;
+
+    return {
+        x: (sourceX + targetX) / 2 - (dy / distance) * laneOffset,
+        y: (sourceY + targetY) / 2 + (dx / distance) * laneOffset - 6
+    };
+}
+
 function ticked() {
+    const now = performance.now();
+    const minRenderInterval = rawNodes.length >= 1000 ? 50 : rawNodes.length >= 500 ? 33 : 0;
+    if (minRenderInterval && now - lastGraphRenderAt < minRenderInterval) return;
+    lastGraphRenderAt = now;
+
     // Draw each link from the source node's boundary to the target node's boundary.
     // This ensures the arrowhead (marker-end) appears just outside the target circle
     // and that the line visually exits from the source circle, not its centre.
-    link.each(function(d) {
-        const sx = d.source.x || 0, sy = d.source.y || 0;
-        const tx = d.target.x || 0, ty = d.target.y || 0;
-        const dx = tx - sx, dy = ty - sy;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const ux = dx / dist, uy = dy / dist;
-        const sr = nodeRadius(d.source) + 2;   // source boundary + tiny gap
-        const tr = nodeRadius(d.target) + 2;   // target boundary (arrow tip lands here)
-        d3.select(this)
-            .attr("x1", sx + ux * sr)
-            .attr("y1", sy + uy * sr)
-            .attr("x2", tx - ux * tr)
-            .attr("y2", ty - uy * tr);
-    });
+    link.attr("d", linkPath);
     node.attr("cx", d => d.x).attr("cy", d => d.y);
     label.attr("x", d => d.x).attr("y", d => d.y);
     // Expand-rings share the same data objects as rawNodes, so d.x/d.y are always current
@@ -1056,32 +1153,7 @@ function ticked() {
                 .attr('cx', fn.x || 0).attr('cy', fn.y || 0);
         }
     }
-    // Update edge label positions and text
-    if (edgeLabel && edgeLabel.size && link) {
-        edgeLabel.attr('x', d => (d.source.x + d.target.x) / 2)
-                 .attr('y', d => (d.source.y + d.target.y) / 2 - 6)
-                .text(d => {
-                    const amt = typeof d.amount !== 'undefined' ? (formatBTC(d.amount) + ' BTC') : '';
-                    const ts = d.timestamp || d.ts || 0;
-                    let tsText = '';
-                    if (ts && Number(ts) > 0) {
-                        try {
-                            const dt = new Date(Number(ts) * 1000);
-                            tsText = dt.toISOString().replace('T', ' ').split('.')[0] + ' UTC';
-                        } catch (e) { tsText = ''; }
-                    }
-                    // Only include timestamp in the label text; visibility is still
-                    // controlled by hover/selection/toggle so we don't clutter view.
-                    if (edgeTooltipsVisible) {
-                        // When tooltips are enabled we still hide labels by default
-                        // and show them on hover/selection; text contains amt+ts if available.
-                        return tsText ? `${amt} • ${tsText}` : amt;
-                    }
-                    return (amt && tsText && timestampsVisible && (selectedNodeId && (d.source.id === selectedNodeId || d.target.id === selectedNodeId)))
-                        ? `${amt} • ${tsText}`
-                        : amt;
-                });
-    }
+    if (timestampsVisible) positionVisibleEdgeLabels();
     // If an edge tooltip is visible while the simulation/tick runs, keep it positioned
     if (currentEdgeHover && edgeTooltipDiv && edgeTooltipDiv.style.display === 'block') {
         try {
@@ -1227,16 +1299,18 @@ function drag() {
  * ones are entered. The simulation is NOT rebuilt here — callers do that.
  */
 function rebindGraphSelections() {
+    markOppositeDirectionEdges(rawLinks);
     // ── Links ────────────────────────────────────────────────────────────────
-    g.select(".links").selectAll("line")
+    g.select(".links").selectAll("path")
         .data(rawLinks, l => {
             const s = l.source?.id || l.source;
             const t = l.target?.id || l.target;
             return `${s}|${t}`;
         })
         .join(
-            enter => enter.append("line")
+            enter => enter.append("path")
                 .attr("class", "link")
+                .attr("fill", "none")
                 .style("stroke", d => getEdgeColor(d))
                 .attr("stroke-opacity", 0.85)
                 .attr("stroke-width", d => Math.max(2.5, Math.min(Math.sqrt((d.amount||0)+1)*2, 8)))
@@ -1244,7 +1318,7 @@ function rebindGraphSelections() {
             update => update,
             exit   => exit.remove()
         );
-    link = g.select(".links").selectAll("line");
+    link = g.select(".links").selectAll("path");
     state.link = link;
 
     // ── Nodes ────────────────────────────────────────────────────────────────
@@ -1299,29 +1373,16 @@ function rebindGraphSelections() {
                 .attr('class', 'edge-label')
                 .attr('text-anchor', 'middle')
                 .attr('fill', '#0f172a').attr('font-size', '10px').attr('font-weight', '500')
-                .text(d => {
-                    const amt = typeof d.amount !== 'undefined' ? (formatBTC(d.amount) + ' BTC') : '';
-                    const ts = d.timestamp || d.ts || 0;
-                    let tsText = '';
-                    if (ts && Number(ts) > 0) {
-                        try { tsText = new Date(Number(ts) * 1000).toISOString().replace('T', ' ').split('.')[0] + ' UTC'; } catch (e) { tsText = ''; }
-                    }
-                    return (amt && tsText && timestampsVisible && (selectedNodeId && true)) ? `${amt} • ${tsText}` : amt;
-                }),
-            update => update.text(d => {
-                const amt = typeof d.amount !== 'undefined' ? (formatBTC(d.amount) + ' BTC') : '';
-                const ts = d.timestamp || d.ts || 0;
-                let tsText = '';
-                if (ts && Number(ts) > 0) {
-                    try { tsText = new Date(Number(ts) * 1000).toISOString().replace('T', ' ').split('.')[0] + ' UTC'; } catch (e) { tsText = ''; }
-                }
-                return (amt && tsText && timestampsVisible && (selectedNodeId && true)) ? `${amt} • ${tsText}` : amt;
-            }),
+                .attr('paint-order', 'stroke')
+                .attr('stroke', '#ffffff').attr('stroke-width', '5px').attr('stroke-linejoin', 'round')
+                .style('display', 'none')
+                .text(edgeLabelText),
+            update => update.text(edgeLabelText),
             exit => exit.remove()
         );
 
     // Add hover listeners on links to show per-edge tooltip when enabled
-    g.select('.links').selectAll('line')
+    g.select('.links').selectAll('path')
         .on('mouseover', function(ev, d) {
             if (!edgeTooltipsVisible) return;
             if (!edgeTooltipDiv) createEdgeTooltip();
@@ -1459,26 +1520,36 @@ async function expandNode(nodeId) {
         updateNodeCountDisplay(rawNodes.length);
         document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
 
-        // ── Rebuild simulation — do NOT reuse old one ────────────────────────
-        // The old simulation already has stale node/link references.
-        if (simulation) simulation.stop();
-        simulation = d3.forceSimulation(rawNodes)
-            .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
-                // Transactions need more space from their connections
-                if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
-                    return (d.amount||0) > 1 ? 120 : 80;
-                }
-                return (d.amount||0) > 1 ? 100 : 60;
-            }))
-            .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -100))
-            .force("center", d3.forceCenter(0, 0))
-            .on("tick", ticked);
-
         const msg = newNodeCount > 0
             ? `Added ${newNodeCount} node${newNodeCount!==1?'s':''}, ${newEdgeCount} edge${newEdgeCount!==1?'s':''}`
             : 'No new connections found';
-        setBusy(true, 'RECALCULATING LAYOUT...', msg);
-        setTimeout(() => { if (simulation) simulation.stop(); fitGraphToScreen(); setBusy(false); }, 2500);
+        if (currentLayout === 'tree') {
+            simulation?.stop();
+            simulation = null;
+            applyTreeLayout();
+            setBusy(false);
+        } else {
+            // Rebuild: the previous simulation has stale node/link references.
+            if (simulation) simulation.stop();
+            simulation = d3.forceSimulation(rawNodes)
+                .force("link",   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
+                    if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
+                        return (d.amount||0) > 1 ? 120 : 80;
+                    }
+                    return (d.amount||0) > 1 ? 100 : 60;
+                }))
+                .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -100))
+                .force("center", d3.forceCenter(0, 0))
+                .on("tick", ticked);
+            const expandedSimulation = simulation;
+            setBusy(true, 'RECALCULATING LAYOUT...', msg);
+            setTimeout(() => {
+                if (simulation !== expandedSimulation) return;
+                expandedSimulation.stop();
+                fitGraphToScreen();
+                setBusy(false);
+            }, 2500);
+        }
         // Refresh timeline to include any newly added timestamps from expansion
         refreshTimelineFromRawLinks();
 
@@ -1516,14 +1587,14 @@ async function expandAll() {
         if (!btn) return;
         if (!running) {
             btn.disabled = false;
-            btn.textContent = '⚡ Expand All';
+            btn.textContent = ' Expand All';
             btn.classList.remove('bg-red-700', 'hover:bg-red-600');
             btn.classList.add('bg-violet-700', 'hover:bg-violet-600');
             if (stopBtn) stopBtn.style.display = 'none';
             if (loaderStop) loaderStop.style.display = 'none';
         } else {
             btn.disabled = false;
-            btn.textContent = `⚡ Expanding… ${remaining}`;
+            btn.textContent = ` Expanding… ${remaining}`;
             btn.classList.remove('bg-violet-700', 'hover:bg-violet-600');
             btn.classList.add('bg-violet-900', 'hover:bg-violet-800');
             if (stopBtn) stopBtn.style.display = '';
@@ -1556,74 +1627,90 @@ async function expandAll() {
     setBtn(true, `0 / ${queue.length}`);
     let done = 0;
 
-    for (const nodeId of queue) {
+    // Expand in server-side-parallel batches via /api/trace-batch. The old
+    // version awaited a full /api/trace round-trip per node with a 400ms
+    // throttle — minutes of waiting on larger graphs.
+    const BATCH_SIZE = 8;
+
+    for (let i = 0; i < queue.length; i += BATCH_SIZE) {
         if (_expandAllAbort) break;
-        setBtn(true, `${done + 1} / ${queue.length}`);
-        setBusy(true, `EXPANDING ${done + 1} / ${queue.length}`,
-            nodeId.substring(0, 10) + '…' + nodeId.slice(-6));
+        const chunk = queue.slice(i, i + BATCH_SIZE);
+        const progressed = Math.min(i + BATCH_SIZE, queue.length);
+        setBtn(true, `${progressed} / ${queue.length}`);
+        setBusy(true, `EXPANDING ${progressed} / ${queue.length}`,
+            chunk[0].substring(0, 10) + '…' + chunk[0].slice(-6));
 
-        if (!expandedNodes.has(nodeId)) {
-            expandedNodes.add(nodeId);
-            window._expandedNodes = expandedNodes;
+        // Mark the whole chunk up front; un-mark on failure so a retry works
+        chunk.forEach(nodeId => expandedNodes.add(nodeId));
+        window._expandedNodes = expandedNodes;
+        updateExpandRings();
+
+        try {
+            const res = await fetch('/api/trace-batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: chunk }),
+            });
+            const data = await res.json();
+            if (!data.graphs) throw new Error(data.error || 'batch request failed');
+
+            const anchor = rawNodes.find(n => n.id === chunk[0]);
+            const ax = anchor?.x ?? 0, ay = anchor?.y ?? 0;
+            const existingIds  = new Set(rawNodes.map(n => n.id));
+            const existingKeys = new Set(rawLinks.map(l =>
+                `${l.source?.id || l.source}|${l.target?.id || l.target}`));
+
+            Object.values(data.graphs).forEach(g => {
+                Object.entries(g.nodes).forEach(([id, n]) => {
+                    if (existingIds.has(id)) return;
+                    const angle = Math.random() * 2 * Math.PI;
+                    const dist  = 80 + Math.random() * 80;
+                    rawNodes.push({ id, ...n, label: n.label || id, isTarget: false,
+                        x: ax + Math.cos(angle) * dist, y: ay + Math.sin(angle) * dist });
+                    fullGraphData.nodes[id] = n;
+                });
+                (g.edges || []).forEach(e => {
+                    if (existingKeys.has(`${e.source}|${e.target}`)) return;
+                    rawLinks.push({ ...e });
+                    if (!fullGraphData.edges) fullGraphData.edges = [];
+                    fullGraphData.edges.push(e);
+                });
+            });
+            window._rawLinks = rawLinks;  // Update playback module with new links
+
+            rebindGraphSelections();
             updateExpandRings();
+            updateNodeCountDisplay(rawNodes.length);
+            document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
 
-            try {
-                const res  = await fetch(`/api/trace/${nodeId}`);
-                const data = await res.json();
-
-                if (data.graph?.nodes) {
-                    const anchor = rawNodes.find(n => n.id === nodeId);
-                    const ax = anchor?.x ?? 0, ay = anchor?.y ?? 0;
-                    const existingIds  = new Set(rawNodes.map(n => n.id));
-                    const existingKeys = new Set(rawLinks.map(l =>
-                        `${l.source?.id || l.source}|${l.target?.id || l.target}`));
-
-                    Object.entries(data.graph.nodes).forEach(([id, n]) => {
-                        if (existingIds.has(id)) return;
-                        const angle = Math.random() * 2 * Math.PI;
-                        const dist  = 80 + Math.random() * 80;
-                        rawNodes.push({ id, ...n, label: n.label || id, isTarget: false,
-                            x: ax + Math.cos(angle) * dist, y: ay + Math.sin(angle) * dist });
-                        fullGraphData.nodes[id] = n;
-                    });
-                    (data.graph.edges || []).forEach(e => {
-                        if (existingKeys.has(`${e.source}|${e.target}`)) return;
-                        rawLinks.push({ ...e });
-                        if (!fullGraphData.edges) fullGraphData.edges = [];
-                        fullGraphData.edges.push(e);
-                    });
-                    window._rawLinks = rawLinks;  // Update playback module with new links
-
-                    rebindGraphSelections();
-                    updateExpandRings();
-                    updateNodeCountDisplay(rawNodes.length);
-                    document.getElementById('edgeCount').textContent = rawLinks.length.toLocaleString();
-
-                    if (simulation) simulation.stop();
-                    simulation = d3.forceSimulation(rawNodes)
-                        .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
-                            if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
-                                return (d.amount||0) > 1 ? 120 : 80;
-                            }
-                            return (d.amount||0) > 1 ? 100 : 60;
-                        }))
-                        .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -100))
-                        .force('center', d3.forceCenter(0, 0))
-                        .on('tick', ticked);
-                    refreshTimelineFromRawLinks();
-                }
-            } catch (err) {
-                expandedNodes.delete(nodeId);
-                console.error('expandAll error:', nodeId, err);
+            if (currentLayout === 'tree') {
+                simulation?.stop();
+                simulation = null;
+            } else {
+                if (simulation) simulation.stop();
+                simulation = d3.forceSimulation(rawNodes)
+                    .force('link',   d3.forceLink(rawLinks).id(d => d.id).distance(d => {
+                        if (d.source?.type === 'Transaction' || d.target?.type === 'Transaction') {
+                            return (d.amount||0) > 1 ? 120 : 80;
+                        }
+                        return (d.amount||0) > 1 ? 100 : 60;
+                    }))
+                    .force('charge', d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -100))
+                    .force('center', d3.forceCenter(0, 0))
+                    .on('tick', ticked);
             }
+            refreshTimelineFromRawLinks();
+        } catch (err) {
+            chunk.forEach(nodeId => expandedNodes.delete(nodeId));
+            console.error('expandAll batch error:', err);
         }
-        done++;
-        await new Promise(r => setTimeout(r, 400)); // throttle — 400ms between requests
+        done += chunk.length;
     }
 
     setBtn(false, 0);
+    if (currentLayout === 'tree') applyTreeLayout();
     setBusy(true, 'EXPAND ALL COMPLETE', `Expanded ${done} node${done !== 1 ? 's' : ''}`);
-    fitGraphToScreen();
+    if (currentLayout !== 'tree') fitGraphToScreen();
     setTimeout(() => setBusy(false), 3000);
 }
 window.expandAll = expandAll;
@@ -1722,20 +1809,42 @@ export function updateGraphEdgeColors(targetNodeId) {
 }
 
 // =============================================================================
-// TREE LAYOUT — proper d3.hierarchy + d3.cluster(), NOT force simulation
+// TREE LAYOUT — rooted hierarchy with a stable spanning tree
 // =============================================================================
+
+function updateLayoutButton() {
+    const btn = document.getElementById('layoutBtn');
+    const text = document.getElementById('layoutText');
+    if (!btn || !text) return;
+
+    const isTree = currentLayout === 'tree';
+    text.textContent = isTree ? 'Force layout' : 'Tree layout';
+    btn.title = isTree
+        ? 'Switch to force-directed layout'
+        : 'Switch to hierarchy layout';
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-pressed', String(isTree));
+    btn.classList.toggle('bg-emerald-700', isTree);
+    btn.classList.toggle('border-emerald-500', isTree);
+    btn.classList.toggle('text-white', isTree);
+    btn.classList.toggle('hover:bg-emerald-600', isTree);
+    btn.classList.toggle('bg-slate-700', !isTree);
+    btn.classList.toggle('border-slate-600', !isTree);
+    btn.classList.toggle('text-slate-200', !isTree);
+    btn.classList.toggle('hover:bg-slate-600', !isTree);
+}
+
+function undirectedEdgeKey(source, target) {
+    const a = String(source);
+    const b = String(target);
+    return JSON.stringify(a < b ? [a, b] : [b, a]);
+}
 
 function applyTreeLayout() {
     if (!node || !link || !label || rawNodes.length === 0) return;
 
-    // ── Step 1: Kill simulation completely. Do NOT reuse it. ──────────────────
-    if (simulation) {
-        simulation.stop();
-        simulation = null;
-    }
-    // Clear every pinned position left over from force layout.
-    // If any fx/fy survive, D3 will honour them and override our tree positions.
-    node.data().forEach(d => { d.fx = null; d.fy = null; });
+    simulation?.stop();
+    simulation = null;
     isFrozen = true;
 
     const freezeBtn = document.getElementById('freezeText');
@@ -1745,112 +1854,128 @@ function applyTreeLayout() {
         freezeBtn.parentElement.classList.add('bg-blue-700/90', 'border-blue-500', 'text-white');
     }
 
-    // ── Step 2: Build a BFS spanning tree rooted at the target ───────────────
-    // d3.hierarchy requires a strict tree (no cycles). The blockchain graph has
-    // cycles, so we do a BFS and visit each node exactly once, turning the graph
-    // into a spanning tree. Each edge is recorded as parent→child only once.
-    const rootId = currentTargetId || rawNodes[0]?.id;
-    if (!rootId) return;
-
-    // Undirected adjacency from all raw edges
-    const adj = new Map(rawNodes.map(n => [n.id, []]));
-    rawLinks.forEach(l => {
-        const sid = l.source.id || l.source;
-        const tid = l.target.id || l.target;
-        if (adj.has(sid)) adj.get(sid).push(tid);
-        if (adj.has(tid)) adj.get(tid).push(sid);
+    const liveNodesById = new Map(node.data().map(d => [d.id, d]));
+    rawLinks.forEach(edge => {
+        const sourceId = edge.source?.id ?? edge.source;
+        const targetId = edge.target?.id ?? edge.target;
+        if (liveNodesById.has(sourceId)) edge.source = liveNodesById.get(sourceId);
+        if (liveNodesById.has(targetId)) edge.target = liveNodesById.get(targetId);
     });
 
-    // BFS: each visited node becomes a child of the node that first discovered it.
-    const treeNodes = new Map(rawNodes.map(n => [n.id, { id: n.id, children: [] }]));
-    const visited   = new Set([rootId]);
-    const queue     = [rootId];
-    while (queue.length) {
-        const curr = queue.shift();
-        for (const nb of (adj.get(curr) || [])) {
-            if (!visited.has(nb)) {
-                visited.add(nb);
-                treeNodes.get(curr).children.push(treeNodes.get(nb));
-                queue.push(nb);
+    const adjacency = new Map(rawNodes.map(n => [n.id, new Set()]));
+    rawLinks.forEach(edge => {
+        const source = edge.source?.id ?? edge.source;
+        const target = edge.target?.id ?? edge.target;
+        if (source === target || !adjacency.has(source) || !adjacency.has(target)) return;
+        adjacency.get(source).add(target);
+        adjacency.get(target).add(source);
+    });
+
+    const hierarchyNodes = new Map(rawNodes.map(n => [n.id, { id: n.id, children: [] }]));
+    const preferredRoot = hierarchyNodes.has(currentTargetId)
+        ? currentTargetId
+        : rawNodes[0].id;
+    const candidates = [preferredRoot, ...rawNodes.map(n => n.id).filter(id => id !== preferredRoot)];
+    const visited = new Set();
+    const componentRoots = [];
+    const treeEdgeKeys = new Set();
+
+    // Use an index-based queue to keep the traversal linear on large graphs.
+    for (const rootId of candidates) {
+        if (visited.has(rootId)) continue;
+        componentRoots.push(hierarchyNodes.get(rootId));
+        visited.add(rootId);
+        const queue = [rootId];
+        for (let cursor = 0; cursor < queue.length; cursor++) {
+            const parentId = queue[cursor];
+            for (const childId of adjacency.get(parentId)) {
+                if (visited.has(childId)) continue;
+                visited.add(childId);
+                hierarchyNodes.get(parentId).children.push(hierarchyNodes.get(childId));
+                treeEdgeKeys.add(undirectedEdgeKey(parentId, childId));
+                queue.push(childId);
             }
         }
     }
-    // Disconnected nodes that BFS never reached: attach directly to root so
-    // they don't disappear from the view.
-    rawNodes.forEach(n => {
-        if (!visited.has(n.id)) treeNodes.get(rootId).children.push(treeNodes.get(n.id));
+
+    // A virtual root lays out disconnected components separately without
+    // drawing made-up links between them.
+    const hierarchyData = componentRoots.length === 1
+        ? componentRoots[0]
+        : { children: componentRoots };
+    const hierarchyRoot = d3.hierarchy(hierarchyData, d => d.children);
+    const breadthGap = Math.max(28, Math.min(56, 1800 / Math.sqrt(rawNodes.length)));
+    d3.tree().nodeSize([breadthGap, 170])(hierarchyRoot);
+
+    const positions = new Map();
+    hierarchyRoot.descendants().forEach(d => {
+        if (d.data.id != null) positions.set(d.data.id, { x: d.y, y: d.x });
     });
-
-    // ── Step 3: Build d3.hierarchy and compute layout with d3.cluster() ──────
-    // d3.cluster() aligns all leaves at the same depth — better visual for
-    // dense wallet graphs than d3.tree(), which separates subtrees.
-    const hierarchyRoot = d3.hierarchy(treeNodes.get(rootId), d => d.children);
-
-    d3.cluster().nodeSize([36, 200])(hierarchyRoot);
-    // d3.cluster assigns: d.x = breadth position, d.y = depth position.
-    // We want left-to-right, so: screenX = d.y  (depth),  screenY = d.x  (breadth).
-
-    // ── Step 4: Overwrite node positions ABSOLUTELY — not adjust, not animate from ──
-    // Write directly into the data objects that the `node` selection references,
-    // then pin with fx/fy so nothing can move them.
-    const posMap = new Map();
-    hierarchyRoot.descendants().forEach(d => posMap.set(d.data.id, { x: d.y, y: d.x }));
-
     node.data().forEach(d => {
-        const pos = posMap.get(d.id);
-        if (pos) { d.x = pos.x; d.y = pos.y; d.fx = pos.x; d.fy = pos.y; }
+        const position = positions.get(d.id);
+        if (!position) return;
+        d.x = d.fx = position.x;
+        d.y = d.fy = position.y;
+        d.vx = d.vy = 0;
     });
 
-    // ── Step 5: Replace visible edges with hierarchy-only edges ──────────────
-    // Hide the original force-graph edges (they include non-tree cycles).
-    // Draw a new <g class="tree-links"> with only the spanning-tree paths.
-    link.style("display", "none");
-    g.select(".tree-links").remove();
+    // Keep every real relationship visible. Tree edges are emphasized; cycles
+    // and other non-tree edges remain as faint context instead of disappearing.
+    link.each(d => {
+        d._treeLayoutEdge = treeEdgeKeys.has(undirectedEdgeKey(d.source.id, d.target.id));
+    });
+    link.style('display', null)
+        .style('stroke', d => d._treeLayoutEdge
+            ? getEdgeColor(d)
+            : '#94a3b8')
+        .attr('stroke-opacity', d => d._treeLayoutEdge ? 0.9 : 0.18)
+        .attr('stroke-width', d => d._treeLayoutEdge
+            ? Math.max(1.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 6))
+            : 1)
+        .attr('marker-end', d => getArrowMarkerId(d._treeLayoutEdge ? getEdgeColor(d) : '#94a3b8'));
 
-    const treeLinkData = hierarchyRoot.links().map(hl => {
-        // Resolve back to the live node-data objects so coordinates are shared refs.
-        const src = node.data().find(n => n.id === hl.source.data.id);
-        const tgt = node.data().find(n => n.id === hl.target.data.id);
-        // Carry through the original edge amount for stroke-width parity.
-        const orig = rawLinks.find(rl => {
-            const s = rl.source.id || rl.source, t = rl.target.id || rl.target;
-            return (s === hl.source.data.id && t === hl.target.data.id) ||
-                   (s === hl.target.data.id && t === hl.source.data.id);
-        });
-        return { source: src, target: tgt, amount: orig?.amount || 0 };
-    }).filter(l => l.source && l.target);
-
-    g.insert("g", ".nodes")                  // insert before nodes layer so nodes sit on top
-        .attr("class", "tree-links")
-        .selectAll("line")
-        .data(treeLinkData)
-        .enter().append("line")
-        .style("stroke", d => getEdgeColor(d))
-        .attr("stroke-opacity", 0.85)
-        .attr("stroke-width", d => Math.max(1.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 6)))
-        .attr("marker-end", d => getArrowMarkerId(getEdgeColor(d)))
-        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-
-    // ── Step 6: Animate nodes and labels to their absolute positions ──────────
-    // The positions are already written into d.x/d.y — this is purely cosmetic.
-    const t = d3.transition().duration(700).ease(d3.easeCubicInOut);
-    node.transition(t).attr("cx", d => d.x).attr("cy", d => d.y);
-    label.transition(t).attr("x", d => d.x).attr("y", d => d.y);
-
-    // ── Step 7: Fit the entire tree to the viewport after animation ───────────
-    setTimeout(() => fitGraphToScreen(), 750);
+    const t = d3.transition().duration(650).ease(d3.easeCubicInOut);
+    const finalEdgePositions = new Map();
+    link.each(d => finalEdgePositions.set(d, linkCoordinates(d)));
+    node.transition(t).attr('cx', d => d.x).attr('cy', d => d.y);
+    label.transition(t).attr('x', d => d.x).attr('y', d => d.y);
+    link.transition(t)
+        .attr('x1', d => finalEdgePositions.get(d).x1)
+        .attr('y1', d => finalEdgePositions.get(d).y1)
+        .attr('x2', d => finalEdgePositions.get(d).x2)
+        .attr('y2', d => finalEdgePositions.get(d).y2);
+    g.select('.expand-rings').selectAll('circle').transition(t)
+        .attr('cx', d => d.x).attr('cy', d => d.y);
+    if (traceFinalAddr) {
+        const finalNode = rawNodes.find(n => n.id === traceFinalAddr);
+        if (finalNode) {
+            g.select('.dest-ring').selectAll('circle').transition(t)
+                .attr('cx', finalNode.x || 0).attr('cy', finalNode.y || 0);
+        }
+    }
+    const firstNode = node.node();
+    node.transition(t).on('end.layout', function() {
+        if (this !== firstNode || currentLayout !== 'tree') return;
+        positionVisibleEdgeLabels();
+        fitGraphToScreen();
+    });
 }
 
 function applyForceLayout() {
     if (!node || !rawNodes.length) return;
 
-    // Restore original force-graph edges (tree mode hid them and drew new ones).
-    g.select(".tree-links").remove();
-    link.style("display", null);
+    link.each(d => { d._treeLayoutEdge = false; });
+    link.style('display', null)
+        .style('stroke', d => getEdgeColor(d))
+        .attr('stroke-opacity', 0.85)
+        .attr('stroke-width', d => Math.max(2.5, Math.min(Math.sqrt((d.amount || 0) + 1) * 2, 8)))
+        .attr('marker-end', d => getArrowMarkerId(getEdgeColor(d)));
 
     // Unpin all nodes so the simulation can move them freely.
-    node.data().forEach(d => { d.fx = null; d.fy = null; });
+    node.data().forEach(d => {
+        d.fx = d.fy = null;
+        d.vx = d.vy = 0;
+    });
     isFrozen = false;
 
     const freezeBtn = document.getElementById('freezeText');
@@ -1868,27 +1993,45 @@ function applyForceLayout() {
             }
             return d.amount > 1 ? 100 : 60;
         }))
-        .force("charge", d3.forceManyBody().strength(d => d.type === 'Transaction' ? -200 : -90))
-        .force("center", d3.forceCenter(0, 0))
+        .force("charge", d3.forceManyBody()
+            .strength(d => d.type === 'Transaction' ? -200 : -90)
+            .distanceMax(600))
+        .force("collide", d3.forceCollide(d => nodeRadius(d) + 3).strength(0.8))
+        .force("center", d3.forceCenter(0, 0).strength(0.03))
         .on("tick", ticked);
+    const activeSimulation = simulation;
 
     setBusy(true, 'RECALCULATING LAYOUT...', 'Running force simulation');
-    setTimeout(() => { simulation.stop(); fitGraphToScreen(); setBusy(false); }, 2500);
+    layoutSettleTimeout = setTimeout(() => {
+        layoutSettleTimeout = null;
+        if (simulation !== activeSimulation || currentLayout !== 'force') return;
+        activeSimulation.stop();
+        fitGraphToScreen();
+        setBusy(false);
+    }, 3000);
 }
 
 export function toggleLayout() {
-    if (!node) return;
-    const btn = document.getElementById('layoutText');
+    if (!node || rawNodes.length === 0) return;
+
+    clearTimeout(renderWarmupTimeout);
+    renderWarmupTimeout = null;
+    clearTimeout(layoutSettleTimeout);
+    layoutSettleTimeout = null;
+    node.interrupt();
+    link.interrupt();
+    label.interrupt();
+    svg?.interrupt();
+    setBusy(false);
 
     if (currentLayout === 'force') {
         currentLayout = 'tree';
         applyTreeLayout();
-        if (btn) btn.textContent = '[FORCE VIEW]';
     } else {
         currentLayout = 'force';
         applyForceLayout();
-        if (btn) btn.textContent = '[TREE VIEW]';
     }
+    updateLayoutButton();
 }
 
 export function toggleLabels() {
@@ -1925,12 +2068,22 @@ export function recenterGraph() {
 export function fitGraphToScreen() {
     if (!svg || !node || !node.data().length) return;
     const nd = node.data();
-    const minX = d3.min(nd, d => d.x), maxX = d3.max(nd, d => d.x);
-    const minY = d3.min(nd, d => d.y), maxY = d3.max(nd, d => d.y);
-    const w = +svg.attr("width"), h = +svg.attr("height");
-    const gw = maxX - minX, gh = maxY - minY;
-    if (isNaN(gw) || isNaN(gh) || !gw || !gh) return;
-    const scale = Math.min(w / gw, h / gh) * 0.9;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nd.forEach(d => {
+        const padding = nodeRadius(d) + 12;
+        minX = Math.min(minX, d.x - padding);
+        maxX = Math.max(maxX, d.x + padding);
+        minY = Math.min(minY, d.y - padding);
+        maxY = Math.max(maxY, d.y + padding);
+    });
+    const svgNode = svg.node();
+    const w = +svg.attr("width") || svgNode?.clientWidth || 0;
+    const h = +svg.attr("height") || svgNode?.clientHeight || 0;
+    if (!w || !h) return;
+    const gw = Math.max(maxX - minX, 1);
+    const gh = Math.max(maxY - minY, 1);
+    const scale = Math.min((w - 48) / gw, (h - 48) / gh, 2.5) * 0.95;
+    if (!Number.isFinite(scale) || scale <= 0) return;
     // The SVG viewBox is [-w/2, -h/2, w, h], so (0,0) IS the visual center.
     // Do NOT translate by (w/2, h/2) — that would move the graph to the bottom-right corner.
     svg.transition().duration(1000).call(zoom.transform,
@@ -1950,13 +2103,20 @@ function connected(a, b) {
     return linkedByIndex[`${a.id},${b.id}`] || linkedByIndex[`${b.id},${a.id}`] || a.id === b.id;
 }
 
-function applyLinkHighlight(activePred) {
+function applyLinkHighlight(activePred, focusNodeId = null) {
     link.style("opacity", o => activePred(o) ? 1 : 0.12)
         .style("stroke", o => {
+            if (activePred(o) && focusNodeId) {
+                return o.source.id === focusNodeId ? "#ef4444" : "#22c55e";
+            }
             if (activePred(o)) return "#0ea5e9";
             return getEdgeColor(o);
         })
         .attr("marker-end", o => {
+            if (activePred(o) && focusNodeId) {
+                const color = o.source.id === focusNodeId ? "#ef4444" : "#22c55e";
+                return getArrowMarkerId(color);
+            }
             if (activePred(o)) return "url(#arrowhead-highlight)";
             return getArrowMarkerId(getEdgeColor(o));
         });
@@ -1966,14 +2126,19 @@ function highlightNeighbors(d, hovering) {
     if (hovering) {
         updateLinkedByIndex();
         node.style("opacity", o => connected(d, o) ? 1 : 0.1);
-        applyLinkHighlight(o => o.source === d || o.target === d);
+        applyLinkHighlight(o => o.source === d || o.target === d, d.id);
         // Show all labels for connected nodes while hovering, even if normally hidden
         label.style("opacity", o => connected(d, o) ? 1 : 0.0)
              .style("display", o => (connected(d, o) && labelsVisible) ? null : "none");
         if (edgeLabel) {
             edgeLabel.style('display', e => (timestampsVisible && (e.source === d || e.target === d)) ? 'block' : 'none');
+            positionVisibleEdgeLabels();
         }
-    } else { unhighlightAll(); }
+    } else if (selectedNodeId) {
+        highlightNode(selectedNodeId);
+    } else {
+        unhighlightAll();
+    }
 }
 
 function highlightNode(nodeId) {
@@ -1981,7 +2146,7 @@ function highlightNode(nodeId) {
     const tn = node.data().find(n => n.id === nodeId);
     if (!tn) return;
     node.style("opacity", o => connected(tn, o) ? 1 : 0.12);
-    applyLinkHighlight(o => o.source.id === nodeId || o.target.id === nodeId);
+    applyLinkHighlight(o => o.source.id === nodeId || o.target.id === nodeId, nodeId);
     label.style("opacity", o => connected(tn, o) ? 1 : 0.12);
 
     // track selection for the expand button
@@ -1989,6 +2154,8 @@ function highlightNode(nodeId) {
     updateExpandBtn();
     if (edgeLabel) {
         edgeLabel.style('display', e => (timestampsVisible && (e.source.id === nodeId || e.target.id === nodeId)) ? 'block' : 'none');
+        updateEdgeLabelText();
+        positionVisibleEdgeLabels();
     }
 }
 
@@ -2046,6 +2213,8 @@ export function toggleTimestamps() {
     if (!timestampsVisible && edgeLabel) edgeLabel.style('display', 'none');
     if (timestampsVisible && selectedNodeId && edgeLabel) {
         edgeLabel.style('display', e => (e.source.id === selectedNodeId || e.target.id === selectedNodeId) ? 'block' : 'none');
+        updateEdgeLabelText();
+        positionVisibleEdgeLabels();
     }
 }
 
@@ -2159,9 +2328,9 @@ function applyMiningFilter() {
                 const list  = miningNames.slice(0, 3).join(', ');
                 const extra = miningNames.length > 3 ? ` +${miningNames.length - 3}` : '';
                 const totalHidden = rawNodes.length - visNodes;
-                det.textContent = `⛏ Hiding ${totalHidden} node(s) (Pools: ${miningNodeIds.size}, Payouts: ${totalHidden - miningNodeIds.size}): ${list}${extra}`;
+                det.textContent = ` Hiding ${totalHidden} node(s) (Pools: ${miningNodeIds.size}, Payouts: ${totalHidden - miningNodeIds.size}): ${list}${extra}`;
             } else {
-                det.textContent = '⛏ No mining nodes detected in current graph';
+                det.textContent = ' No mining nodes detected in current graph';
             }
         }
 
@@ -2184,7 +2353,7 @@ function applyMiningFilter() {
 
         const det = document.getElementById('loaderDetails');
         if (det) det.textContent = miningNodeIds.size > 0
-            ? `⛏ Mining nodes restored (${miningNodeIds.size})` : '';
+            ? ` Mining nodes restored (${miningNodeIds.size})` : '';
     }
 }
 
@@ -2329,7 +2498,7 @@ window.enrichFromMempool = async function(nodeId, address) {
                 <div>
                     <a href="https://mempool.space/tx/${tx.txid}" target="_blank"
                        class="text-cyan-600 hover:underline font-mono text-[8px]">${tx.txid.substring(0, 14)}…</a>
-                    <div class="text-[8px] text-slate-400">${time} ${confirmed ? `· Block #${tx.status.block_height}` : '· ⏳ Mempool'}</div>
+                    <div class="text-[8px] text-slate-400">${time} ${confirmed ? `· Block #${tx.status.block_height}` : '·  Mempool'}</div>
                 </div>
                 <div class="text-right shrink-0 ml-2">
                     <div class="text-[8px] text-slate-600 font-bold">${(tx.fee || 0).toLocaleString()} sat</div>
@@ -2342,7 +2511,7 @@ window.enrichFromMempool = async function(nodeId, address) {
                 <div>
                     <a href="https://mempool.space/tx/${u.txid}" target="_blank"
                        class="text-cyan-600 hover:underline font-mono text-[8px]">${u.txid.substring(0, 14)}…:${u.vout}</a>
-                    <div class="text-[8px] text-slate-400">${u.status?.confirmed ? '✅ Confirmed' : '⏳ Unconfirmed'}</div>
+                    <div class="text-[8px] text-slate-400">${u.status?.confirmed ? ' Confirmed' : ' Unconfirmed'}</div>
                 </div>
                 <div class="text-[8px] font-bold text-green-700 shrink-0 ml-2">${satsToBTC(u.value)} BTC</div>
             </div>`).join('');
@@ -2391,7 +2560,7 @@ window.enrichFromMempool = async function(nodeId, address) {
         </div>`;
 
     } catch (err) {
-        el.innerHTML = `<div class="text-[9px] text-red-500">⚠️ ${err.message}</div>
+        el.innerHTML = `<div class="text-[9px] text-red-500"> ${err.message}</div>
             <div class="text-[8px] text-slate-400 mt-1">mempool.space may be unreachable or rate-limited.</div>`;
     }
 
@@ -2440,7 +2609,7 @@ window.enrichTxFromMempool = async function(txid) {
             <div class="bg-slate-50 border border-slate-200 rounded p-2 col-span-2">
                 <div class="text-[8px] text-slate-400 uppercase mb-0.5">Status</div>
                 <div class="font-bold text-[10px] ${confirmed ? 'text-green-700' : 'text-yellow-700'}">
-                    ${confirmed ? `✅ Confirmed · Block #${tx.status.block_height}` : '⏳ Unconfirmed (Mempool)'}
+                    ${confirmed ? ` Confirmed · Block #${tx.status.block_height}` : ' Unconfirmed (Mempool)'}
                 </div>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded p-2">
@@ -2484,7 +2653,7 @@ window.enrichTxFromMempool = async function(txid) {
         </div>`;
 
     } catch (err) {
-        el.innerHTML = `<div class="text-[9px] text-red-500">⚠️ ${err.message}</div>`;
+        el.innerHTML = `<div class="text-[9px] text-red-500"> ${err.message}</div>`;
     }
 
     btn.disabled = false;
@@ -2502,6 +2671,25 @@ function closeEntityView() {
 // =============================================================================
 // TIMELINE
 // =============================================================================
+/**
+ * Toggle the complete timeline overlay, including its calendar controls.
+ */
+window.toggleTimelineCollapse = function() {
+    const timeline = document.getElementById('timelineUI');
+    const calendar = document.getElementById('calendarModal');
+    if (!timeline) return;
+
+    timelineCollapsed = !timelineCollapsed;
+    timeline.classList.toggle('hidden', timelineCollapsed);
+    calendar?.classList.add('hidden');
+
+    const collapseButton = document.getElementById('timelineCollapseBtn');
+    if (collapseButton) {
+        collapseButton.textContent = timelineCollapsed ? '▶' : '▼';
+        collapseButton.title = timelineCollapsed ? 'Show Timeline' : 'Hide Timeline';
+    }
+};
+
 function initTimeline(edges) {
     const ts_edges = edges.filter(e => e.timestamp > 0);
     if (!ts_edges.length) { document.getElementById('timelineUI').classList.add('hidden'); return; }
@@ -2530,11 +2718,17 @@ function initTimeline(edges) {
 
     const slider  = document.getElementById('timeSlider');
     const display = document.getElementById('dateDisplay');
-    ui.classList.remove('hidden');
+    ui.classList.toggle('hidden', timelineCollapsed);
     slider.min = minTS; slider.max = maxTS; slider.value = maxTS;
+    updateTimelineRangeLabels(minTS, maxTS);
 
     slider.oninput = () => {
-        const v = parseInt(slider.value);
+        let v = parseInt(slider.value);
+        const frameTimestamp = window.seekPlaybackToTimestamp?.(v);
+        if (frameTimestamp !== undefined && frameTimestamp !== null) {
+            v = frameTimestamp;
+            slider.value = String(v);
+        }
         const d = new Date(v * 1000);
         display.innerText = d.toISOString().split('T')[0];
         calendarViewDate = d;
@@ -2572,10 +2766,15 @@ function refreshTimelineFromRawLinks() {
     if (!rawLinks || rawLinks.length === 0) {
         const ui = document.getElementById('timelineUI');
         if (ui) ui.classList.add('hidden');
+        window.initPlayback?.();
         return;
     }
     const ts_edges = rawLinks.filter(e => e.timestamp > 0);
-    if (!ts_edges.length) { document.getElementById('timelineUI').classList.add('hidden'); return; }
+    if (!ts_edges.length) {
+        document.getElementById('timelineUI').classList.add('hidden');
+        window.initPlayback?.();
+        return;
+    }
 
     const timestamps = ts_edges.map(e => e.timestamp).sort((a, b) => a - b);
     const minTS = timestamps[0], maxTS = timestamps[timestamps.length - 1];
@@ -2592,15 +2791,24 @@ function refreshTimelineFromRawLinks() {
     const ui = document.getElementById('timelineUI');
     const slider  = document.getElementById('timeSlider');
     if (!ui || !slider) return;
-    ui.classList.remove('hidden');
+    ui.classList.toggle('hidden', timelineCollapsed);
     slider.min = minTS; slider.max = maxTS;
     // If current slider value is outside new range, clamp it to max (latest)
     if (parseInt(slider.value) > maxTS || parseInt(slider.value) < minTS) slider.value = maxTS;
+    updateTimelineRangeLabels(minTS, maxTS);
     // Update calendar display and invoke the oninput handler to re-evaluate visibility
     const display = document.getElementById('dateDisplay');
     const v = parseInt(slider.value);
     if (display) display.innerText = new Date(v * 1000).toISOString().split('T')[0];
+    window.initPlayback?.();
     if (typeof slider.oninput === 'function') slider.oninput();
+}
+
+function updateTimelineRangeLabels(minTS, maxTS) {
+    const start = document.getElementById('timelineStartDate');
+    const end = document.getElementById('timelineEndDate');
+    if (start) start.textContent = new Date(minTS * 1000).toISOString().split('T')[0];
+    if (end) end.textContent = new Date(maxTS * 1000).toISOString().split('T')[0];
 }
 
 // =============================================================================
@@ -2776,9 +2984,10 @@ export async function mergePathIntoGraph(path) {
 
         defs = svg.append('defs');
         const mkArrow = (id, color) => defs.append('marker').attr('id', id)
-            .attr('viewBox', '0 -5 10 10').attr('refX', 10).attr('refY', 0)
-            .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
-            .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', color);
+            .attr('viewBox', '0 -6 12 12').attr('refX', 11).attr('refY', 0)
+            .attr('markerWidth', 9).attr('markerHeight', 9)
+            .attr('markerUnits', 'userSpaceOnUse').attr('orient', 'auto')
+            .append('path').attr('d', 'M0,-6L12,0L0,6Z').attr('fill', color);
         mkArrow('arrowhead-default',   '#64748b');
         mkArrow('arrowhead-highlight', '#0ea5e9');
         mkArrow('arrowhead-risk',      '#ef4444');
@@ -2795,7 +3004,7 @@ export async function mergePathIntoGraph(path) {
 
         rawNodes = [];
         rawLinks = [];
-        link  = g.select('.links').selectAll('line');
+        link  = g.select('.links').selectAll('path');
         node  = g.select('.nodes').selectAll('circle');
         label = g.select('.labels').selectAll('text');
         state.link = link;
@@ -3054,7 +3263,7 @@ window.graphSearchSelect = function(nodeId, openPanel = true) {
     // Resolve the ID if we are in Wallet View (cluster-collapsed)
     let actualId = nodeId;
     if (walletViewActive) {
-        actualId = getWalletId(nodeId, _fullGraphDataBak || fullGraphData);
+        actualId = getWalletIdModule(nodeId, _fullGraphDataBak || fullGraphData);
     }
 
     const n = rawNodes.find(n => n.id === actualId);
@@ -3095,155 +3304,6 @@ export { saveSession, restoreSession, checkPendingSession };
 export { updateNodeCountDisplay, updateMixerDetectionDisplay };
 
 
-// =============================================================================
-// WALLET VIEW — co-spend cluster collapse
-// =============================================================================
-
-/**
- * Build a "wallet graph" where every set of co-owned addresses (those sharing
- * a cluster_id from the co-spend heuristic) is collapsed into a single node.
- *
- * Algorithm:
- *   1. Map each address node to its wallet cluster (cluster_id from backend).
- *      Singletons (cluster_size <= 1 or no cluster_id) map to themselves.
- *   2. Transaction nodes are kept as-is (they are not clusterable).
- *   3. Rebuild edges using cluster IDs; deduplicate and aggregate amounts.
- *   4. Self-edges (both endpoints in the same cluster) are dropped.
- *
- * @param {object} graphData  The original address-level graph from the API.
- * @returns {object}          A new graph with wallet nodes in place of address clusters.
- */
-function buildWalletGraph(graphData) {
-    if (!graphData || !graphData.nodes) return graphData;
-
-    // ── Step 1: Assign each node to a cluster representative ─────────────────
-    // nodeToWallet maps every original node ID → the wallet/cluster ID to use.
-    const nodeToWallet = {};
-    for (const [id, node] of Object.entries(graphData.nodes)) {
-        if (node.type !== 'Address') {
-            // Transaction nodes are kept unchanged in wallet view.
-            nodeToWallet[id] = id;
-        } else if (node.cluster_id && node.cluster_size > 1) {
-            // Multi-address cluster: use a stable, display-safe wallet ID.
-            nodeToWallet[id] = 'wallet__' + node.cluster_id;
-        } else {
-            // Singleton address: keep its own ID.
-            nodeToWallet[id] = id;
-        }
-    }
-
-    // ── Step 2: Build wallet nodes ────────────────────────────────────────────
-    const walletNodes = {};
-
-    for (const [id, node] of Object.entries(graphData.nodes)) {
-        const wid = nodeToWallet[id];
-
-        if (!walletNodes[wid]) {
-            walletNodes[wid] = {
-                id:           wid,
-                label:        node.label || id,
-                type:         node.type,
-                risk:         node.risk  || 0,
-                entity_type:  node.entity_type  || 'unknown',
-                sources:      node.sources || [],
-                member_count: 1,
-                members:      [id],
-                cluster_id:   wid,
-                // Carry through detection info from the highest-risk member
-                mixer_info:    node.mixer_info    || null,
-                exchange_info: node.exchange_info || null,
-                gambling_info: node.gambling_info || null,
-                mining_info:   node.mining_info   || null,
-            };
-        } else {
-            const wn = walletNodes[wid];
-            wn.members.push(id);
-            wn.member_count++;
-
-            // Propagate highest risk
-            if ((node.risk || 0) > wn.risk) wn.risk = node.risk;
-
-            // Prefer a named entity type over 'unknown'
-            if (node.entity_type && node.entity_type !== 'unknown' &&
-                wn.entity_type === 'unknown') {
-                wn.entity_type = node.entity_type;
-            }
-
-            // Carry the most descriptive label: prefer a named service label
-            if (node.label && node.label !== id && wn.label === wn.members[0]) {
-                wn.label = node.label;
-            }
-
-            // Carry through detection results
-            if (!wn.mixer_info    && node.mixer_info)    wn.mixer_info    = node.mixer_info;
-            if (!wn.exchange_info && node.exchange_info) wn.exchange_info = node.exchange_info;
-            if (!wn.gambling_info && node.gambling_info) wn.gambling_info = node.gambling_info;
-            if (!wn.mining_info   && node.mining_info)   wn.mining_info   = node.mining_info;
-        }
-    }
-
-    // Finalise labels for multi-address wallet nodes
-    for (const [wid, wn] of Object.entries(walletNodes)) {
-        if (wn.member_count > 1) {
-            // Check whether any member has a meaningful label from WalletExplorer
-            const namedNode = wn.members
-                .map(m => graphData.nodes[m])
-                .find(n => n && n.label && n.label !== n.id && n.label.length < 50);
-            wn.label = namedNode
-                ? `${namedNode.label} (+${wn.member_count - 1})`
-                : `Wallet · ${wn.member_count} addrs`;
-        }
-    }
-
-    // ── Step 3: Build wallet edges (deduplicated, amounts aggregated) ─────────
-    const edgeMap = {};
-    for (const edge of (graphData.edges || [])) {
-        const srcId = edge.source?.id || edge.source;
-        const tgtId = edge.target?.id || edge.target;
-        const src = nodeToWallet[srcId] || srcId;
-        const tgt = nodeToWallet[tgtId] || tgtId;
-
-        // Drop self-edges (both endpoints collapsed into same wallet node)
-        if (src === tgt) continue;
-
-        const key = `${src}|${tgt}`;
-        if (!edgeMap[key]) {
-            edgeMap[key] = {
-                source:    src,
-                target:    tgt,
-                amount:    edge.amount    || 0,
-                timestamp: edge.timestamp || 0,
-                sources:   edge.sources   || [],
-            };
-        } else {
-            edgeMap[key].amount += edge.amount || 0;
-            // Keep the latest timestamp
-            if ((edge.timestamp || 0) > edgeMap[key].timestamp) {
-                edgeMap[key].timestamp = edge.timestamp;
-            }
-        }
-    }
-
-    return {
-        nodes:   walletNodes,
-        edges:   Object.values(edgeMap),
-        summary: graphData.summary,
-    };
-}
-
-/**
- * Map a node ID from address space → wallet space.
- * If the address belongs to a cluster, return the wallet node ID.
- */
-function getWalletId(nodeId, graphData) {
-    if (!graphData || !nodeId) return nodeId;
-    const node = graphData.nodes[nodeId];
-    if (node && node.cluster_id && node.cluster_size > 1) {
-        return 'wallet__' + node.cluster_id;
-    }
-    return nodeId;
-}
-
 /**
  * Toggle between Address View (default) and Wallet View (co-spend collapsed).
  *
@@ -3271,8 +3331,8 @@ export function toggleWalletView() {
         _targetIdBak      = currentTargetId;
 
         // Build and render the collapsed wallet graph
-        walletGraphData = buildWalletGraph(fullGraphData);
-        const walletTargetId = getWalletId(currentTargetId, fullGraphData);
+        walletGraphData = buildWalletGraphModule(fullGraphData);
+        const walletTargetId = getWalletIdModule(currentTargetId, fullGraphData);
 
         renderGraph(walletGraphData, walletTargetId);
 
@@ -3303,6 +3363,31 @@ export function toggleWalletView() {
 
 const SESSION_VERSION = 1; // Increment if session format changes
 const PENDING_SESSION_KEY = 'cryptrace_pending_session';
+const RELOAD_SESSION_KEY = 'cryptracer_reload_session';
+
+function saveReloadSession() {
+    if (!fullGraphData || !currentTargetId) {
+        sessionStorage.removeItem(RELOAD_SESSION_KEY);
+        return;
+    }
+
+    const session = {
+        version: SESSION_VERSION,
+        saved_at: new Date().toISOString(),
+        target: currentTargetId,
+        graph: fullGraphData,
+        expanded_nodes: [...expandedNodes],
+    };
+
+    try {
+        sessionStorage.setItem(RELOAD_SESSION_KEY, JSON.stringify(session));
+    } catch (error) {
+        console.error('Failed to save the current graph for reload:', error);
+        showToast('This graph could not be saved for reload. It may be too large for browser storage.', 'warning', 9000);
+    }
+}
+
+window.addEventListener('pagehide', saveReloadSession);
 
 /**
  * Save the current graph state to a downloadable .ctk file.
@@ -3382,13 +3467,17 @@ async function restoreSession(session) {
  */
 function checkPendingSession() {
     const raw = sessionStorage.getItem(PENDING_SESSION_KEY);
-    if (!raw) return;
-    sessionStorage.removeItem(PENDING_SESSION_KEY);
+    const isPendingImport = Boolean(raw);
+    const sessionRaw = raw || sessionStorage.getItem(RELOAD_SESSION_KEY);
+    if (!sessionRaw) return;
+    if (isPendingImport) sessionStorage.removeItem(PENDING_SESSION_KEY);
     try {
-        const session = JSON.parse(raw);
+        const session = JSON.parse(sessionRaw);
         // Slight delay so D3 canvas is ready
         setTimeout(() => restoreSession(session), 600);
     } catch (e) {
-        console.error('Failed to restore pending session:', e);
+        console.error('Failed to restore saved session:', e);
+        showToast('The saved graph could not be restored.', 'error', 9000);
+        if (!isPendingImport) sessionStorage.removeItem(RELOAD_SESSION_KEY);
     }
 }

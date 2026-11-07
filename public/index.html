@@ -9,15 +9,26 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
         body { font-family: 'JetBrains Mono', monospace; background: #020617; color: #cbd5e1; }
-        #graph-container { width: 100%; height: 100%; position: absolute; }
+        #graph-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            background-color: #f8fafc;
+            background-image:
+                linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
         #loader { display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.9); z-index: 100; backdrop-filter: blur(8px); align-items: center; justify-content: center; flex-direction: column; }
         .spinner { width: 40px; height: 40px; border: 3px solid #1e293b; border-top: 3px solid #06b6d4; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         /* D3 specific styles — tuned for white canvas */
         .node { cursor: pointer; }
+        .node:hover { filter: drop-shadow(0 0 5px rgba(6, 182, 212, 0.8)); }
         .link {
             stroke: #64748b;       /* Solid slate, clearly visible on white */
+            fill: none;
             stroke-opacity: 0.85;
             stroke-width: 2.5px;   /* Minimum visible thickness */
         }
@@ -156,9 +167,7 @@
             animation: countPulse 0.6s ease-out;
         }
 
-        #statsBox {
-            animation: countGlow 3s ease-in-out infinite;
-        }
+        #statsBox { box-shadow: inset 0 -1px 0 rgba(51, 65, 85, 0.65); }
 
         /* Highlight when node count increases */
         @keyframes highlightFlash {
@@ -169,6 +178,283 @@
 
         #nodeCount.flash {
             animation: highlightFlash 0.8s ease-out;
+        }
+
+        .app-header {
+            min-height: 4rem;
+        }
+
+        .toolbar-group {
+            max-width: min(100%, 56rem);
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .graph-hud {
+            pointer-events: none;
+        }
+
+        .graph-hud > * {
+            pointer-events: auto;
+        }
+
+        .graph-tools-menu {
+            width: min(27rem, calc(100vw - 2rem));
+            max-height: calc(100vh - 7rem);
+            overflow-y: auto;
+            padding: 0.55rem;
+            border: 1px solid rgba(71, 85, 105, 0.8);
+            border-radius: 0.85rem;
+            background: rgba(15, 23, 42, 0.97);
+            box-shadow: 0 18px 42px rgba(2, 6, 23, 0.38);
+            backdrop-filter: blur(18px);
+        }
+
+        .graph-tools-menu::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .graph-tools-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .graph-tools-menu::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 999px;
+        }
+
+        .graph-tools-menu.is-collapsed .graph-tools-content {
+            display: none;
+        }
+
+        .graph-tools-menu.is-collapsed {
+            width: auto;
+            max-height: none;
+            overflow: visible;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+        }
+
+        .graph-tools-menu.is-collapsed .graph-tools-header {
+            padding: 0;
+        }
+
+        .graph-tools-menu.is-collapsed .graph-tools-header > div {
+            display: none;
+        }
+
+        .graph-tools-menu.is-collapsed #graphToolsToggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            padding: 0;
+            border: 1px solid rgba(34, 211, 238, 0.55);
+            border-radius: 0.5rem;
+            background: rgba(15, 23, 42, 0.96);
+            box-shadow: 0 8px 20px rgba(2, 6, 23, 0.35);
+            color: #67e8f9;
+        }
+
+        .graph-tools-menu.is-collapsed #graphToolsToggle:hover {
+            border-color: #67e8f9;
+            background: rgba(8, 51, 68, 0.96);
+            color: #cffafe;
+        }
+
+        .graph-tools-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.15rem 0.3rem 0.55rem;
+        }
+
+        .graph-tools-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .graph-tools-content .toolbar-group {
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0.35rem;
+            border: 1px solid rgba(51, 65, 85, 0.85);
+            border-radius: 0.65rem;
+            background: rgba(30, 41, 59, 0.42);
+            box-shadow: none;
+            padding: 0.35rem;
+        }
+
+        .graph-tools-content .toolbar-group > span {
+            flex: 0 0 auto;
+        }
+
+        .graph-tools-content .toolbar-group > button,
+        .graph-tools-content .toolbar-group > input {
+            margin: 0;
+        }
+
+        .graph-tools-content .toolbar-group > .section-toggle {
+            flex: 1 0 100%;
+            width: 100%;
+            justify-content: space-between;
+            padding: 0.25rem 0.35rem 0.4rem;
+            border-right: 0;
+            border-bottom: 1px solid rgba(71, 85, 105, 0.65);
+            color: #cbd5e1;
+            font-size: 9px;
+            letter-spacing: 0.16em;
+        }
+
+        .graph-tools-content .toolbar-group:nth-child(1) .section-toggle {
+            color: #c4b5fd;
+        }
+
+        .graph-tools-content .toolbar-group:nth-child(2) .section-toggle {
+            color: #67e8f9;
+        }
+
+        .graph-tools-content .toolbar-group:nth-child(3) .section-toggle {
+            color: #fdba74;
+        }
+
+        .graph-tools-content .toolbar-group > button {
+            padding: 0.4rem 0.6rem;
+            font-size: 10px;
+            border-radius: 0.45rem;
+        }
+
+        .graph-tools-content .toolbar-group.section-collapsed {
+            padding-bottom: 0.25rem;
+        }
+
+        .graph-tools-content .toolbar-group.section-collapsed > .section-toggle {
+            border-bottom: 0;
+            padding-bottom: 0.25rem;
+        }
+
+        @media (max-width: 900px) {
+            .app-header {
+                height: auto;
+                min-height: 4rem;
+                padding: 0.75rem 1rem;
+                gap: 0.75rem;
+                flex-wrap: wrap;
+            }
+
+            .app-header > div:last-child {
+                width: 100%;
+                order: 3;
+            }
+
+            .app-header input {
+                min-width: 0;
+            }
+
+            .sidebar {
+                width: 18rem;
+            }
+
+            body.sidebar-open #sidebarToggleBtn {
+                left: 18.5rem;
+            }
+
+            .toolbar-group {
+                max-width: calc(100vw - 2rem);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .sidebar {
+                width: 15rem;
+            }
+
+            body.sidebar-open #sidebarToggleBtn {
+                left: 15.5rem;
+            }
+
+            .toolbar-group > span {
+                display: none;
+            }
+
+            .toolbar-group button {
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+
+            #timelineUI {
+                left: 0.75rem;
+                right: 0.75rem;
+                bottom: 0.75rem;
+                padding: 1rem;
+            }
+        }
+
+        .sidebar {
+            transition: width 0.25s ease, opacity 0.25s ease;
+        }
+
+        .sidebar.sidebar-collapsed {
+            width: 0;
+            border-right-width: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .focus-mode-hidden {
+            display: none !important;
+        }
+
+        body.focus-mode-active .app-header {
+            display: none !important;
+        }
+
+        .toolbar-group.section-collapsed > :not(.section-toggle) {
+            display: none !important;
+        }
+
+        .section-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex: 0 0 auto;
+            padding: 0.3rem 0.45rem;
+            border: 0;
+            border-right: 1px solid rgba(51, 65, 85, 0.75);
+            background: transparent;
+            color: #94a3b8;
+            font: inherit;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .section-toggle:hover {
+            color: #67e8f9;
+        }
+
+        #sidebarToggleBtn {
+            position: fixed;
+            bottom: 18px;
+            left: 18px;
+            z-index: 9999;
+            transition: left 0.25s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+
+        body.sidebar-open #sidebarToggleBtn {
+            left: 20.5rem;
         }
     </style>
 </head>
@@ -186,7 +472,7 @@
         </button>
     </div>
 
-    <header class="h-16 border-b border-slate-800 bg-slate-900/95 flex items-center px-8 justify-between shrink-0 z-50">
+    <header class="app-header h-16 border-b border-slate-800 bg-slate-900/95 flex items-center px-8 justify-between shrink-0 z-50">
         <div class="flex items-center gap-3">
             <img src="/ui/logo.png" alt="Cryptrace Logo" class="w-8 h-8 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]">
             <span class="font-bold text-white text-sm tracking-[0.3em] uppercase">Cryptracer</span>
@@ -198,16 +484,16 @@
         <div class="flex gap-3 w-1/2">
             <input id="targetId" type="text" placeholder="Trace Address or Hash..." class="flex-1 bg-black/50 border border-slate-700 rounded-md px-4 py-2 text-xs font-mono focus:border-cyan-500 outline-none text-cyan-400">
             <button onclick="runSleuth()" class="bg-cyan-600 hover:bg-cyan-500 px-8 py-2 rounded-md text-xs font-bold transition text-white uppercase tracking-widest">Investigate</button>
-            <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="bg-orange-600 hover:bg-orange-500 px-5 py-2 rounded-md text-xs font-bold transition text-white uppercase tracking-widest" title="Trace BTC forward to its final destination">🔍 Trace Path</button>
+            <button onclick="runTracePath(document.getElementById('targetId').value.trim())" class="bg-orange-600 hover:bg-orange-500 px-5 py-2 rounded-md text-xs font-bold transition text-white uppercase tracking-widest" title="Trace BTC forward to its final destination">Trace Path</button>
+            <button onclick="clearGraph()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-md text-xs font-bold transition text-slate-300 uppercase tracking-widest" title="Clear the current graph and investigation">Clear</button>
             <a href="/ui/setup.html" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-md text-xs font-bold transition text-slate-300 uppercase tracking-widest flex items-center gap-2" title="Configure database and API settings">
-                <span>⚙️</span>
                 <span class="hidden sm:inline">Setup</span>
             </a>
         </div>
     </header>
 
     <main class="flex-grow flex min-h-0 relative">
-        <aside class="w-80 border-r border-slate-800 bg-slate-900/80 overflow-hidden z-40 flex flex-col">
+        <aside id="graphSidebar" class="sidebar sidebar-collapsed w-80 border-r border-slate-800 bg-slate-900/80 overflow-hidden z-40 flex flex-col">
             <!-- Persistent Statistics (Always Visible) -->
             <div id="statsBox" class="p-6 border-b border-slate-800 bg-slate-900/40">
                 <div class="p-4 rounded-lg border border-cyan-500/40 bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 shadow-lg shadow-cyan-500/20">
@@ -230,7 +516,7 @@
                 <div class="p-3 rounded-lg border border-indigo-500/50 bg-indigo-950/30">
                     <div class="flex items-center gap-2 mb-3">
                         <div class="w-2 h-2 bg-purple-500 rounded-full shadow-[0_0_12px_#a78bfa]"></div>
-                        <span class="text-[10px] text-indigo-300 uppercase font-bold tracking-widest">🌀 Mixer Detection</span>
+                        <span class="text-[10px] text-indigo-300 uppercase font-bold tracking-widest"> Mixer Detection</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <div>
@@ -302,10 +588,10 @@
                                 <span class="text-slate-300">Mixer (heuristic)</span>
                             </div>
                             <div class="flex items-center gap-2 pb-2 border-b border-slate-700">
-                                <span class="text-[8px] text-slate-400">🎰 Gambling · ⛏️ Mining</span>
+                                <span class="text-[8px] text-slate-400">Gambling · Mining</span>
                             </div>
                             <div class="flex items-center gap-2 pb-2 border-b border-slate-700" style="color:#f7931a;font-weight:600">
-                                <span class="text-[8px]">🏦 Exchanges auto-detected</span>
+                                <span class="text-[8px]">Exchanges auto-detected</span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <div class="w-4 h-4 rounded-full" style="background:#f97316"></div>
@@ -316,30 +602,30 @@
                                 <span class="text-slate-300">Wallet Cluster</span>
                             </div>
                             <div id="walletViewLegend" class="hidden mt-2 p-2 rounded text-[8px]" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#6ee7b7">
-                                🔗 Wallet View active — addresses collapsed by co-spend
+                                Wallet View active — addresses collapsed by co-spend
                             </div>
-                            <!-- Arrow legend -->
+                            <!-- Direction legend -->
                             <div class="flex items-center gap-2 pt-1 border-t border-slate-700/50 mt-1">
                                 <svg width="28" height="10" viewBox="0 0 28 10">
                                     <defs>
-                                        <marker id="leg-arrow" viewBox="0 -4 8 8" refX="7" refY="0" markerWidth="5" markerHeight="5" orient="auto">
-                                            <path d="M0,-4L8,0L0,4" fill="#64748b"/>
+                                        <marker id="leg-arrow-in" viewBox="0 -4 8 8" refX="7" refY="0" markerWidth="5" markerHeight="5" orient="auto">
+                                            <path d="M0,-4L8,0L0,4" fill="#22c55e"/>
                                         </marker>
                                     </defs>
-                                    <line x1="2" y1="5" x2="20" y2="5" stroke="#64748b" stroke-width="1.5" marker-end="url(#leg-arrow)"/>
+                                    <line x1="2" y1="5" x2="20" y2="5" stroke="#22c55e" stroke-width="1.5" marker-end="url(#leg-arrow-in)"/>
                                 </svg>
-                                <span class="text-slate-400">Fund flow direction</span>
+                                <span class="text-slate-400">Incoming when selected</span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <svg width="28" height="10" viewBox="0 0 28 10">
                                     <defs>
-                                        <marker id="leg-arrow-r" viewBox="0 -4 8 8" refX="7" refY="0" markerWidth="5" markerHeight="5" orient="auto">
+                                        <marker id="leg-arrow-out" viewBox="0 -4 8 8" refX="7" refY="0" markerWidth="5" markerHeight="5" orient="auto">
                                             <path d="M0,-4L8,0L0,4" fill="#ef4444"/>
                                         </marker>
                                     </defs>
-                                    <line x1="2" y1="5" x2="20" y2="5" stroke="#ef4444" stroke-width="1.5" marker-end="url(#leg-arrow-r)"/>
+                                    <line x1="2" y1="5" x2="20" y2="5" stroke="#ef4444" stroke-width="1.5" marker-end="url(#leg-arrow-out)"/>
                                 </svg>
-                                <span class="text-slate-400">To high-risk node</span>
+                                <span class="text-slate-400">Outgoing when selected</span>
                             </div>
                         </div>
                     </div>
@@ -374,18 +660,19 @@
                 </div>
                 
                 <div class="p-4 rounded-lg border border-slate-700/50 bg-slate-800/20">
-                    <div class="text-[9px] text-slate-400 uppercase font-bold mb-3">💡 Tips</div>
+                    <div class="text-[9px] text-slate-400 uppercase font-bold mb-3">Tips</div>
                     <div class="space-y-2 text-[9px] text-slate-500">
                         <div>• <span class="text-cyan-400 font-bold">Dashed ring</span> = expandable address</div>
                         <div>• Click node → <span class="text-cyan-400 font-bold">Expand Search</span> to merge its network</div>
                         <div>• <span class="text-orange-400 font-bold">Exchange names</span> (Binance, Kraken, etc.) auto-detected in labels</div>
-                        <div>• <span class="text-slate-300 font-semibold">⛏ Mining</span> filter hides mining pools and fee nodes</div>
+                        <div>• <span class="text-slate-300 font-semibold">Mining</span> filter hides mining pools and fee nodes</div>
                         <div>• <span class="text-slate-300 font-semibold">← Incoming</span> filter shows only transactions coming TO the selected address</div>
                         <div>• <span class="text-slate-300 font-semibold">→ Outgoing</span> filter shows only transactions going FROM the selected address</div>
                         <div>• Scroll to zoom · Drag to pan</div>
                         <div>• Hover to highlight neighbors</div>
                         <div>• Use [FREEZE] to lock positions</div>
-                        <div>• Use [TREE VIEW] to toggle hierarchy layout</div>
+                        <div>• Tree layout starts at the target; faint links show cycles and other connections</div>
+                        <div>• Disconnected graph sections stay separate in Tree layout</div>
                         <div>• <span class="text-orange-400 font-bold">Trace Path</span> follows BTC forward using change detection</div>
                         <div>• Use [HIDE LABELS] for clarity</div>
                         <div>• <span class="text-emerald-400 font-bold">[WALLET VIEW]</span> collapses co-owned addresses (co-spend heuristic) into wallet entities — reveals true inter-entity flow</div>
@@ -425,72 +712,110 @@
             </div>
             
             <!-- Timeline Floating UI with Playback Controls -->
-            <div id="timelineUI" class="absolute bottom-10 left-10 right-10 bg-slate-900/90 border border-slate-800 p-6 rounded-xl backdrop-blur-xl z-50 hidden shadow-2xl">
-                <div class="flex justify-between items-center mb-4">
+            <div id="timelineUI" class="absolute bottom-10 left-10 right-10 bg-slate-900/90 border border-slate-800 p-6 rounded-xl backdrop-blur-xl z-50 hidden shadow-2xl transition-all duration-300">
+                <div class="flex justify-between items-center mb-2">
                     <div class="flex items-center gap-3">
+                        <button onclick="window.toggleTimelineCollapse()" id="timelineCollapseBtn" title="Collapse/Expand Timeline" class="w-6 h-6 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition text-[10px]">▼</button>
                         <span class="text-[10px] font-bold text-cyan-500 tracking-widest uppercase">Chronological Flow</span>
                         <span id="dateDisplay" class="text-xs font-mono text-white bg-cyan-950 px-3 py-1 rounded-md border border-cyan-800">2017-08-01</span>
                     </div>
                     <div class="flex items-center gap-3">
-                        <div id="playbackStatus" class="text-[9px] text-slate-400 uppercase font-bold">Stopped</div>
-                        <div id="playbackProgress" class="text-[9px] text-slate-500 uppercase font-bold">Frame 0 / 0</div>
+                        <button onclick="window.toggleTimelinePin()" id="timelinePinBtn" title="Pin timeline" class="text-slate-500 hover:text-yellow-400 transition text-[10px] uppercase font-bold px-2 py-0.5 rounded border border-transparent hover:border-yellow-900/30">📌 Pin</button>
+                        <div id="playbackStatus" aria-live="polite" class="text-[9px] text-slate-400 uppercase font-bold">Stopped</div>
+                        <div id="playbackProgress" aria-live="polite" class="text-[9px] text-slate-500 uppercase font-bold">Frame 0 / 0</div>
                     </div>
                 </div>
                 
+                <div id="timelineContent" class="mt-4">
                 <!-- Playback Controls -->
                 <div class="flex items-center gap-2 mb-4 pb-4 border-b border-slate-700">
                     <button onclick="togglePlayback()" 
                         id="playPauseBtn"
                         title="Play/Pause time-travel animation"
-                        class="flex items-center justify-center w-8 h-8 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition">
+                        disabled
+                        class="flex items-center justify-center w-8 h-8 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">
                         ▶
                     </button>
                     
                     <button onclick="stopPlayback()" 
+                        id="playbackStopBtn"
                         title="Stop playback and reset"
-                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition">
+                        disabled
+                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">
                         ⏹
                     </button>
                     
                     <button onclick="previousFrame()" 
+                        id="previousFrameBtn"
                         title="Previous frame"
-                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition">
+                        disabled
+                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">
                         ⏮
                     </button>
                     
                     <button onclick="nextFrame()" 
+                        id="nextFrameBtn"
                         title="Next frame"
-                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition">
+                        disabled
+                        class="flex items-center justify-center w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">
                         ⏭
                     </button>
                     
                     <div class="flex items-center gap-2 ml-2 pl-2 border-l border-slate-700">
                         <button onclick="decreaseSpeed()" 
+                            id="decreaseSpeedBtn"
                             title="Decrease speed (min 0.5x)"
                             class="flex items-center justify-center w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold transition">
                             −
                         </button>
                         <span id="playbackSpeed" class="text-xs font-mono text-cyan-300 bg-slate-800 px-2 py-1 rounded min-w-12 text-center">1.0x</span>
                         <button onclick="increaseSpeed()" 
+                            id="increaseSpeedBtn"
                             title="Increase speed (max 4.0x)"
                             class="flex items-center justify-center w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold transition">
                             +
                         </button>
                     </div>
                     
-                    <div class="ml-auto text-[9px] text-slate-500 uppercase font-bold">Scrub or play to animate</div>
+                    <div class="ml-auto text-[9px] text-slate-500 uppercase font-bold">Play from start · drag to seek</div>
                 </div>
                 
                 <!-- Time Slider -->
-                <input type="range" id="timeSlider" min="0" max="100" value="100" class="w-full">
+                <div class="flex items-center gap-3">
+                    <span id="timelineStartDate" class="text-[9px] text-slate-400 font-mono">—</span>
+                    <input type="range" id="timeSlider" min="0" max="100" value="100" step="1"
+                           aria-label="Transaction timeline position"
+                           title="Drag to seek through transaction history"
+                           class="w-full">
+                    <span id="timelineEndDate" class="text-[9px] text-slate-400 font-mono">—</span>
+                </div>
+                </div>
             </div>
 
             <!-- ── Toolbar ─────────────────────────────────────────────── -->
-            <div class="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
+            <div class="graph-hud absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
+                <div id="graphToolsMenu" class="graph-tools-menu">
+                    <div class="graph-tools-header">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></span>
+                            <span class="text-[10px] text-cyan-300 font-bold uppercase tracking-widest">Graph Tools</span>
+                        </div>
+                        <button id="graphToolsToggle"
+                            onclick="toggleGraphTools()"
+                            aria-controls="graphToolsContent"
+                            aria-expanded="true"
+                            title="Hide graph tools"
+                            class="px-2 py-1 rounded text-[10px] font-bold text-slate-300 bg-slate-800 border border-slate-700 hover:bg-slate-700 hover:text-white transition">
+                            <span id="graphToolsToggleIcon" aria-hidden="true">⌃</span>
+                        </button>
+                    </div>
+                    <div id="graphToolsContent" class="graph-tools-content">
 
                 <!-- Row 1: Expand controls -->
-                <div class="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
-                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest pr-1 border-r border-slate-700 mr-1">Expand</span>
+                <div class="toolbar-group flex items-center gap-1.5 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
+                    <button class="section-toggle" onclick="toggleToolbarSection(this)" aria-expanded="true">
+                        Expand <span aria-hidden="true">⌃</span>
+                    </button>
                     <button id="expandSelectedBtn"
                         onclick="expandSelected()"
                         disabled
@@ -499,14 +824,14 @@
                                bg-slate-700 text-slate-300 border border-slate-600
                                hover:bg-slate-600 hover:text-white transition
                                disabled:opacity-30 disabled:cursor-not-allowed">
-                        ⤡ <span id="expandSelectedText">Expand Node</span>
+                        <span id="expandSelectedText">Expand Node</span>
                     </button>
                     <button id="expandAllBtn"
                         onclick="expandAll()"
                         title="Sequentially expand every unexpanded address node"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold text-white
                                bg-violet-600 border border-violet-500 hover:bg-violet-500 transition">
-                        ⚡ Expand All
+                        Expand All
                     </button>
                     <button id="stopExpandBtn"
                         onclick="stopExpandAll()"
@@ -519,8 +844,10 @@
                 </div>
 
                 <!-- Row 2: View controls -->
-                <div class="flex items-center gap-1 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
-                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest pr-1 border-r border-slate-700 mr-1">View</span>
+                <div class="toolbar-group flex items-center gap-1 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
+                    <button class="section-toggle" onclick="toggleToolbarSection(this)" aria-expanded="true">
+                        View <span aria-hidden="true">⌃</span>
+                    </button>
 
                     <button onclick="fitGraphToScreen()" title="Fit all nodes into view"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
@@ -532,23 +859,24 @@
                     </button>
                     <button onclick="toggleFreeze()" title="Freeze / unfreeze node positions"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
-                        ❄ <span id="freezeText">Freeze</span>
+                        <span id="freezeText">Freeze</span>
                     </button>
                     <button onclick="toggleLabels()" title="Show / hide address labels"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
-                        ☰ <span id="labelToggleText">Labels</span>
+                        <span id="labelToggleText">Labels</span>
                     </button>
                     <button onclick="toggleTimestamps()" title="Toggle transaction info overlays"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
-                        🕐 <span id="timestampToggleText">Info</span>
+                        <span id="timestampToggleText">Info</span>
                     </button>
-                    <button onclick="toggleLayout()" title="Re-run force layout"
+                    <button id="layoutBtn" onclick="toggleLayout()" title="Switch to hierarchy layout"
+                        aria-label="Switch to hierarchy layout" aria-pressed="false"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
-                        ⟳ Layout
+                        <span id="layoutText">Tree layout</span>
                     </button>
                     <button onclick="toggleMiningFilter()" title="Hide / show mining pool nodes"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
-                        ⛏ <span id="miningFilterText">Mining</span>
+                        <span id="miningFilterText">Mining</span>
                     </button>
                     <button onclick="toggleIncomingFilter()" title="Show only transactions coming TO the selected address"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
@@ -557,6 +885,10 @@
                     <button onclick="toggleOutgoingFilter()" title="Show only transactions going FROM the selected address"
                         class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
                         → <span id="outgoingFilterText">Outgoing</span>
+                    </button>
+                    <button onclick="window.toggleTimelineCollapse()" title="Toggle chronological timeline controls"
+                        class="px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-200 bg-slate-700 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
+                        Timeline
                     </button>
 
                     <div class="w-px h-5 bg-slate-600 mx-0.5"></div>
@@ -567,37 +899,41 @@
                 </div>
 
                 <!-- Row 3: Analysis tools -->
-                <div class="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
-                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest pr-1 border-r border-slate-700 mr-1">Analyse</span>
+                <div class="toolbar-group flex items-center gap-1.5 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl">
+                    <button class="section-toggle" onclick="toggleToolbarSection(this)" aria-expanded="true">
+                        Analyse <span aria-hidden="true">⌃</span>
+                    </button>
 
                     <button onclick="runTracePath(document.getElementById('targetId').value.trim())"
                         title="Trace BTC forward to its final destination"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold text-white
                                bg-orange-700 border border-orange-600 hover:bg-orange-600 transition">
-                        ▶ Trace Path
+                        Trace Path
                     </button>
                     <button onclick="toggleWalletView()"
                         title="Collapse co-owned addresses into wallet clusters"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold
                                bg-emerald-900/70 text-emerald-300 border border-emerald-700 hover:bg-emerald-800 hover:text-emerald-200 transition">
-                        ⬡ <span id="walletViewText">Wallet View</span>
+                        <span id="walletViewText">Wallet View</span>
                     </button>
                     <button onclick="saveSession()"
                         title="Save this investigation to a .ctk file"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold
                                bg-amber-900/60 text-amber-300 border border-amber-700 hover:bg-amber-800 hover:text-amber-200 transition">
-                        💾 Save Session
+                        Save Session
                     </button>
                     <button onclick="document.getElementById('loadSessionInput').click()"
                         title="Load a previously saved .ctk session file"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-bold
                                bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600 hover:text-white transition">
-                        📂 Load Session
+                        Load Session
                     </button>
                     <input id="loadSessionInput" type="file" accept=".ctk,.json" style="display:none"
                            onchange="window._handleSessionLoad(this)">
                 </div>
 
+                    </div>
+                </div>
             </div>
         </div>
     </main>
@@ -618,11 +954,85 @@
         ⛶ <span id="focusModeLabel">Focus</span>
     </button>
 
+    <button id="sidebarToggleBtn"
+        onclick="toggleSidebar()"
+        title="Show graph statistics and investigation panel"
+        aria-controls="graphSidebar"
+        aria-expanded="false"
+        style="display:flex;align-items:center;gap:6px;
+               padding:8px 14px;border-radius:8px;border:1px solid #334155;
+               background:rgba(15,23,42,0.9);color:#94a3b8;
+               font-size:11px;font-weight:700;letter-spacing:0.06em;
+               backdrop-filter:blur(6px);cursor:pointer;
+               text-transform:uppercase;transition:all .2s">
+        <span id="sidebarToggleLabel" aria-hidden="true">❯</span>
+    </button>
+
     <script>
     let _focusActive = false;
+    let _sidebarVisible = false;
+    let _graphToolsVisible = true;
+    const _focusOverlayIds = ['graphSearchBox', 'timelineUI', 'calendarModal', 'sidebarToggleBtn'];
+    const _focusOverlayState = new Map();
+
+    function toggleGraphTools(force) {
+        _graphToolsVisible = force !== undefined ? force : !_graphToolsVisible;
+
+        const menu = document.getElementById('graphToolsMenu');
+        const button = document.getElementById('graphToolsToggle');
+        const icon = document.getElementById('graphToolsToggleIcon');
+        if (!menu) return;
+
+        menu.classList.toggle('is-collapsed', !_graphToolsVisible);
+        if (button) {
+            button.setAttribute('aria-expanded', String(_graphToolsVisible));
+            button.title = _graphToolsVisible ? 'Hide graph tools' : 'Show graph tools';
+        }
+        if (icon) icon.textContent = _graphToolsVisible ? '⌃' : '⌄';
+    }
+
+    function toggleToolbarSection(button) {
+        const group = button.closest('.toolbar-group');
+        if (!group) return;
+
+        const isExpanded = group.classList.toggle('section-collapsed') === false;
+        button.setAttribute('aria-expanded', String(isExpanded));
+        const icon = button.querySelector('span');
+        if (icon) icon.textContent = isExpanded ? '⌃' : '⌄';
+    }
+
+    function toggleSidebar(force) {
+        _sidebarVisible = force !== undefined ? force : !_sidebarVisible;
+
+        const aside = document.getElementById('graphSidebar');
+        const btn = document.getElementById('sidebarToggleBtn');
+        const label = document.getElementById('sidebarToggleLabel');
+        if (!aside) return;
+
+        aside.classList.toggle('sidebar-collapsed', !_sidebarVisible);
+        document.body.classList.toggle('sidebar-open', _sidebarVisible);
+        if (_sidebarVisible) {
+            aside.style.width = '';
+            aside.style.opacity = '';
+        }
+
+        if (btn) {
+            btn.setAttribute('aria-expanded', String(_sidebarVisible));
+            btn.title = _sidebarVisible
+                ? 'Hide graph statistics and investigation panel'
+                : 'Show graph statistics and investigation panel';
+            btn.style.background = _sidebarVisible
+                ? 'rgba(6,182,212,0.15)'
+                : 'rgba(15,23,42,0.9)';
+            btn.style.borderColor = _sidebarVisible ? '#06b6d4' : '#334155';
+            btn.style.color = _sidebarVisible ? '#06b6d4' : '#94a3b8';
+        }
+        if (label) label.textContent = _sidebarVisible ? '❮' : '❯';
+    }
 
     function toggleFocusMode(force) {
         _focusActive = force !== undefined ? force : !_focusActive;
+        document.body.classList.toggle('focus-mode-active', _focusActive);
 
         const header = document.querySelector('header');
         const aside  = document.querySelector('aside');
@@ -630,6 +1040,13 @@
         const label  = document.getElementById('focusModeLabel');
 
         if (_focusActive) {
+            _focusOverlayIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (!element) return;
+                _focusOverlayState.set(id, element.classList.contains('hidden'));
+                element.classList.add('focus-mode-hidden');
+            });
+
             // Collapse header — animate height to 0 then hide
             if (header) {
                 header.style.transition = 'height .25s ease, padding .25s ease, opacity .25s ease';
@@ -645,6 +1062,7 @@
                 aside.style.width    = '0';
                 aside.style.opacity  = '0';
             }
+            document.body.classList.remove('sidebar-open');
             // Style the button as active
             if (btn) {
                 btn.style.background    = 'rgba(6,182,212,0.15)';
@@ -661,6 +1079,13 @@
                 lv && lv.classList.remove('hidden');
             }
         } else {
+            _focusOverlayIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (!element || _focusOverlayState.get(id)) return;
+                element.classList.remove('focus-mode-hidden');
+            });
+            _focusOverlayState.clear();
+
             // Restore header
             if (header) {
                 header.style.height  = '';
@@ -671,10 +1096,11 @@
             }
             // Restore sidebar
             if (aside) {
-                aside.style.width   = '';
-                aside.style.opacity = '1';
+                aside.style.width   = _sidebarVisible ? '' : '0';
+                aside.style.opacity = _sidebarVisible ? '1' : '0';
                 setTimeout(() => { if (aside) aside.style.overflow = ''; }, 300);
             }
+            document.body.classList.toggle('sidebar-open', _sidebarVisible);
             // Reset button
             if (btn) {
                 btn.style.background  = '';

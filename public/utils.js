@@ -55,7 +55,7 @@ export function showToast(message, type = 'info', duration = 5000) {
         warning: {
             bg: '#0f172a',
             border: '#f59e0b',
-            icon: '⚠️',
+            icon: '',
             color: '#f59e0b'
         },
         error: {
@@ -67,7 +67,7 @@ export function showToast(message, type = 'info', duration = 5000) {
         mixer: {
             bg: '#1e1b4b',
             border: '#7c3aed',
-            icon: '🌀',
+            icon: '',
             color: '#a78bfa',
             textColor: '#c4b5fd'
         }

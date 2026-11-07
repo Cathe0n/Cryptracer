@@ -24,14 +24,14 @@ window.exportGraphJSON = function() {
  * Expand this mapping to include more exchanges as needed
  */
 const KNOWN_EXCHANGES = {
-    'binance': { name: 'Binance', icon: '🏦', color: '#f7931a', desc: 'Major cryptocurrency exchange' },
-    'kraken': { name: 'Kraken', icon: '🏦', color: '#264c96', desc: 'Established cryptocurrency exchange' },
-    'coinbase': { name: 'Coinbase', icon: '🏦', color: '#0052ff', desc: 'U.S.-based cryptocurrency exchange' },
-    'gemini': { name: 'Gemini', icon: '🏦', color: '#122140', desc: 'Digital asset exchange' },
-    'huobi': { name: 'Huobi', icon: '🏦', color: '#0096ff', desc: 'Global cryptocurrency exchange' },
-    'bitfinex': { name: 'Bitfinex', icon: '🏦', color: '#1a1a1a', desc: 'Cryptocurrency trading platform' },
-    'ftx': { name: 'FTX', icon: '🏦', color: '#1f87ff', desc: 'Cryptocurrency derivatives exchange' },
-    'bybit': { name: 'Bybit', icon: '🏦', color: '#f7931a', desc: 'Derivatives trading platform' },
+    'binance': { name: 'Binance', icon: '', color: '#f7931a', desc: 'Major cryptocurrency exchange' },
+    'kraken': { name: 'Kraken', icon: '', color: '#264c96', desc: 'Established cryptocurrency exchange' },
+    'coinbase': { name: 'Coinbase', icon: '', color: '#0052ff', desc: 'U.S.-based cryptocurrency exchange' },
+    'gemini': { name: 'Gemini', icon: '', color: '#122140', desc: 'Digital asset exchange' },
+    'huobi': { name: 'Huobi', icon: '', color: '#0096ff', desc: 'Global cryptocurrency exchange' },
+    'bitfinex': { name: 'Bitfinex', icon: '', color: '#1a1a1a', desc: 'Cryptocurrency trading platform' },
+    'ftx': { name: 'FTX', icon: '', color: '#1f87ff', desc: 'Cryptocurrency derivatives exchange' },
+    'bybit': { name: 'Bybit', icon: '', color: '#f7931a', desc: 'Derivatives trading platform' },
 };
 
 /**
@@ -51,7 +51,7 @@ export function getEnrichedEntityInfo(nodeData) {
         return { 
             type: 'mining', 
             name: 'Mining Reward Tx', 
-            icon: '⛏️', 
+            icon: '',
             color: '#64748b', 
             desc: 'Coinbase transaction — block mining reward' 
         };
@@ -65,7 +65,7 @@ export function getEnrichedEntityInfo(nodeData) {
             }
         }
         // Generic exchange if no specific match
-        return { type: 'exchange', name: 'Exchange', icon: '🏦', color: '#0284c7', desc: 'Identified cryptocurrency exchange' };
+        return { type: 'exchange', name: 'Exchange', icon: '', color: '#0284c7', desc: 'Identified cryptocurrency exchange' };
     }
     
     if (type === 'mining') {
@@ -75,19 +75,19 @@ export function getEnrichedEntityInfo(nodeData) {
         else if (labelLower.includes('block')) poolName = 'Block Mining Pool';
         else if (labelLower.includes('pool')) poolName = 'Mining Pool';
         
-        return { type: 'mining', name: poolName, icon: '⛏️', color: '#64748b', desc: 'Cryptocurrency mining pool' };
+        return { type: 'mining', name: poolName, icon: '', color: '#64748b', desc: 'Cryptocurrency mining pool' };
     }
     
     if (type === 'gambling') {
-        return { type: 'gambling', name: 'Gambling Platform', icon: '🎰', color: '#d97706', desc: 'Identified gambling service' };
+        return { type: 'gambling', name: 'Gambling Platform', icon: '', color: '#d97706', desc: 'Identified gambling service' };
     }
     
     if (type === 'darknet') {
-        return { type: 'darknet', name: 'Darknet Service', icon: '🕷️', color: '#be123c', desc: 'Darknet marketplace or service' };
+        return { type: 'darknet', name: 'Darknet Service', icon: '', color: '#be123c', desc: 'Darknet marketplace or service' };
     }
     
     if (type === 'mixer') {
-        return { type: 'mixer', name: 'Coin Mixer', icon: '🌀', color: '#7c3aed', desc: 'Coin mixing service for privacy' };
+        return { type: 'mixer', name: 'Coin Mixer', icon: '', color: '#7c3aed', desc: 'Coin mixing service for privacy' };
     }
     
     return null;
@@ -147,7 +147,7 @@ export function showEntityView(nodeId) {
     // "Direct risk" = risk score derived from actual ChainAbuse reports.
     // "Taint risk"  = risk score propagated from nearby high-risk nodes; no
     //                 reports exist for this specific address.
-    // We distinguish them so we never show "NO RISK REPORTS ✅" alongside a
+    // We distinguish them so we never show "NO RISK REPORTS " alongside a
     // non-zero risk score — that combination is actively misleading.
     const hasTaintOnly = !hasReports && !hasError && risk > 0;
 
@@ -155,28 +155,28 @@ export function showEntityView(nodeId) {
     // dynamic Tailwind class) so text is always readable regardless of theme.
     let accentColor, accentBg, accentLabel, accentIcon, accentGlow;
     if (hasError) {
-        accentColor='#c2410c'; accentBg='#fff7ed'; accentLabel='API LIMIT REACHED'; accentIcon='⏳'; accentGlow='';
+        accentColor='#c2410c'; accentBg='#fff7ed'; accentLabel='API LIMIT REACHED'; accentIcon=''; accentGlow='';
     } else if (hasTaintOnly) {
         if (risk >= 70) {
-            accentColor='#b45309'; accentBg='#fffbeb'; accentLabel='HIGH TAINT RISK'; accentIcon='⚠️';
+            accentColor='#b45309'; accentBg='#fffbeb'; accentLabel='HIGH TAINT RISK'; accentIcon='';
             accentGlow='box-shadow:0 0 20px rgba(245,158,11,0.2)';
         } else if (risk >= 40) {
-            accentColor='#92400e'; accentBg='#fefce8'; accentLabel='ELEVATED TAINT RISK'; accentIcon='⚠️'; accentGlow='';
+            accentColor='#92400e'; accentBg='#fefce8'; accentLabel='ELEVATED TAINT RISK'; accentIcon=''; accentGlow='';
         } else {
             accentColor='#374151'; accentBg='#f8fafc'; accentLabel='LOW TAINT RISK'; accentIcon='🔗'; accentGlow='';
         }
     } else if (!hasReports && risk === 0) {
-        accentColor='#065f46'; accentBg='#f0fdf4'; accentLabel='NO RISK REPORTS'; accentIcon='✅'; accentGlow='';
+        accentColor='#065f46'; accentBg='#f0fdf4'; accentLabel='NO RISK REPORTS'; accentIcon=''; accentGlow='';
     } else if (risk >= 70) {
         accentColor='#b91c1c'; accentBg='#fef2f2'; accentLabel='CRITICAL RISK'; accentIcon='🚨';
         accentGlow='box-shadow:0 0 30px rgba(239,68,68,0.35)';
     } else if (risk >= 40) {
-        accentColor='#c2410c'; accentBg='#fff7ed'; accentLabel='HIGH RISK'; accentIcon='⚠️';
+        accentColor='#c2410c'; accentBg='#fff7ed'; accentLabel='HIGH RISK'; accentIcon='';
         accentGlow='box-shadow:0 0 25px rgba(249,115,22,0.25)';
     } else if (risk >= 20) {
-        accentColor='#92400e'; accentBg='#fefce8'; accentLabel='MEDIUM RISK'; accentIcon='⚠️'; accentGlow='';
+        accentColor='#92400e'; accentBg='#fefce8'; accentLabel='MEDIUM RISK'; accentIcon=''; accentGlow='';
     } else {
-        accentColor='#065f46'; accentBg='#f0fdf4'; accentLabel='LOW RISK'; accentIcon='✅'; accentGlow='';
+        accentColor='#065f46'; accentBg='#f0fdf4'; accentLabel='LOW RISK'; accentIcon=''; accentGlow='';
     }
 
     // Inject a scoped <style> that beats the parent dark theme's !important rules.
@@ -373,7 +373,7 @@ export function showEntityView(nodeId) {
 
     if (hasReports && rd.categories && Object.keys(rd.categories).length > 0) {
         html += `<div class="ep-card">
-            <div class="ep-heading" style="color:#b91c1c!important;margin-bottom:8px">⚠️ Reported Activities</div>
+            <div class="ep-heading" style="color:#b91c1c!important;margin-bottom:8px"> Reported Activities</div>
             <div>`;
         Object.entries(rd.categories).sort((a, b) => b[1] - a[1]).forEach(([cat, cnt]) => {
             html += `<div class="ep-row" style="margin-bottom:5px">
@@ -385,7 +385,7 @@ export function showEntityView(nodeId) {
 
     if (hasReports && rd.reports?.length > 0) {
         html += `<div class="ep-card" style="max-height:240px;overflow-y:auto">
-            <div class="ep-heading" style="margin-bottom:8px">📋 Recent Reports</div>
+            <div class="ep-heading" style="margin-bottom:8px"> Recent Reports</div>
             <div>`;
         rd.reports.slice(0, 5).forEach(r => {
             html += `<div class="ep-card" style="margin-bottom:6px;padding:8px!important">
@@ -436,11 +436,11 @@ export function showEntityView(nodeId) {
         <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px">
             <span class="ep-badge" style="background:${isAddress ? '#dbeafe' : '#ede9fe'};color:${isAddress ? '#1e40af' : '#5b21b6'};border:1px solid ${isAddress ? '#bfdbfe' : '#ddd6fe'}">${nodeData.type}</span>
             ${hasReports && risk >= 70 ? `<span class="ep-badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">🚨 CRITICAL RISK</span>` : ''}
-            ${hasReports && risk >= 40 && risk < 70 ? `<span class="ep-badge" style="background:#ffedd5;color:#9a3412;border:1px solid #fdba74">⚠️ HIGH RISK</span>` : ''}
-            ${nodeData.mixer_info?.is_mixer ? `<span class="ep-badge" style="background:#2e1065;color:#c4b5fd;border:1px solid #7c3aed">🌀 ${nodeData.mixer_info.raw?.mixer_type||'MIXER'} (${nodeData.mixer_info.confidence||0}%)</span>` : ''}
-            ${enrichedEntity ? '' : (nodeData.entity_type === 'exchange' || nodeData.exchange_info?.flagged ? `<span class="ep-badge" style="background:#e0f2fe;color:#075985;border:1px solid #bae6fd">🏦 EXCHANGE</span>` : '')}
-            ${enrichedEntity ? '' : (nodeData.entity_type === 'gambling' || nodeData.gambling_info?.flagged ? `<span class="ep-badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe">🎰 GAMBLING</span>` : '')}
-            ${enrichedEntity ? '' : (nodeData.entity_type === 'mining' || nodeData.mining_info?.flagged ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">⛏️ MINING POOL</span>` : '')}
+            ${hasReports && risk >= 40 && risk < 70 ? `<span class="ep-badge" style="background:#ffedd5;color:#9a3412;border:1px solid #fdba74"> HIGH RISK</span>` : ''}
+            ${nodeData.mixer_info?.is_mixer ? `<span class="ep-badge" style="background:#2e1065;color:#c4b5fd;border:1px solid #7c3aed"> ${nodeData.mixer_info.raw?.mixer_type||'MIXER'} (${nodeData.mixer_info.confidence||0}%)</span>` : ''}
+            ${enrichedEntity ? '' : (nodeData.entity_type === 'exchange' || nodeData.exchange_info?.flagged ? `<span class="ep-badge" style="background:#e0f2fe;color:#075985;border:1px solid #bae6fd"> EXCHANGE</span>` : '')}
+            ${enrichedEntity ? '' : (nodeData.entity_type === 'gambling' || nodeData.gambling_info?.flagged ? `<span class="ep-badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe"> GAMBLING</span>` : '')}
+            ${enrichedEntity ? '' : (nodeData.entity_type === 'mining' || nodeData.mining_info?.flagged ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a"> MINING POOL</span>` : '')}
             ${hasTaintOnly && risk >= 40 ? `<span class="ep-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">🔗 TAINT ${risk}</span>` : ''}
             <a href="https://mempool.space/${isAddress ? 'address' : 'tx'}/${encodeURIComponent(nodeData.label)}" target="_blank" rel="noopener"
                class="ep-badge ep-link" style="background:#ecfeff;border:1px solid #a5f3fc">🔍 mempool.space ↗</a>
@@ -514,7 +514,7 @@ export function showEntityView(nodeId) {
         const mp = MIXER_PANEL[mixerType] || { bg:'#1e1b4b', border:'#6366f1', bar:'#6366f1', text:'#a5b4fc', method:'Heuristic pattern match' };
         html+=`<div class="ep-card" style="background:${mp.bg};border:1px solid ${mp.border}">
             <div class="ep-row" style="margin-bottom:6px">
-                <span class="ep-heading" style="color:${mp.text}!important">🌀 Coin Mixer / CoinJoin</span>
+                <span class="ep-heading" style="color:${mp.text}!important"> Coin Mixer / CoinJoin</span>
                 <span class="ep-body-sm">Conf: <strong style="color:${mp.text}">${conf}%</strong></span>
             </div>
             ${mixerType?`<div class="ep-body" style="font-weight:700!important;color:${mp.text}!important;margin-bottom:2px">${mixerType}</div>`:''}
@@ -522,7 +522,7 @@ export function showEntityView(nodeId) {
             <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${conf}%;background:${mp.bar}"></div></div>
             <div class="ep-body" style="margin-bottom:6px">${expl}</div>
             ${rows?`<div style="border-top:1px solid ${mp.border};padding-top:6px">${rows}</div>`:''}
-            <div class="ep-footer" style="background:${mp.bg};color:${mp.text};border-top:1px solid ${mp.border}">⚠️ Mixer transactions deliberately obscure the origin of funds. Tracing beyond this point is unreliable.</div>
+            <div class="ep-footer" style="background:${mp.bg};color:${mp.text};border-top:1px solid ${mp.border}"> Mixer transactions deliberately obscure the origin of funds. Tracing beyond this point is unreliable.</div>
         </div>`;
     }
     if (nodeData.exchange_info?.flagged||nodeData.entity_type==='exchange') {
@@ -532,12 +532,12 @@ export function showEntityView(nodeId) {
         const ename=nodeData.label&&nodeData.label!==nodeId?nodeData.label:null;
         const rows=mkBreakdown(ei.breakdown||{},'#38bdf8');
         html+=`<div class="ep-card ep-card-accent-sky">
-            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#38bdf8!important">🏦 Exchange / Custodial Service</span><span class="ep-body-sm">Conf: <strong style="color:#38bdf8">${ec}%</strong></span></div>
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#38bdf8!important"> Exchange / Custodial Service</span><span class="ep-body-sm">Conf: <strong style="color:#38bdf8">${ec}%</strong></span></div>
             ${ename?`<div class="ep-body" style="font-weight:700!important;color:#7dd3fc!important;margin-bottom:4px">${ename}</div>`:''}
             <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${ec}%;background:#38bdf8"></div></div>
             <div class="ep-body" style="margin-bottom:6px">${en2}</div>
             ${rows?`<div style="border-top:1px solid #334155;padding-top:6px">${rows}</div>`:''}
-            <div class="ep-footer" style="background:#0c4a6e44;color:#7dd3fc;border:1px solid #0ea5e955">ℹ️ Funds entering an exchange may be harder to trace. Exchanges apply KYC and may respond to legal requests.</div>
+            <div class="ep-footer" style="background:#0c4a6e44;color:#7dd3fc;border:1px solid #0ea5e955">ℹ Funds entering an exchange may be harder to trace. Exchanges apply KYC and may respond to legal requests.</div>
         </div>`;
     }
     if (nodeData.gambling_info?.flagged||nodeData.entity_type==='gambling') {
@@ -546,11 +546,11 @@ export function showEntityView(nodeId) {
         const gn=(gi.notes||[]).join('; ')||'Gambling / gaming service pattern detected.';
         const rows=mkBreakdown(gi.breakdown||{},'#a78bfa');
         html+=`<div class="ep-card ep-card-accent-violet">
-            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#a78bfa!important">🎰 Gambling / Gaming Service</span><span class="ep-body-sm">Conf: <strong style="color:#a78bfa">${gc}%</strong></span></div>
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#a78bfa!important"> Gambling / Gaming Service</span><span class="ep-body-sm">Conf: <strong style="color:#a78bfa">${gc}%</strong></span></div>
             <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${gc}%;background:#a78bfa"></div></div>
             <div class="ep-body" style="margin-bottom:6px">${gn}</div>
             ${rows?`<div style="border-top:1px solid #334155;padding-top:6px">${rows}</div>`:''}
-            <div class="ep-footer" style="background:#4c1d9544;color:#c4b5fd;border:1px solid #8b5cf655">ℹ️ Gambling services are often unlicensed. Funds may be commingled and hard to attribute.</div>
+            <div class="ep-footer" style="background:#4c1d9544;color:#c4b5fd;border:1px solid #8b5cf655">ℹ Gambling services are often unlicensed. Funds may be commingled and hard to attribute.</div>
         </div>`;
     }
     if (nodeData.mining_info?.flagged||nodeData.entity_type==='mining') {
@@ -559,11 +559,11 @@ export function showEntityView(nodeId) {
         const mn=(mi.notes||[]).join('; ')||'Mining pool pattern detected.';
         const rows=mkBreakdown(mi.breakdown||{},'#fbbf24');
         html+=`<div class="ep-card ep-card-accent-amber2">
-            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#fbbf24!important">⛏️ Mining Pool</span><span class="ep-body-sm">Conf: <strong style="color:#fbbf24">${mc}%</strong></span></div>
+            <div class="ep-row" style="margin-bottom:6px"><span class="ep-heading" style="color:#fbbf24!important"> Mining Pool</span><span class="ep-body-sm">Conf: <strong style="color:#fbbf24">${mc}%</strong></span></div>
             <div class="ep-bar-track"><div class="ep-bar-fill" style="width:${mc}%;background:#fbbf24"></div></div>
             <div class="ep-body" style="margin-bottom:6px">${mn}</div>
             ${rows?`<div style="border-top:1px solid #334155;padding-top:6px">${rows}</div>`:''}
-            <div class="ep-footer" style="background:#78350f44;color:#fcd34d;border:1px solid #f59e0b55">ℹ️ Coinbase flows through mining pools — generally benign unless co-mingled with flagged funds.</div>
+            <div class="ep-footer" style="background:#78350f44;color:#fcd34d;border:1px solid #f59e0b55">ℹ Coinbase flows through mining pools — generally benign unless co-mingled with flagged funds.</div>
         </div>`;
     }
 
@@ -632,8 +632,8 @@ export function showEntityView(nodeId) {
                     style="width:30px;height:30px;border-radius:5px;border:2px solid ${!customEdgeColor?'#1e293b':'#cbd5e1'};background:#f1f5f9;font-size:10px;font-weight:700;cursor:pointer;color:#334155" title="Auto">A</button>
             </div>
         </div>
-        <button onclick="window.saveNodeAnnotation('${nodeId}')" class="ep-btn-primary">💾 Save Annotations</button>
-        <button onclick="window.exportGraphJSON()" class="ep-btn-primary" style="margin-top:8px!important;background:#475569!important">📋 Export Graph JSON</button>
+        <button onclick="window.saveNodeAnnotation('${nodeId}')" class="ep-btn-primary"> Save Annotations</button>
+        <button onclick="window.exportGraphJSON()" class="ep-btn-primary" style="margin-top:8px!important;background:#475569!important"> Export Graph JSON</button>
     </div>`;
 
     // ── Live mempool enrichment block ────────────────────────────────────────
@@ -664,7 +664,7 @@ export function showEntityView(nodeId) {
             forTx: false,
         },
         'WalletExplorer': {
-            icon:'🏷️', label:'WalletExplorer',
+            icon:'🏷', label:'WalletExplorer',
             url:(id,isA)=>`https://www.walletexplorer.com/address/${id}`,
             provides:'This isattribution database labels for known exchanges, pools & mixers.',
             caveat:'Label database frozen since 2016 — post-2016 services are unlisted.',
@@ -688,7 +688,7 @@ export function showEntityView(nodeId) {
             forTx: true,
         },
         'mempool.space': {
-            icon:'⛓️', label:'Mempool.space',
+            icon:'⛓', label:'Mempool.space',
             url:(id,isA)=>isA?`https://mempool.space/address/${id}`:`https://mempool.space/tx/${id}`,
             provides:'Real-time mempool state: pending TXs, UTXO set, live balance & fee rates.',
             caveat:'Public rate limits apply. Unconfirmed TX data may change before confirmation.',
@@ -696,7 +696,7 @@ export function showEntityView(nodeId) {
             forTx: true,
         },
         'Local DB':      {
-            icon:'🗄️', label:'Local Neo4j DB', url:null,
+            icon:'🗄', label:'Local Neo4j DB', url:null,
             provides:'Cached graph data from previous investigations stored locally.',
             caveat:'Data may be stale. Re-investigate to refresh against live sources.',
             keyNeeded: false, forTx: true,
@@ -751,7 +751,7 @@ export function showEntityView(nodeId) {
     {
         // ── 1. Source cards ───────────────────────────────────────────────────
         const sourceCards = mergedSources.map(s => {
-            const d = SRC_DEF[s] || {icon:'📄',label:s,url:null,provides:'Unknown source.',caveat:'',keyNeeded:false,forTx:true};
+            const d = SRC_DEF[s] || {icon:'',label:s,url:null,provides:'Unknown source.',caveat:'',keyNeeded:false,forTx:true};
             const rawUrl  = d.url ? d.url(nodeId, isAddress) : null;
             const safeUrl = rawUrl ? rawUrl.replace(/'/g,'%27') : null;
             const canVerify = VERIFIABLE.has(s);
@@ -797,7 +797,7 @@ export function showEntityView(nodeId) {
                     <div style="display:flex;gap:4px;flex-shrink:0;margin-left:auto">${verifyBtn}${openBtn}</div>
                 </div>
                 <div class="ep-body-sm" style="color:#334155!important;padding-left:21px;margin-bottom:2px">${d.provides}</div>
-                <div class="ep-body-sm" style="color:#94a3b8!important;padding-left:21px;font-style:italic">⚠ ${d.caveat}</div>
+                <div class="ep-body-sm" style="color:#94a3b8!important;padding-left:21px;font-style:italic"> ${d.caveat}</div>
                 <div id="${resultId}" style="margin-top:0"></div>
             </div>`;
         }).join('');
@@ -820,41 +820,41 @@ export function showEntityView(nodeId) {
         const clusterSize   = nodeData.cluster_size || 1;
 
         if (mixerFlagged && hasCA && rd?.categories?.['mixer'] > 0)
-            findings.push({type:'agree',icon:'✅',weight:3,text:`<strong>Mixing confirmed by 2 independent sources.</strong> On-chain heuristics (${nodeData.mixer_info.raw?.mixer_type||'CoinJoin'}) and ChainAbuse community reports both flag mixer activity.`});
+            findings.push({type:'agree',icon:'',weight:3,text:`<strong>Mixing confirmed by 2 independent sources.</strong> On-chain heuristics (${nodeData.mixer_info.raw?.mixer_type||'CoinJoin'}) and ChainAbuse community reports both flag mixer activity.`});
         else if (mixerFlagged && hasCA && !hasReports)
             findings.push({type:'info',icon:'🔍',weight:1,text:`Behavioral analysis flags mixing patterns but ChainAbuse has no reports. Heuristic detection only.`});
         if (label && exchFlagged && hasWE)
-            findings.push({type:'agree',icon:'✅',weight:3,text:`<strong>Exchange identity corroborated.</strong> WalletExplorer label "<em>${label}</em>" and behavioral analysis both classify this as a custodial service.`});
+            findings.push({type:'agree',icon:'',weight:3,text:`<strong>Exchange identity corroborated.</strong> WalletExplorer label "<em>${label}</em>" and behavioral analysis both classify this as a custodial service.`});
         else if (label && !exchFlagged && hasWE && hasBS)
-            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>WalletExplorer and on-chain data agree:</strong> Label "<em>${label}</em>" assigned with no conflicting behavioral flags.`});
+            findings.push({type:'agree',icon:'',weight:2,text:`<strong>WalletExplorer and on-chain data agree:</strong> Label "<em>${label}</em>" assigned with no conflicting behavioral flags.`});
         if (mineFlagged && hasBS)
-            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>Mining pool corroborated.</strong> Blockstream coinbase inputs and behavioral heuristics both confirm mining pool activity.`});
+            findings.push({type:'agree',icon:'',weight:2,text:`<strong>Mining pool corroborated.</strong> Blockstream coinbase inputs and behavioral heuristics both confirm mining pool activity.`});
         if (gambleFlagged && hasCA && hasReports)
-            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>Gambling confirmed by 2 sources.</strong> Behavioral heuristics and ChainAbuse reports align on gambling classification.`});
+            findings.push({type:'agree',icon:'',weight:2,text:`<strong>Gambling confirmed by 2 sources.</strong> Behavioral heuristics and ChainAbuse reports align on gambling classification.`});
         if (hasReports && risk >= 70 && (mixerFlagged || exchFlagged || gambleFlagged))
-            findings.push({type:'agree',icon:'✅',weight:3,text:`<strong>High-risk classification corroborated.</strong> ChainAbuse (score ${risk}/100) aligns with behavioral pattern detection — multiple signals converge.`});
+            findings.push({type:'agree',icon:'',weight:3,text:`<strong>High-risk classification corroborated.</strong> ChainAbuse (score ${risk}/100) aligns with behavioral pattern detection — multiple signals converge.`});
         if (!hasReports && !mixerFlagged && !exchFlagged && !gambleFlagged && !mineFlagged && risk === 0 && activeSrcSet.size >= 2)
-            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>${activeSrcSet.size} sources cross-checked — no risk signals found.</strong> No abuse reports, no behavioral flags, no known-entity label.`});
+            findings.push({type:'agree',icon:'',weight:2,text:`<strong>${activeSrcSet.size} sources cross-checked — no risk signals found.</strong> No abuse reports, no behavioral flags, no known-entity label.`});
         if (clusterSize > 1 && hasBS)
-            findings.push({type:'agree',icon:'✅',weight:2,text:`<strong>Co-spend cluster corroborated.</strong> Blockstream inputs link this address to <strong>${clusterSize}</strong> addresses in the same wallet cluster.`});
+            findings.push({type:'agree',icon:'',weight:2,text:`<strong>Co-spend cluster corroborated.</strong> Blockstream inputs link this address to <strong>${clusterSize}</strong> addresses in the same wallet cluster.`});
         if (hasBQ && hasBS)
-            findings.push({type:'agree',icon:'✅',weight:1,text:`Bitquery historical flows and Blockstream on-chain data both active. Cross-referencing improves tracing confidence.`});
+            findings.push({type:'agree',icon:'',weight:1,text:`Bitquery historical flows and Blockstream on-chain data both active. Cross-referencing improves tracing confidence.`});
         if (label && hasWE && hasReports && risk >= 40)
-            findings.push({type:'conflict',icon:'⚠️',weight:4,text:`<strong>Attribution conflict.</strong> WalletExplorer labels this "<em>${label}</em>" (known service), yet ChainAbuse holds <strong>${rd.report_count} report(s)</strong> for: ${Object.keys(rd?.categories||{}).join(', ')||'unknown'}. May indicate a compromised account or mislabeled address.`});
+            findings.push({type:'conflict',icon:'',weight:4,text:`<strong>Attribution conflict.</strong> WalletExplorer labels this "<em>${label}</em>" (known service), yet ChainAbuse holds <strong>${rd.report_count} report(s)</strong> for: ${Object.keys(rd?.categories||{}).join(', ')||'unknown'}. May indicate a compromised account or mislabeled address.`});
         if (mixerFlagged && exchFlagged)
-            findings.push({type:'conflict',icon:'⚠️',weight:3,text:`<strong>Behavioural conflict.</strong> TX patterns match both a <em>coin mixer</em> and an <em>exchange</em>. Could indicate a mixer operating through exchange infrastructure.`});
+            findings.push({type:'conflict',icon:'',weight:3,text:`<strong>Behavioural conflict.</strong> TX patterns match both a <em>coin mixer</em> and an <em>exchange</em>. Could indicate a mixer operating through exchange infrastructure.`});
         if (hasReports && risk >= 50 && label && hasWE && !exchFlagged)
-            findings.push({type:'conflict',icon:'⚠️',weight:3,text:`<strong>Source disagreement on risk.</strong> WalletExplorer identifies "<em>${label}</em>" as a known entity, but ChainAbuse risk score is <strong>${risk}/100</strong>. Investigate whether the label is outdated.`});
+            findings.push({type:'conflict',icon:'',weight:3,text:`<strong>Source disagreement on risk.</strong> WalletExplorer identifies "<em>${label}</em>" as a known entity, but ChainAbuse risk score is <strong>${risk}/100</strong>. Investigate whether the label is outdated.`});
         if (risk > 0 && !hasReports && !label && activeSrcSet.size >= 2)
-            findings.push({type:'conflict',icon:'⚠️',weight:2,text:`<strong>Taint risk not independently confirmed.</strong> Risk score <strong>${risk}</strong> is inherited via graph proximity — no direct abuse reports or attribution exist for this address.`});
+            findings.push({type:'conflict',icon:'',weight:2,text:`<strong>Taint risk not independently confirmed.</strong> Risk score <strong>${risk}</strong> is inherited via graph proximity — no direct abuse reports or attribution exist for this address.`});
         if (hasCA && !hasReports && risk === 0)
-            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`ChainAbuse queried — zero reports found. Coverage depends on community submissions; may miss recent or obscure schemes.`});
+            findings.push({type:'gap',icon:'ℹ',weight:0,text:`ChainAbuse queried — zero reports found. Coverage depends on community submissions; may miss recent or obscure schemes.`});
         if (hasWE && !label)
-            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`WalletExplorer returned no label. The address may be an individual wallet, an unlisted service, or active after the 2016 label freeze.`});
+            findings.push({type:'gap',icon:'ℹ',weight:0,text:`WalletExplorer returned no label. The address may be an individual wallet, an unlisted service, or active after the 2016 label freeze.`});
         if (!hasBQ)
-            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`Bitquery not configured — only Blockstream's 50 most-recent TXs are available. Add a Bitquery API key in Settings for full historical flow coverage.`});
+            findings.push({type:'gap',icon:'ℹ',weight:0,text:`Bitquery not configured — only Blockstream's 50 most-recent TXs are available. Add a Bitquery API key in Settings for full historical flow coverage.`});
         if (!hasCA && isAddress)
-            findings.push({type:'gap',icon:'ℹ️',weight:0,text:`ChainAbuse key not set — automated risk scoring disabled. Use the <strong>Open ↗</strong> button on the ChainAbuse card above to manually check this address, or add your key in Settings.`});
+            findings.push({type:'gap',icon:'ℹ',weight:0,text:`ChainAbuse key not set — automated risk scoring disabled. Use the <strong>Open ↗</strong> button on the ChainAbuse card above to manually check this address, or add your key in Settings.`});
 
         findings.sort((a,b)=>b.weight-a.weight);
         const FSTYLE = {
@@ -884,7 +884,7 @@ export function showEntityView(nodeId) {
             <div class="ep-heading" style="margin-bottom:8px">🔍 Intelligence Sources</div>
             <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;max-height:320px;overflow-y:auto;padding-right:4px">${sourceCards}</div>
             <div style="display:flex;align-items:center;gap:6px;background:${summaryBg};border:1px solid ${summaryBorder};border-radius:6px;padding:7px 10px;margin-bottom:8px">
-                <span style="font-size:11px;color:${summaryColor}">${conflictCount>0?'⚠️':agreeCount>0?'✅':'ℹ️'}</span>
+                <span style="font-size:11px;color:${summaryColor}">${conflictCount>0?'':agreeCount>0?'':'ℹ'}</span>
                 <span class="ep-body" style="font-weight:700!important;color:${summaryColor}!important">Cross-validation: ${summaryText}</span>
             </div>
             ${findingRows?`<div style="display:flex;flex-direction:column;gap:5px">${findingRows}</div>`:''}
@@ -938,11 +938,11 @@ window.verifySource = async function(nodeId, sourceName, isAddress) {
 
         if (!data.ok) {
             // API key missing or request failed
-            bg='#fff7ed'; border='#fdba74'; icon='⚠️'; textColor='#7c2d12';
+            bg='#fff7ed'; border='#fdba74'; icon=''; textColor='#7c2d12';
             body = `<strong>${data.error || 'Verification failed'}</strong>`;
         } else if (!data.found) {
             // Source responded but found nothing
-            bg='#f0fdf4'; border='#86efac'; icon='✅'; textColor='#14532d';
+            bg='#f0fdf4'; border='#86efac'; icon=''; textColor='#14532d';
             body = data.summary || 'No data found — address appears clean on this source.';
         } else {
             // Source returned positive data
@@ -957,7 +957,7 @@ window.verifySource = async function(nodeId, sourceName, isAddress) {
                 if (data.highest_risk) rows.push(`Highest category: <strong>${data.highest_risk}</strong>`);
                 if (data.verified)     rows.push(`✓ Verified reports`);
                 if (data.risk_score >= 70) { bg='#fef2f2'; border='#fca5a5'; icon='🚨'; textColor='#7f1d1d'; }
-                else if (data.risk_score >= 40) { bg='#fff7ed'; border='#fdba74'; icon='⚠️'; textColor='#7c2d12'; }
+                else if (data.risk_score >= 40) { bg='#fff7ed'; border='#fdba74'; icon=''; textColor='#7c2d12'; }
             }
             if (key === 'walletexplorer' && data.label) {
                 rows.push(`Label: <strong>${data.label}</strong>`);
@@ -996,7 +996,7 @@ window.verifySource = async function(nodeId, sourceName, isAddress) {
     } catch (err) {
         resultEl.innerHTML = `
             <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:5px;padding:6px 8px;margin-top:6px">
-                <div class="ep-body-sm" style="color:#7f1d1d!important">⚠ ${err.name === 'TimeoutError' ? 'Request timed out' : err.message}</div>
+                <div class="ep-body-sm" style="color:#7f1d1d!important"> ${err.name === 'TimeoutError' ? 'Request timed out' : err.message}</div>
             </div>`;
     } finally {
         if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Verify ↻'; }
@@ -1035,7 +1035,7 @@ export async function enrichFromMempool(nodeId, address) {
             return `<div class="ep-row" style="padding:5px 0;border-bottom:1px solid #f1f5f9">
                 <div>
                     <a href="https://mempool.space/tx/${tx.txid}" target="_blank" class="ep-link" style="font-family:monospace">${tx.txid.substring(0, 14)}…</a>
-                    <div class="ep-body-sm">${time} ${confirmed ? `· Block #${tx.status.block_height}` : '· ⏳ Mempool'}</div>
+                    <div class="ep-body-sm">${time} ${confirmed ? `· Block #${tx.status.block_height}` : '·  Mempool'}</div>
                 </div>
                 <div style="text-align:right;margin-left:8px">
                     <div class="ep-body" style="font-weight:700!important">${(tx.fee || 0).toLocaleString()} sat</div>
@@ -1047,7 +1047,7 @@ export async function enrichFromMempool(nodeId, address) {
             <div class="ep-row" style="padding:5px 0;border-bottom:1px solid #f1f5f9">
                 <div>
                     <a href="https://mempool.space/tx/${u.txid}" target="_blank" class="ep-link" style="font-family:monospace">${u.txid.substring(0, 14)}…:${u.vout}</a>
-                    <div class="ep-body-sm">${u.status?.confirmed ? '✅ Confirmed' : '⏳ Unconfirmed'}</div>
+                    <div class="ep-body-sm">${u.status?.confirmed ? ' Confirmed' : ' Unconfirmed'}</div>
                 </div>
                 <div class="ep-body" style="font-weight:700!important;color:#14532d!important;margin-left:8px">${satsToBTC(u.value)} BTC</div>
             </div>`).join('');
@@ -1077,7 +1077,7 @@ export async function enrichFromMempool(nodeId, address) {
         </div>`;
 
     } catch (err) {
-        el.innerHTML = `<div class="ep-body" style="color:#dc2626!important;font-weight:700!important">⚠️ ${err.message}</div>
+        el.innerHTML = `<div class="ep-body" style="color:#dc2626!important;font-weight:700!important"> ${err.message}</div>
             <div class="ep-body-sm" style="margin-top:4px">mempool.space may be unreachable or rate-limited.</div>`;
     }
 
@@ -1151,7 +1151,7 @@ export async function enrichTxFromMempool(txid) {
             <div class="ep-card ep-grid2-span">
                 <span class="ep-label">Status</span>
                 <span class="ep-value" style="color:${confirmed ? '#14532d' : '#92400e'}!important">
-                    ${confirmed ? `✅ Confirmed · Block #${tx.status.block_height}` : '⏳ Unconfirmed (Mempool)'}
+                    ${confirmed ? ` Confirmed · Block #${tx.status.block_height}` : ' Unconfirmed (Mempool)'}
                 </span>
             </div>
             <div class="ep-card"><span class="ep-label">Fee</span><span class="ep-value">${(tx.fee || 0).toLocaleString()} sat</span></div>
@@ -1180,20 +1180,20 @@ export async function enrichTxFromMempool(txid) {
 
         if (err.status) { // This is an HTTP error from mempoolFetch
             if (err.status === 400) {
-                errorMessage = `⚠️ Bad Request (${err.status})`;
+                errorMessage = ` Bad Request (${err.status})`;
                 detailMessage = "The transaction ID might be invalid or malformed. Please check your input.";
             } else if (err.status === 429) {
-                errorMessage = `⚠️ Rate Limit Exceeded (${err.status})`;
+                errorMessage = ` Rate Limit Exceeded (${err.status})`;
                 detailMessage = "You've sent too many requests. Please wait a moment and try again.";
             } else if (err.status >= 500) {
-                errorMessage = `⚠️ Server Error (${err.status})`;
+                errorMessage = ` Server Error (${err.status})`;
                 detailMessage = "mempool.space is experiencing issues. Please try again later.";
             } else {
-                errorMessage = `⚠️ HTTP Error (${err.status})`;
+                errorMessage = ` HTTP Error (${err.status})`;
                 detailMessage = "mempool.space returned an unexpected error. It might be temporarily unavailable.";
             }
         } else { // This is a network error or other JS error
-            errorMessage = `⚠️ Network Error`;
+            errorMessage = ` Network Error`;
             detailMessage = "Could not connect to mempool.space. It might be unreachable or your internet connection is down.";
             if (err.message) {
                 if (err.name === 'AbortError') {
